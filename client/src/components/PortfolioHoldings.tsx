@@ -86,8 +86,8 @@ export default function PortfolioHoldings({ holdings = [] }: PortfolioHoldingsPr
                     <TableCell className="font-semibold">{holding.symbol}</TableCell>
                     <TableCell className="text-muted-foreground text-sm">{holding.name}</TableCell>
                     <TableCell className="text-right font-mono">{holding.shares.toLocaleString()}</TableCell>
-                    <TableCell className="text-right font-mono">${holding.avgCost.toFixed(2)}</TableCell>
-                    <TableCell className="text-right font-mono">${holding.currentPrice.toFixed(2)}</TableCell>
+                    <TableCell className="text-right font-mono">{holding.avgCost.toFixed(5)}</TableCell>
+                    <TableCell className="text-right font-mono">{holding.currentPrice.toFixed(5)}</TableCell>
                     <TableCell className="text-right font-mono font-semibold">${holding.totalValue.toLocaleString('en-US', { minimumFractionDigits: 2 })}</TableCell>
                     <TableCell className={`text-right font-mono ${isPositive ? 'text-market-green' : 'text-market-red'}`}>
                       {isPositive ? '+' : ''}${Math.abs(holding.gainLoss).toFixed(2)}

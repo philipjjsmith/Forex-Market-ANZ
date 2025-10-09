@@ -6,6 +6,7 @@ import TechnicalIndicators from "@/components/TechnicalIndicators";
 import SignalCard from "@/components/SignalCard";
 import PortfolioHoldings from "@/components/PortfolioHoldings";
 import PriceCard from "@/components/PriceCard";
+import SavedSignalsPanel from "@/components/SavedSignalsPanel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useState } from "react";
 
@@ -35,12 +36,12 @@ export default function Dashboard() {
     return data;
   };
 
-  // Mock data
+  // Mock data - Forex pairs
   const watchlistItems = [
-    { symbol: "AAPL", name: "Apple Inc.", price: 185.92, change: 3.45, changePercent: 1.89 },
-    { symbol: "GOOGL", name: "Alphabet Inc.", price: 142.53, change: -1.23, changePercent: -0.85 },
-    { symbol: "MSFT", name: "Microsoft Corp.", price: 378.91, change: 5.67, changePercent: 1.52 },
-    { symbol: "TSLA", name: "Tesla Inc.", price: 242.18, change: -5.32, changePercent: -2.15 },
+    { symbol: "EUR/USD", name: "Euro / US Dollar", price: 1.08945, change: 0.00245, changePercent: 0.23 },
+    { symbol: "GBP/USD", name: "British Pound / US Dollar", price: 1.27532, change: -0.00123, changePercent: -0.10 },
+    { symbol: "USD/JPY", name: "US Dollar / Japanese Yen", price: 149.875, change: 0.425, changePercent: 0.28 },
+    { symbol: "AUD/USD", name: "Australian Dollar / US Dollar", price: 0.66234, change: -0.00156, changePercent: -0.24 },
   ];
 
   const indicators = [
@@ -52,64 +53,81 @@ export default function Dashboard() {
 
   const signals = [
     {
+      id: "SIG_001",
       type: "LONG" as const,
-      symbol: "AAPL",
-      entry: 185.50,
-      stop: 182.30,
-      targets: [188.25, 191.50, 195.00],
+      symbol: "EUR/USD",
+      entry: 1.08945,
+      stop: 1.08645,
+      stopLimitPrice: 1.08695,
+      targets: [1.09395, 1.09945, 1.10645],
       confidence: 85,
       rationale: "Bullish MA crossover detected. RSI in favorable range. Strong trend confirmed by ADX. Higher timeframe trend is bullish.",
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      orderType: "BUY_STOP_LIMIT"
     },
     {
+      id: "SIG_002",
       type: "SHORT" as const,
-      symbol: "TSLA",
-      entry: 245.80,
-      stop: 249.20,
-      targets: [242.50, 239.00, 235.00],
+      symbol: "GBP/USD",
+      entry: 1.27532,
+      stop: 1.27832,
+      targets: [1.27082, 1.26632, 1.26132],
       confidence: 72,
-      rationale: "Bearish MA crossover detected. RSI showing weakness. Price in upper BB region.",
-      timestamp: new Date(Date.now() - 3600000).toISOString()
+      rationale: "Bearish MA crossover detected. RSI showing weakness. Price in upper BB region. Higher timeframe shows bearish momentum.",
+      timestamp: new Date(Date.now() - 3600000).toISOString(),
+      orderType: "SELL_LIMIT"
+    },
+    {
+      id: "SIG_003",
+      type: "LONG" as const,
+      symbol: "USD/JPY",
+      entry: 149.875,
+      stop: 149.375,
+      targets: [150.625, 151.375, 152.375],
+      confidence: 78,
+      rationale: "Strong bullish momentum. Support level holding. ADX showing trend strength above 25.",
+      timestamp: new Date(Date.now() - 7200000).toISOString(),
+      orderType: "MARKET"
     },
   ];
 
   const holdings = [
     {
-      symbol: "AAPL",
-      name: "Apple Inc.",
-      shares: 150,
-      avgCost: 172.50,
-      currentPrice: 185.92,
-      totalValue: 27888.00,
-      gainLoss: 2013.00,
-      gainLossPercent: 7.78
+      symbol: "EUR/USD",
+      name: "Euro / US Dollar",
+      shares: 100000,
+      avgCost: 1.08500,
+      currentPrice: 1.08945,
+      totalValue: 108945.00,
+      gainLoss: 445.00,
+      gainLossPercent: 0.41
     },
     {
-      symbol: "GOOGL",
-      name: "Alphabet Inc.",
-      shares: 200,
-      avgCost: 145.80,
-      currentPrice: 142.53,
-      totalValue: 28506.00,
-      gainLoss: -654.00,
-      gainLossPercent: -2.24
+      symbol: "GBP/USD",
+      name: "British Pound / US Dollar",
+      shares: 75000,
+      avgCost: 1.27800,
+      currentPrice: 1.27532,
+      totalValue: 95649.00,
+      gainLoss: -201.00,
+      gainLossPercent: -0.21
     },
     {
-      symbol: "MSFT",
-      name: "Microsoft Corp.",
-      shares: 100,
-      avgCost: 365.20,
-      currentPrice: 378.91,
-      totalValue: 37891.00,
-      gainLoss: 1371.00,
-      gainLossPercent: 3.75
+      symbol: "USD/JPY",
+      name: "US Dollar / Japanese Yen",
+      shares: 50000,
+      avgCost: 149.250,
+      currentPrice: 149.875,
+      totalValue: 7493750.00,
+      gainLoss: 31250.00,
+      gainLossPercent: 0.42
     },
   ];
 
   const topMovers = [
-    { symbol: "NVDA", name: "NVIDIA Corp.", price: 495.22, change: 15.43, changePercent: 3.22 },
-    { symbol: "META", name: "Meta Platforms", price: 358.67, change: -8.92, changePercent: -2.43 },
-    { symbol: "AMZN", name: "Amazon.com", price: 152.38, change: 4.21, changePercent: 2.84 },
+    { symbol: "NZD/USD", name: "New Zealand Dollar / USD", price: 0.61245, change: 0.00456, changePercent: 0.75 },
+    { symbol: "EUR/JPY", name: "Euro / Japanese Yen", price: 163.245, change: -0.545, changePercent: -0.33 },
+    { symbol: "AUD/JPY", name: "Australian Dollar / Yen", price: 99.325, change: 0.625, changePercent: 0.63 },
   ];
 
   return (
@@ -118,10 +136,11 @@ export default function Dashboard() {
       
       <main className="container mx-auto px-4 py-6 max-w-7xl">
         <Tabs value={selectedTab} onValueChange={setSelectedTab} className="space-y-6">
-          <TabsList className="grid w-full max-w-md grid-cols-3">
+          <TabsList className="grid w-full max-w-2xl grid-cols-4">
             <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
             <TabsTrigger value="portfolio" data-testid="tab-portfolio">Portfolio</TabsTrigger>
             <TabsTrigger value="signals" data-testid="tab-signals">Signals</TabsTrigger>
+            <TabsTrigger value="saved" data-testid="tab-saved">Saved</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-6">
@@ -129,7 +148,7 @@ export default function Dashboard() {
             
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2 space-y-6">
-                <MarketChart symbol="SPY" data={generateChartData()} />
+                <MarketChart symbol="EUR/USD" data={generateChartData()} />
                 
                 <div>
                   <h2 className="text-lg font-semibold mb-4">Top Movers</h2>
@@ -155,10 +174,14 @@ export default function Dashboard() {
 
           <TabsContent value="signals" className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {signals.map((signal, idx) => (
-                <SignalCard key={idx} {...signal} />
+              {signals.map((signal) => (
+                <SignalCard key={signal.id} {...signal} />
               ))}
             </div>
+          </TabsContent>
+
+          <TabsContent value="saved" className="space-y-6">
+            <SavedSignalsPanel />
           </TabsContent>
         </Tabs>
       </main>
