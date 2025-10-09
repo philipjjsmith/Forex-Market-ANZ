@@ -38,10 +38,10 @@ export default function PriceCard({ symbol, name, price, change, changePercent, 
           
           <div className="text-right">
             <p className="font-mono font-semibold text-lg" data-testid={`text-price-${symbol}`}>
-              ${price.toFixed(2)}
+              {price.toFixed(5)}
             </p>
             <p className={`text-xs font-mono ${isPositive ? 'text-market-green' : 'text-market-red'}`} data-testid={`text-change-${symbol}`}>
-              {isPositive ? '+' : ''}{change.toFixed(2)} ({isPositive ? '+' : ''}{changePercent.toFixed(2)}%)
+              {isPositive ? '+' : ''}{change.toFixed(5)} ({isPositive ? '+' : ''}{changePercent.toFixed(2)}%)
             </p>
           </div>
         </div>

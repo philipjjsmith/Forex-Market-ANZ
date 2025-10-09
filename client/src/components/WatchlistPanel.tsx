@@ -62,7 +62,7 @@ export default function WatchlistPanel({ items = [] }: WatchlistPanelProps) {
                       <p className="text-xs text-muted-foreground mt-1">{item.name}</p>
                     </div>
                     <div className="flex items-center gap-3">
-                      <span className="font-mono font-semibold text-sm">${item.price.toFixed(2)}</span>
+                      <span className="font-mono font-semibold text-sm">{item.price.toFixed(5)}</span>
                       <Button
                         size="icon"
                         variant="ghost"

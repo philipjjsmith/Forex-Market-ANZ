@@ -24,13 +24,13 @@ export default function MarketHeader({ selectedSymbol = "SPY", onSymbolChange }:
     <header className="border-b bg-card sticky top-0 z-50">
       <div className="flex items-center justify-between px-4 py-3 gap-4">
         <div className="flex items-center gap-4">
-          <h1 className="text-xl font-semibold text-foreground">Market Tracker</h1>
+          <h1 className="text-xl font-semibold text-foreground">Forex Tracker</h1>
           <div className="hidden md:flex items-center gap-2 text-sm">
-            <span className="text-muted-foreground">S&P 500</span>
-            <span className="font-mono font-semibold text-market-green">4,783.45</span>
+            <span className="text-muted-foreground">EUR/USD</span>
+            <span className="font-mono font-semibold text-market-green">1.08945</span>
             <span className="flex items-center text-market-green text-xs">
               <TrendingUp className="w-3 h-3 mr-1" />
-              +1.24%
+              +0.24%
             </span>
           </div>
         </div>
@@ -40,7 +40,7 @@ export default function MarketHeader({ selectedSymbol = "SPY", onSymbolChange }:
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
               type="search"
-              placeholder="Search symbols..."
+              placeholder="Search pairs..."
               className="pl-9"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
