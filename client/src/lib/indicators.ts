@@ -109,9 +109,9 @@ export class Indicators {
     
     const atr = this.sma(tr.slice(-period), period);
     if (!atr) return null;
-    
-    const diPlus = (this.sma(dmPlus.slice(-period), period) || 0 / atr) * 100;
-    const diMinus = (this.sma(dmMinus.slice(-period), period) || 0 / atr) * 100;
+
+    const diPlus = ((this.sma(dmPlus.slice(-period), period) || 0) / atr) * 100;
+    const diMinus = ((this.sma(dmMinus.slice(-period), period) || 0) / atr) * 100;
     
     const dx = Math.abs(diPlus - diMinus) / (diPlus + diMinus) * 100;
     

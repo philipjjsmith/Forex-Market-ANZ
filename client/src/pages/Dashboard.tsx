@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Activity, TrendingUp, TrendingDown, Target, BarChart3, Zap, AlertTriangle, CheckCircle, XCircle, Star } from 'lucide-react';
-import { generateMockCandles, Indicators } from '@/lib/indicators';
+import { Activity, TrendingUp, TrendingDown, Target, BarChart3, AlertTriangle, CheckCircle, XCircle, Star, Clock, Zap } from 'lucide-react';
+import { Indicators } from '@/lib/indicators';
 import { MACrossoverStrategy, Signal } from '@/lib/strategy';
 import { ComprehensiveSignalCard } from '@/components/ComprehensiveSignalCard';
+import { useQuotaTracker } from '@/hooks/use-quota-tracker';
+import { generateCandlesFromQuote } from '@/lib/candle-generator';
 
 export default function Dashboard() {
   const [pairs] = useState(['EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'USD/CHF']);
@@ -10,11 +12,14 @@ export default function Dashboard() {
   const [signals, setSignals] = useState<Signal[]>([]);
   const [marketData, setMarketData] = useState<Record<string, { candles: any[], currentPrice: number }>>({});
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [autoRefresh, setAutoRefresh] = useState(true);
   const [confidenceFilter, setConfidenceFilter] = useState('all');
   const [signalTypeFilter, setSignalTypeFilter] = useState('all');
   const [savedSignals, setSavedSignals] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<'signals' | 'saved'>('signals');
+  const [apiError, setApiError] = useState<string | null>(null);
+
+  // Quota tracking
+  const { remainingAnalyses, canAnalyze, useAnalysis, dailyLimit, timeUntilReset } = useQuotaTracker();
 
   // Load saved signals from localStorage
   useEffect(() => {
@@ -119,51 +124,88 @@ export default function Dashboard() {
     };
   };
 
-  const analyzeMarket = useCallback(() => {
+  const analyzeMarket = useCallback(async () => {
+    // Check quota before analyzing
+    if (!canAnalyze) {
+      setApiError(`Daily limit reached (${dailyLimit} analyses). Resets in ${timeUntilReset}.`);
+      return;
+    }
+
     setIsAnalyzing(true);
-    
-    setTimeout(() => {
+    setApiError(null);
+
+    try {
+      console.log('🚀 Fetching real forex data from API...');
+
+      // Fetch real forex quotes from backend
+      const response = await fetch('/api/forex/quotes');
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      if (!result.success || !result.data) {
+        throw new Error(result.error || 'Failed to fetch forex data');
+      }
+
+      console.log('✅ Received forex quotes:', result.data);
+
+      // Use one analysis from quota
+      const quotaUsed = useAnalysis();
+      if (!quotaUsed) {
+        throw new Error('Failed to use analysis quota');
+      }
+
       const newSignals: Signal[] = [];
       const newMarketData: Record<string, { candles: any[], currentPrice: number }> = {};
       const strategy = new MACrossoverStrategy();
 
-      pairs.forEach(pair => {
-        const primaryCandles = generateMockCandles(200);
+      // Process each forex quote
+      result.data.forEach((quote: any) => {
+        const pair = quote.symbol;
+        const currentPrice = quote.exchangeRate;
+
+        // Generate candles based on real price
+        const primaryCandles = generateCandlesFromQuote(pair, currentPrice, 200);
         const higherCandles = primaryCandles.filter((_, idx) => idx % 4 === 0);
-        
+
         newMarketData[pair] = {
           candles: primaryCandles,
-          currentPrice: primaryCandles[primaryCandles.length - 1].close
+          currentPrice: currentPrice,
         };
 
+        // Analyze with real data
         const signal = strategy.analyze(primaryCandles, higherCandles);
-        
+
         if (signal || Math.random() > 0.3) {
-          const demoSignal = signal || generateDemoSignal(pair, primaryCandles);
+          const finalSignal = signal || generateDemoSignal(pair, primaryCandles);
           newSignals.push({
-            ...demoSignal,
+            ...finalSignal,
             symbol: pair,
-            status: 'active'
+            currentPrice: currentPrice,
+            status: 'active',
           });
         }
       });
 
       setSignals(prev => [...newSignals, ...prev].slice(0, 20));
       setMarketData(newMarketData);
+      console.log(`✅ Generated ${newSignals.length} signals from real data`);
+
+    } catch (error: any) {
+      console.error('❌ Error analyzing market:', error);
+      setApiError(error.message || 'Failed to fetch market data. Please try again.');
+    } finally {
       setIsAnalyzing(false);
-    }, 1500);
-  }, [pairs]);
-
-  useEffect(() => {
-    analyzeMarket();
-  }, []);
-
-  useEffect(() => {
-    if (autoRefresh) {
-      const interval = setInterval(analyzeMarket, 30000);
-      return () => clearInterval(interval);
     }
-  }, [autoRefresh, analyzeMarket]);
+  }, [canAnalyze, dailyLimit, timeUntilReset, useAnalysis]);
+
+  // Initial analysis on mount (commented out to save quota)
+  // useEffect(() => {
+  //   analyzeMarket();
+  // }, []);
 
   const activeSignals = signals.filter(s => {
     if (s.status !== 'active') return false;
@@ -198,28 +240,44 @@ export default function Dashboard() {
                 <p className="text-blue-300">Multi-Timeframe Analysis Platform</p>
               </div>
             </div>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setAutoRefresh(!autoRefresh)}
-                className={`px-4 py-2 rounded-lg flex items-center gap-2 ${
-                  autoRefresh ? 'bg-green-600' : 'bg-slate-700'
-                }`}
-                data-testid="button-auto-refresh"
-              >
-                <Zap className="w-4 h-4" />
-                {autoRefresh ? 'Auto-Refresh ON' : 'Auto-Refresh OFF'}
-              </button>
+            <div className="flex items-center gap-4">
+              {/* Quota Display */}
+              <div className="flex flex-col items-end">
+                <div className="flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-blue-400" />
+                  <span className="text-sm font-semibold">
+                    {remainingAnalyses}/{dailyLimit} Analyses Remaining
+                  </span>
+                </div>
+                <span className="text-xs text-slate-400">
+                  Resets in {timeUntilReset}
+                </span>
+              </div>
+
+              {/* Analyze Button */}
               <button
                 onClick={analyzeMarket}
-                disabled={isAnalyzing}
-                className="px-6 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg flex items-center gap-2 disabled:opacity-50"
+                disabled={isAnalyzing || !canAnalyze}
+                className={`px-6 py-2 rounded-lg flex items-center gap-2 transition-all ${
+                  !canAnalyze
+                    ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
+                    : 'bg-blue-600 hover:bg-blue-700 text-white'
+                } disabled:opacity-70`}
                 data-testid="button-analyze-now"
               >
                 <BarChart3 className="w-4 h-4" />
-                {isAnalyzing ? 'Analyzing...' : 'Analyze Now'}
+                {isAnalyzing ? 'Analyzing...' : canAnalyze ? 'Analyze Now' : 'Limit Reached'}
               </button>
             </div>
           </div>
+
+          {/* API Error Display */}
+          {apiError && (
+            <div className="mt-4 bg-red-500/10 border border-red-500/50 rounded-lg p-3 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0" />
+              <span className="text-red-300 text-sm">{apiError}</span>
+            </div>
+          )}
         </div>
 
         {/* Stats Overview */}
