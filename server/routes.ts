@@ -1,14 +1,14 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { alphaVantageAPI } from "./services/alphavantage-api";
+import { exchangeRateAPI } from "./services/exchangerate-api";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Forex API routes
   app.get("/api/forex/quotes", async (req, res) => {
     try {
       console.log('📊 Fetching forex quotes...');
-      const quotes = await alphaVantageAPI.fetchAllQuotes();
+      const quotes = await exchangeRateAPI.fetchAllQuotes();
 
       res.json({
         success: true,
@@ -28,7 +28,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Cache stats endpoint (for debugging)
   app.get("/api/forex/cache-stats", (req, res) => {
-    const stats = alphaVantageAPI.getCacheStats();
+    const stats = exchangeRateAPI.getCacheStats();
     res.json({
       success: true,
       data: stats,
