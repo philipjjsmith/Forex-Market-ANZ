@@ -26,7 +26,7 @@ export class AlphaVantageAPI {
     this.baseUrl = process.env.FOREX_API_BASE_URL || 'https://www.alphavantage.co/query';
     this.apiKey = process.env.FOREX_API_KEY || '';
     this.cache = new Map();
-    this.cacheTTL = 5 * 60 * 1000; // 5 minutes
+    this.cacheTTL = 15 * 60 * 1000; // 15 minutes - optimized for free API tier
 
     if (!this.apiKey) {
       console.warn('⚠️  FOREX_API_KEY not set in environment variables');
@@ -60,8 +60,8 @@ export class AlphaVantageAPI {
       const data = await response.json();
 
       // Check for API error messages
-      if (data.Note) {
-        throw new Error('API rate limit reached. Please try again later.');
+      if (data.Note || (data.Information && data.Information.includes('rate limit'))) {
+        throw new Error('⏳ Daily API limit reached. Data updates every 15 minutes. Please try again in a few minutes when cached data refreshes.');
       }
 
       if (data.Error) {
