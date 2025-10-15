@@ -138,7 +138,7 @@ export default function Dashboard() {
       console.log('🚀 Fetching real forex data from API...');
 
       // Fetch real forex quotes from backend
-      const response = await fetch('/api/forex/quotes');
+      const response = await fetch(API_ENDPOINTS.FOREX_QUOTES);
 
       if (!response.ok) {
         throw new Error(`API error: ${response.status}`);
