@@ -1,11 +1,57 @@
 import "dotenv/config";
 import express, { type Request, Response, NextFunction } from "express";
+import session from "express-session";
+import passport from "./passport-config";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+
+// Force rebuild to clear old passport-google-oauth20 reference
 
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+
+// Session configuration
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'forex-secret-key-change-in-production',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // Allow cross-site in production
+  },
+}));
+
+// Initialize Passport and session
+app.use(passport.initialize());
+app.use(passport.session());
+
+// CORS middleware - allow requests from Cloudflare Pages frontend
+app.use((req, res, next) => {
+  const allowedOrigins = [
+    'https://forex-market-anz.pages.dev',
+    'http://localhost:5000',
+    'http://localhost:5173'
+  ];
+
+  const origin = req.headers.origin;
+  if (origin && allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
+
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+
+  next();
+});
 
 app.use((req, res, next) => {
   const start = Date.now();
