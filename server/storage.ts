@@ -1,8 +1,11 @@
-import { type User, type InsertUser, type SavedSignal, users, savedSignals } from "@shared/schema";
+import { type User, type InsertUser, type SavedSignal } from "@shared/schema";
 import { randomUUID } from "crypto";
 import bcrypt from "bcrypt";
-import { eq, and, gt } from "drizzle-orm";
-import { db } from "./db";
+
+// Uncomment these when using DrizzleStorage with database:
+// import { users, savedSignals } from "@shared/schema";
+// import { eq, and, gt } from "drizzle-orm";
+// import { db } from "./db";
 
 const SALT_ROUNDS = 10;
 
@@ -148,110 +151,14 @@ export class MemStorage implements IStorage {
   }
 }
 
-// Drizzle ORM Storage Implementation (uses Neon PostgreSQL)
-export class DrizzleStorage implements IStorage {
-  async getUser(id: string): Promise<User | undefined> {
-    const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
-    return result[0];
-  }
-
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    const result = await db.select().from(users).where(eq(users.username, username)).limit(1);
-    return result[0];
-  }
-
-  async getUserByEmail(email: string): Promise<User | undefined> {
-    const result = await db.select().from(users).where(eq(users.email, email)).limit(1);
-    return result[0];
-  }
-
-  async getUserByGoogleId(googleId: string): Promise<User | undefined> {
-    const result = await db.select().from(users).where(eq(users.googleId, googleId)).limit(1);
-    return result[0];
-  }
-
-  async createUser(insertUser: InsertUser, googleId?: string): Promise<User> {
-    // Hash password if provided
-    let hashedPassword: string | null = null;
-    if (insertUser.password) {
-      hashedPassword = await bcrypt.hash(insertUser.password, SALT_ROUNDS);
-    }
-
-    const result = await db.insert(users).values({
-      username: insertUser.username,
-      email: insertUser.email,
-      password: hashedPassword,
-      googleId: googleId || null,
-    }).returning();
-
-    return result[0];
-  }
-
-  async updateUserGoogleId(userId: string, googleId: string): Promise<void> {
-    await db.update(users)
-      .set({ googleId })
-      .where(eq(users.id, userId));
-  }
-
-  async updateUserPassword(userId: string, hashedPassword: string): Promise<void> {
-    await db.update(users)
-      .set({ password: hashedPassword })
-      .where(eq(users.id, userId));
-  }
-
-  async setPasswordResetToken(userId: string, token: string, expires: Date): Promise<void> {
-    await db.update(users)
-      .set({
-        resetPasswordToken: token,
-        resetPasswordExpires: expires,
-      })
-      .where(eq(users.id, userId));
-  }
-
-  async getUserByResetToken(token: string): Promise<User | undefined> {
-    const result = await db.select()
-      .from(users)
-      .where(
-        and(
-          eq(users.resetPasswordToken, token),
-          gt(users.resetPasswordExpires, new Date())
-        )
-      )
-      .limit(1);
-
-    return result[0];
-  }
-
-  async clearPasswordResetToken(userId: string): Promise<void> {
-    await db.update(users)
-      .set({
-        resetPasswordToken: null,
-        resetPasswordExpires: null,
-      })
-      .where(eq(users.id, userId));
-  }
-
-  // Saved signals methods
-  async getSavedSignals(userId: string): Promise<SavedSignal[]> {
-    return await db.select()
-      .from(savedSignals)
-      .where(eq(savedSignals.userId, userId));
-  }
-
-  async saveSignal(userId: string, signalData: any, candles: any): Promise<SavedSignal> {
-    const result = await db.insert(savedSignals).values({
-      userId,
-      signalData,
-      candles,
-    }).returning();
-
-    return result[0];
-  }
-
-  async unsaveSignal(signalId: string): Promise<void> {
-    await db.delete(savedSignals).where(eq(savedSignals.id, signalId));
-  }
-}
+// DrizzleStorage commented out - uncomment when database is configured
+// export class DrizzleStorage implements IStorage {
+//   async getUser(id: string): Promise<User | undefined> {
+//     const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
+//     return result[0];
+//   }
+//   ... (rest of implementation)
+// }
 
 // Use in-memory storage for now (switch to DrizzleStorage when database is configured)
 export const storage = new MemStorage();
