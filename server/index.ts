@@ -11,24 +11,7 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
-// Session configuration
-app.use(session({
-  secret: process.env.SESSION_SECRET || 'forex-secret-key-change-in-production',
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    secure: process.env.NODE_ENV === 'production',
-    httpOnly: true,
-    maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
-    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // Allow cross-site in production
-  },
-}));
-
-// Initialize Passport and session
-app.use(passport.initialize());
-app.use(passport.session());
-
-// CORS middleware - allow requests from Cloudflare Pages frontend
+// CORS middleware - MUST be before session/passport
 app.use((req, res, next) => {
   const allowedOrigins = [
     'https://forex-market-anz.pages.dev',
@@ -52,6 +35,23 @@ app.use((req, res, next) => {
 
   next();
 });
+
+// Session configuration
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'forex-secret-key-change-in-production',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // Allow cross-site in production
+  },
+}));
+
+// Initialize Passport and session
+app.use(passport.initialize());
+app.use(passport.session());
 
 app.use((req, res, next) => {
   const start = Date.now();
