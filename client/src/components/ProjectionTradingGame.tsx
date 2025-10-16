@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { createChart, IChartApi, ISeriesApi, Time } from "lightweight-charts";
+import { createChart, IChartApi, ISeriesApi, CandlestickData } from "lightweight-charts";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { TrendingUp, TrendingDown, Target, RotateCcw, Trophy, XCircle } from "lucide-react";
