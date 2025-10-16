@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { GraduationCap, TrendingUp, TrendingDown, PlayCircle, ArrowLeft } from "lucide-react";
-import TradingSimulator from "@/components/TradingSimulator";
+import ProjectionTradingGame from "@/components/ProjectionTradingGame";
 
 export default function Learn() {
   const [showSimulator, setShowSimulator] = useState(false);
@@ -118,7 +118,7 @@ export default function Learn() {
         </Card>
 
         {/* Trading Simulator */}
-        {showSimulator && <TradingSimulator />}
+        {showSimulator && <ProjectionTradingGame />}
       </div>
     </div>
   );

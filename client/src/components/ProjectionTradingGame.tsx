@@ -1,0 +1,445 @@
+import { useState, useEffect, useRef } from "react";
+import { createChart, IChartApi, ISeriesApi, Time } from "lightweight-charts";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { TrendingUp, TrendingDown, Target, RotateCcw, Trophy, XCircle } from "lucide-react";
+
+interface Candle {
+  time: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+}
+
+interface Projection {
+  type: 'long' | 'short';
+  entry: number;
+  takeProfit: number;
+  stopLoss: number;
+}
+
+type GamePhase = 'analysis' | 'drawing' | 'confirmed' | 'playing' | 'result';
+
+export default function ProjectionTradingGame() {
+  const chartContainerRef = useRef<HTMLDivElement>(null);
+  const chartRef = useRef<IChartApi | null>(null);
+  const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
+
+  const [allCandles, setAllCandles] = useState<Candle[]>([]);
+  const [visibleCandleCount, setVisibleCandleCount] = useState(0);
+  const [gamePhase, setGamePhase] = useState<GamePhase>('analysis');
+  const [projection, setProjection] = useState<Projection | null>(null);
+  const [positionType, setPositionType] = useState<'long' | 'short'>('long');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Drawing state
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [drawStart, setDrawStart] = useState<{ price: number; time: number } | null>(null);
+  const [drawEnd, setDrawEnd] = useState<{ price: number; time: number } | null>(null);
+
+  // Result state
+  const [result, setResult] = useState<'win' | 'loss' | null>(null);
+  const [finalPL, setFinalPL] = useState(0);
+  const [hitPrice, setHitPrice] = useState(0);
+
+  const HISTORICAL_CANDLES = 60; // Show first 60 candles for analysis
+  const FOREX_PAIR = "EUR-USD";
+
+  // Fetch historical data
+  useEffect(() => {
+    fetchHistoricalData();
+  }, []);
+
+  const fetchHistoricalData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const apiUrl = import.meta.env.PROD
+        ? `https://forex-market-anz.onrender.com/api/forex/historical/${FOREX_PAIR}`
+        : `/api/forex/historical/${FOREX_PAIR}`;
+
+      const response = await fetch(apiUrl);
+      const data = await response.json();
+
+      if (!data.success || !data.data.candles || data.data.candles.length === 0) {
+        throw new Error("Failed to load market data");
+      }
+
+      const candles = data.data.candles.map((c: any) => ({
+        time: c.date,
+        open: c.open,
+        high: c.high,
+        low: c.low,
+        close: c.close,
+      }));
+
+      setAllCandles(candles);
+      setVisibleCandleCount(HISTORICAL_CANDLES);
+      setLoading(false);
+    } catch (err: any) {
+      console.error("Error fetching data:", err);
+      setError(err.message || "Failed to load data");
+      setLoading(false);
+    }
+  };
+
+  // Initialize chart
+  useEffect(() => {
+    if (!chartContainerRef.current || allCandles.length === 0) return;
+
+    const chart = createChart(chartContainerRef.current, {
+      width: chartContainerRef.current.clientWidth,
+      height: 500,
+      layout: {
+        background: { color: '#1e293b' },
+        textColor: '#d1d5db',
+      },
+      grid: {
+        vertLines: { color: '#334155' },
+        horzLines: { color: '#334155' },
+      },
+      crosshair: {
+        mode: 1,
+      },
+      timeScale: {
+        borderColor: '#475569',
+        timeVisible: true,
+      },
+      rightPriceScale: {
+        borderColor: '#475569',
+      },
+    });
+
+    const candleSeries = chart.addCandlestickSeries({
+      upColor: '#10b981',
+      downColor: '#ef4444',
+      borderUpColor: '#10b981',
+      borderDownColor: '#ef4444',
+      wickUpColor: '#10b981',
+      wickDownColor: '#ef4444',
+    });
+
+    chartRef.current = chart;
+    candleSeriesRef.current = candleSeries;
+
+    // Set initial data (historical candles only)
+    const visibleData = allCandles.slice(0, visibleCandleCount);
+    candleSeries.setData(visibleData as any);
+
+    // Handle resize
+    const handleResize = () => {
+      if (chartContainerRef.current) {
+        chart.applyOptions({
+          width: chartContainerRef.current.clientWidth,
+        });
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      chart.remove();
+    };
+  }, [allCandles, visibleCandleCount]);
+
+  const handleProjectionClick = () => {
+    setGamePhase('drawing');
+    setIsDrawing(false);
+    setDrawStart(null);
+    setDrawEnd(null);
+  };
+
+  const calculateProjection = () => {
+    if (!drawStart || !drawEnd) return null;
+
+    const entry = drawStart.price;
+    let takeProfit: number;
+    let stopLoss: number;
+
+    if (positionType === 'long') {
+      // For long: TP above entry, SL below
+      takeProfit = Math.max(drawStart.price, drawEnd.price);
+      stopLoss = Math.min(drawStart.price, drawEnd.price);
+    } else {
+      // For short: TP below entry, SL above
+      takeProfit = Math.min(drawStart.price, drawEnd.price);
+      stopLoss = Math.max(drawStart.price, drawEnd.price);
+    }
+
+    return { type: positionType, entry, takeProfit, stopLoss };
+  };
+
+  const handleConfirmProjection = () => {
+    const proj = calculateProjection();
+    if (!proj) return;
+
+    setProjection(proj);
+    setGamePhase('confirmed');
+  };
+
+  const handlePlayMarket = () => {
+    if (!projection) return;
+
+    setGamePhase('playing');
+    playMarketAnimation();
+  };
+
+  const playMarketAnimation = () => {
+    if (!projection) return;
+
+    let currentCandle = visibleCandleCount;
+    const maxCandles = allCandles.length;
+
+    const interval = setInterval(() => {
+      if (currentCandle >= maxCandles) {
+        clearInterval(interval);
+        // No TP/SL hit - consider it a neutral result
+        setGamePhase('result');
+        setResult(null);
+        return;
+      }
+
+      // Add next candle
+      const candle = allCandles[currentCandle];
+      setVisibleCandleCount(currentCandle + 1);
+
+      // Check if TP or SL hit
+      if (projection.type === 'long') {
+        if (candle.high >= projection.takeProfit) {
+          // TP hit!
+          clearInterval(interval);
+          const pips = ((projection.takeProfit - projection.entry) * 10000).toFixed(1);
+          setFinalPL(parseFloat(pips));
+          setHitPrice(projection.takeProfit);
+          setResult('win');
+          setGamePhase('result');
+          return;
+        } else if (candle.low <= projection.stopLoss) {
+          // SL hit
+          clearInterval(interval);
+          const pips = ((projection.stopLoss - projection.entry) * 10000).toFixed(1);
+          setFinalPL(parseFloat(pips));
+          setHitPrice(projection.stopLoss);
+          setResult('loss');
+          setGamePhase('result');
+          return;
+        }
+      } else {
+        // Short position
+        if (candle.low <= projection.takeProfit) {
+          // TP hit!
+          clearInterval(interval);
+          const pips = ((projection.entry - projection.takeProfit) * 10000).toFixed(1);
+          setFinalPL(parseFloat(pips));
+          setHitPrice(projection.takeProfit);
+          setResult('win');
+          setGamePhase('result');
+          return;
+        } else if (candle.high >= projection.stopLoss) {
+          // SL hit
+          clearInterval(interval);
+          const pips = ((projection.entry - projection.stopLoss) * 10000).toFixed(1);
+          setFinalPL(parseFloat(pips));
+          setHitPrice(projection.stopLoss);
+          setResult('loss');
+          setGamePhase('result');
+          return;
+        }
+      }
+
+      currentCandle++;
+    }, 300); // New candle every 300ms
+  };
+
+  const handleReset = () => {
+    setGamePhase('analysis');
+    setProjection(null);
+    setDrawStart(null);
+    setDrawEnd(null);
+    setIsDrawing(false);
+    setResult(null);
+    setVisibleCandleCount(HISTORICAL_CANDLES);
+    fetchHistoricalData(); // Load new data
+  };
+
+  if (loading) {
+    return (
+      <Card className="p-8">
+        <div className="flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading market data...</p>
+          </div>
+        </div>
+      </Card>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card className="p-8">
+        <div className="text-center text-red-600">
+          <p className="font-semibold">Error loading data</p>
+          <p className="text-sm">{error}</p>
+          <Button onClick={fetchHistoricalData} className="mt-4">
+            Try Again
+          </Button>
+        </div>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Game Controls */}
+      <Card className="p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-xl font-bold text-gray-900">
+              {gamePhase === 'analysis' && 'Analyze the Market'}
+              {gamePhase === 'drawing' && 'Draw Your Projection'}
+              {gamePhase === 'confirmed' && 'Projection Set'}
+              {gamePhase === 'playing' && 'Market Playing...'}
+              {gamePhase === 'result' && (result === 'win' ? '🎉 Trade Won!' : result === 'loss' ? '❌ Stop Loss Hit' : 'Trade Complete')}
+            </h3>
+            <p className="text-sm text-gray-600 mt-1">
+              {gamePhase === 'analysis' && 'Study the historical candles and decide: bullish or bearish?'}
+              {gamePhase === 'drawing' && 'Click and drag on the chart to set entry, TP, and SL'}
+              {gamePhase === 'confirmed' && 'Review your projection and click Play to see the outcome'}
+              {gamePhase === 'playing' && 'Watching the market unfold...'}
+              {gamePhase === 'result' && `P/L: ${finalPL > 0 ? '+' : ''}${finalPL} pips`}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3">
+            {gamePhase === 'analysis' && (
+              <Button
+                onClick={handleProjectionClick}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                <Target className="w-4 h-4 mr-2" />
+                Start Projection
+              </Button>
+            )}
+
+            {gamePhase === 'drawing' && (
+              <>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={() => setPositionType('long')}
+                    variant={positionType === 'long' ? 'default' : 'outline'}
+                    className={positionType === 'long' ? 'bg-green-600 hover:bg-green-700' : ''}
+                  >
+                    <TrendingUp className="w-4 h-4 mr-2" />
+                    Long
+                  </Button>
+                  <Button
+                    onClick={() => setPositionType('short')}
+                    variant={positionType === 'short' ? 'default' : 'outline'}
+                    className={positionType === 'short' ? 'bg-red-600 hover:bg-red-700' : ''}
+                  >
+                    <TrendingDown className="w-4 h-4 mr-2" />
+                    Short
+                  </Button>
+                </div>
+                {drawStart && drawEnd && (
+                  <Button
+                    onClick={handleConfirmProjection}
+                    className="bg-blue-600 hover:bg-blue-700"
+                  >
+                    Confirm Projection
+                  </Button>
+                )}
+              </>
+            )}
+
+            {gamePhase === 'confirmed' && (
+              <Button
+                onClick={handlePlayMarket}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z" />
+                </svg>
+                Play Market
+              </Button>
+            )}
+
+            {gamePhase === 'result' && (
+              <Button
+                onClick={handleReset}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                <RotateCcw className="w-4 h-4 mr-2" />
+                New Challenge
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {/* Projection Details */}
+        {projection && (
+          <div className="mt-4 p-4 bg-slate-100 rounded-lg">
+            <div className="grid grid-cols-4 gap-4 text-sm">
+              <div>
+                <p className="text-gray-600">Type</p>
+                <p className="font-bold text-gray-900 uppercase">{projection.type}</p>
+              </div>
+              <div>
+                <p className="text-gray-600">Entry</p>
+                <p className="font-bold text-gray-900">{projection.entry.toFixed(5)}</p>
+              </div>
+              <div>
+                <p className="text-gray-600">Take Profit</p>
+                <p className="font-bold text-green-600">{projection.takeProfit.toFixed(5)}</p>
+              </div>
+              <div>
+                <p className="text-gray-600">Stop Loss</p>
+                <p className="font-bold text-red-600">{projection.stopLoss.toFixed(5)}</p>
+              </div>
+            </div>
+          </div>
+        )}
+      </Card>
+
+      {/* Chart */}
+      <Card className="p-4">
+        <div ref={chartContainerRef} className="w-full relative" />
+
+        {gamePhase === 'drawing' && (
+          <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <p className="text-sm text-blue-900">
+              <strong>How to draw:</strong> Click and drag on the chart. Starting point = Entry, drag up/down to set TP and SL.
+            </p>
+          </div>
+        )}
+      </Card>
+
+      {/* Result Card */}
+      {gamePhase === 'result' && result && (
+        <Card className={`p-8 ${result === 'win' ? 'bg-green-50 border-green-300' : 'bg-red-50 border-red-300'} border-2`}>
+          <div className="text-center">
+            {result === 'win' ? (
+              <Trophy className="w-16 h-16 text-green-600 mx-auto mb-4" />
+            ) : (
+              <XCircle className="w-16 h-16 text-red-600 mx-auto mb-4" />
+            )}
+            <h3 className={`text-3xl font-bold ${result === 'win' ? 'text-green-900' : 'text-red-900'}`}>
+              {result === 'win' ? 'Take Profit Hit! 🎉' : 'Stop Loss Hit ❌'}
+            </h3>
+            <p className={`text-xl mt-2 ${result === 'win' ? 'text-green-700' : 'text-red-700'}`}>
+              {finalPL > 0 ? '+' : ''}{finalPL} pips
+            </p>
+            <p className="text-sm text-gray-600 mt-4">
+              Price hit: {hitPrice.toFixed(5)}
+            </p>
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+}
