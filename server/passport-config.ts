@@ -16,22 +16,30 @@ passport.use('local', new LocalStrategy(
       const user = await storage.getUserByEmail(email);
 
       if (!user) {
+        console.log('❌ Login failed: User not found for email:', email);
         return done(null, false, { message: 'Incorrect email or password' });
       }
 
+      console.log('✅ User found:', email, 'Has password:', !!user.password);
+
       // Check if user signed up with Google (no password)
       if (!user.password) {
+        console.log('❌ Login failed: User has no password (Google account)');
         return done(null, false, { message: 'Please sign in with Google' });
       }
 
       const isMatch = await bcrypt.compare(password, user.password);
+      console.log('🔐 Password match:', isMatch);
 
       if (!isMatch) {
+        console.log('❌ Login failed: Password mismatch');
         return done(null, false, { message: 'Incorrect email or password' });
       }
 
+      console.log('✅ Login successful for:', email);
       return done(null, user);
     } catch (error) {
+      console.error('❌ Login error:', error);
       return done(error);
     }
   }
