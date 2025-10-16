@@ -111,13 +111,16 @@ app.use(session({
   secret: process.env.SESSION_SECRET || 'forex-secret-key-change-in-production',
   resave: false,
   saveUninitialized: false,
-  name: 'forex.sid', // Custom session cookie name
-  proxy: true, // Trust proxy (required for Render)
+  name: 'forex.sid',
+  proxy: true,
+  rolling: true, // Reset cookie maxAge on every response
   cookie: {
-    secure: process.env.NODE_ENV === 'production',
+    secure: true, // Always true for HTTPS
     httpOnly: true,
     maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
-    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // Allow cross-site in production
+    sameSite: 'none', // CRITICAL for cross-origin
+    domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined, // Allow subdomain cookies
+    path: '/',
   },
 }));
 
