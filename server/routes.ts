@@ -2,8 +2,10 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { exchangeRateAPI } from "./services/exchangerate-api";
-import passport from "./passport-config";
 import { insertUserSchema } from "@shared/schema";
+import { generateToken } from "./jwt";
+import { requireAuth } from "./auth-middleware";
+import bcrypt from "bcrypt";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // ========== AUTHENTICATION ROUTES ==========
@@ -42,41 +44,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Create user (password will be hashed in storage)
       const user = await storage.createUser({ username, email, password });
 
-      // Log the user in automatically
-      req.login(user, (err) => {
-        if (err) {
-          console.error('❌ Login after registration failed:', err);
-          return res.status(500).json({
-            success: false,
-            error: 'Failed to log in after registration',
-          });
-        }
+      // Generate JWT token
+      const token = generateToken(user);
 
-        console.log('✅ Registration successful, session ID:', req.sessionID);
-        console.log('   Session:', req.session);
+      console.log('✅ Registration successful:', email);
 
-        // CRITICAL: Manually save session before sending response
-        req.session.save((saveErr) => {
-          if (saveErr) {
-            console.error('❌ Session save error:', saveErr);
-            return res.status(500).json({
-              success: false,
-              error: 'Failed to save session',
-            });
-          }
-
-          console.log('✅ Session manually saved');
-          console.log('   Set-Cookie will be:', res.getHeader('Set-Cookie'));
-
-          res.json({
-            success: true,
-            user: {
-              id: user.id,
-              username: user.username,
-              email: user.email,
-            },
-          });
-        });
+      res.json({
+        success: true,
+        token,
+        user: {
+          id: user.id,
+          username: user.username,
+          email: user.email,
+        },
       });
     } catch (error: any) {
       console.error('❌ Registration error:', error);
@@ -88,101 +68,107 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Login with email/password
-  app.post("/api/auth/login", (req, res, next) => {
-    passport.authenticate('local', (err: any, user: any, info: any) => {
-      if (err) {
-        return res.status(500).json({
+  app.post("/api/auth/login", async (req, res) => {
+    try {
+      const { email, password } = req.body;
+
+      if (!email || !password) {
+        return res.status(400).json({
           success: false,
-          error: 'Authentication error',
+          error: 'Email and password are required',
         });
       }
+
+      // Find user by email
+      const user = await storage.getUserByEmail(email);
+
+      if (!user) {
+        console.log('❌ Login failed: User not found for email:', email);
+        return res.status(401).json({
+          success: false,
+          error: 'Incorrect email or password',
+        });
+      }
+
+      // Check if user signed up with Google (no password)
+      if (!user.password) {
+        console.log('❌ Login failed: User has no password (Google account)');
+        return res.status(401).json({
+          success: false,
+          error: 'Please sign in with Google',
+        });
+      }
+
+      // Verify password
+      const isMatch = await bcrypt.compare(password, user.password);
+
+      if (!isMatch) {
+        console.log('❌ Login failed: Password mismatch');
+        return res.status(401).json({
+          success: false,
+          error: 'Incorrect email or password',
+        });
+      }
+
+      // Generate JWT token
+      const token = generateToken(user);
+
+      console.log('✅ Login successful for:', email);
+
+      res.json({
+        success: true,
+        token,
+        user: {
+          id: user.id,
+          username: user.username,
+          email: user.email,
+        },
+      });
+    } catch (error: any) {
+      console.error('❌ Login error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Login failed',
+      });
+    }
+  });
+
+  // Logout (JWT is stateless - just client-side token removal)
+  app.post("/api/auth/logout", (req, res) => {
+    res.json({
+      success: true,
+      message: 'Logged out successfully',
+    });
+  });
+
+  // Get current user (requires JWT authentication)
+  app.get("/api/auth/me", requireAuth, async (req, res) => {
+    try {
+      // requireAuth middleware already validated token and attached user info
+      const user = await storage.getUser(req.userId!);
 
       if (!user) {
         return res.status(401).json({
           success: false,
-          error: info?.message || 'Invalid credentials',
-        });
-      }
-
-      req.login(user, (err) => {
-        if (err) {
-          console.error('❌ Login failed during req.login:', err);
-          return res.status(500).json({
-            success: false,
-            error: 'Login failed',
-          });
-        }
-
-        console.log('✅ Login successful, session ID:', req.sessionID);
-        console.log('   Session:', req.session);
-
-        // CRITICAL: Manually save session before sending response
-        req.session.save((saveErr) => {
-          if (saveErr) {
-            console.error('❌ Session save error:', saveErr);
-            return res.status(500).json({
-              success: false,
-              error: 'Failed to save session',
-            });
-          }
-
-          console.log('✅ Session manually saved');
-          console.log('   Set-Cookie will be:', res.getHeader('Set-Cookie'));
-
-          res.json({
-            success: true,
-            user: {
-              id: user.id,
-              username: user.username,
-              email: user.email,
-            },
-          });
-        });
-      });
-    })(req, res, next);
-  });
-
-  // Logout
-  app.post("/api/auth/logout", (req, res) => {
-    req.logout((err) => {
-      if (err) {
-        return res.status(500).json({
-          success: false,
-          error: 'Logout failed',
+          error: 'User not found',
         });
       }
 
       res.json({
         success: true,
-        message: 'Logged out successfully',
+        user: {
+          id: user.id,
+          username: user.username,
+          email: user.email,
+        },
       });
-    });
-  });
-
-  // Get current user
-  app.get("/api/auth/me", (req, res) => {
-    console.log('🔐 /api/auth/me called');
-    console.log('   Session ID:', req.sessionID);
-    console.log('   Session:', req.session);
-    console.log('   Is authenticated:', req.isAuthenticated());
-    console.log('   Cookie:', req.headers.cookie);
-
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({
+    } catch (error) {
+      console.error('❌ /api/auth/me error:', error);
+      res.status(500).json({
         success: false,
-        error: 'Not authenticated',
+        error: 'Failed to get user',
       });
     }
-
-    const user = req.user as any;
-    res.json({
-      success: true,
-      user: {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-      },
-    });
   });
 
   // Forgot password - simplified version without email
