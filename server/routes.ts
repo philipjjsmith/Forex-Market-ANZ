@@ -45,11 +45,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Log the user in automatically
       req.login(user, (err) => {
         if (err) {
+          console.error('❌ Login after registration failed:', err);
           return res.status(500).json({
             success: false,
             error: 'Failed to log in after registration',
           });
         }
+
+        console.log('✅ Registration successful, session ID:', req.sessionID);
+        console.log('   Session:', req.session);
+        console.log('   Set-Cookie will be:', res.getHeader('Set-Cookie'));
 
         res.json({
           success: true,
@@ -88,11 +93,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       req.login(user, (err) => {
         if (err) {
+          console.error('❌ Login failed during req.login:', err);
           return res.status(500).json({
             success: false,
             error: 'Login failed',
           });
         }
+
+        console.log('✅ Login successful, session ID:', req.sessionID);
+        console.log('   Session:', req.session);
+        console.log('   Set-Cookie will be:', res.getHeader('Set-Cookie'));
 
         res.json({
           success: true,
