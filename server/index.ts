@@ -109,17 +109,16 @@ app.use(express.urlencoded({ extended: false }));
 app.use(session({
   store: new SupabaseSessionStore(),
   secret: process.env.SESSION_SECRET || 'forex-secret-key-change-in-production',
-  resave: false,
-  saveUninitialized: false,
+  resave: true, // Force session save on every request
+  saveUninitialized: true, // Create session for every request
   name: 'forex.sid',
   proxy: true,
-  rolling: true, // Reset cookie maxAge on every response
+  rolling: true,
   cookie: {
-    secure: true, // Always true for HTTPS
+    secure: true,
     httpOnly: true,
-    maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
-    sameSite: 'none', // CRITICAL for cross-origin
-    domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined, // Allow subdomain cookies
+    maxAge: 1000 * 60 * 60 * 24 * 7,
+    sameSite: 'none',
     path: '/',
   },
 }));
