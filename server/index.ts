@@ -12,22 +12,32 @@ import { supabase } from "./supabase";
 class SupabaseSessionStore extends session.Store {
   async get(sid: string, callback: (err?: any, session?: any) => void) {
     try {
+      console.log('🔍 Session GET:', sid);
       const { data, error } = await supabase
         .from('sessions')
         .select('sess, expire')
         .eq('sid', sid)
         .single();
 
-      if (error || !data) {
+      if (error) {
+        console.log('❌ Session GET error:', error.message);
+        return callback(null, null);
+      }
+
+      if (!data) {
+        console.log('⚠️  Session not found:', sid);
         return callback(null, null);
       }
 
       if (data.expire && new Date(data.expire) < new Date()) {
+        console.log('⏰ Session expired:', sid);
         return callback(null, null);
       }
 
+      console.log('✅ Session found:', sid);
       callback(null, data.sess);
     } catch (err) {
+      console.error('❌ Session GET exception:', err);
       callback(err);
     }
   }
@@ -35,6 +45,8 @@ class SupabaseSessionStore extends session.Store {
   async set(sid: string, session: any, callback?: (err?: any) => void) {
     try {
       const expire = session.cookie?.expires ? new Date(session.cookie.expires) : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+      console.log('💾 Session SET:', sid, 'expire:', expire);
 
       const { error } = await supabase
         .from('sessions')
@@ -44,15 +56,22 @@ class SupabaseSessionStore extends session.Store {
           expire: expire.toISOString(),
         });
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Session SET error:', error);
+        throw error;
+      }
+
+      console.log('✅ Session saved:', sid);
       callback?.();
     } catch (err) {
+      console.error('❌ Session SET exception:', err);
       callback?.(err);
     }
   }
 
   async destroy(sid: string, callback?: (err?: any) => void) {
     try {
+      console.log('🗑️  Session DESTROY:', sid);
       await supabase
         .from('sessions')
         .delete()
@@ -60,6 +79,7 @@ class SupabaseSessionStore extends session.Store {
 
       callback?.();
     } catch (err) {
+      console.error('❌ Session DESTROY exception:', err);
       callback?.(err);
     }
   }
