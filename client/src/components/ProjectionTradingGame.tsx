@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { createChart, IChartApi, ISeriesApi, CandlestickData } from "lightweight-charts";
+import { createChart, IChartApi, ISeriesApi, CandlestickSeries, CandlestickData } from "lightweight-charts";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { TrendingUp, TrendingDown, Target, RotateCcw, Trophy, XCircle } from "lucide-react";
@@ -117,11 +117,10 @@ export default function ProjectionTradingGame() {
       },
     });
 
-    const candleSeries = chart.addCandlestickSeries({
+    const candleSeries = chart.addSeries(CandlestickSeries, {
       upColor: '#10b981',
       downColor: '#ef4444',
-      borderUpColor: '#10b981',
-      borderDownColor: '#ef4444',
+      borderVisible: false,
       wickUpColor: '#10b981',
       wickDownColor: '#ef4444',
     });
