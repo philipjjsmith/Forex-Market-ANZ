@@ -36,8 +36,12 @@ export default function ProjectionTradingGame() {
 
   // Drawing state
   const [isDrawing, setIsDrawing] = useState(false);
-  const [drawStart, setDrawStart] = useState<{ price: number; time: number } | null>(null);
-  const [drawEnd, setDrawEnd] = useState<{ price: number; time: number } | null>(null);
+  const [drawStart, setDrawStart] = useState<{ price: number; x: number; y: number } | null>(null);
+  const [drawEnd, setDrawEnd] = useState<{ price: number; x: number; y: number } | null>(null);
+
+  // Chart bounds for price calculation
+  const [priceRange, setPriceRange] = useState<{ min: number; max: number } | null>(null);
+  const [chartHeight, setChartHeight] = useState(500);
 
   // Result state
   const [result, setResult] = useState<'win' | 'loss' | null>(null);
@@ -129,6 +133,13 @@ export default function ProjectionTradingGame() {
     const visibleData = allCandles.slice(0, visibleCandleCount);
     candleSeries.setData(visibleData as any);
 
+    // Calculate price range from visible candles
+    const prices = visibleData.flatMap(c => [c.high, c.low]);
+    const minPrice = Math.min(...prices);
+    const maxPrice = Math.max(...prices);
+    setPriceRange({ min: minPrice, max: maxPrice });
+    setChartHeight(500);
+
     // Handle resize
     const handleResize = () => {
       if (chartContainerRef.current) {
@@ -151,6 +162,46 @@ export default function ProjectionTradingGame() {
     setIsDrawing(false);
     setDrawStart(null);
     setDrawEnd(null);
+  };
+
+  // Convert Y pixel coordinate to price
+  const yToPrice = (y: number): number => {
+    if (!priceRange) return 0;
+    const { min, max } = priceRange;
+    // Y coordinate is inverted (0 = top, chartHeight = bottom)
+    const ratio = 1 - (y / chartHeight);
+    return min + ratio * (max - min);
+  };
+
+  // Mouse event handlers for drawing
+  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (gamePhase !== 'drawing') return;
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const price = yToPrice(y);
+
+    setIsDrawing(true);
+    setDrawStart({ price, x, y });
+    setDrawEnd({ price, x, y });
+  };
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isDrawing || gamePhase !== 'drawing') return;
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const price = yToPrice(y);
+
+    setDrawEnd({ price, x, y });
+  };
+
+  const handleMouseUp = () => {
+    if (!isDrawing || gamePhase !== 'drawing') return;
+    setIsDrawing(false);
+    // Keep drawStart and drawEnd so user can see their projection
   };
 
   const calculateProjection = () => {
@@ -408,12 +459,119 @@ export default function ProjectionTradingGame() {
 
       {/* Chart */}
       <Card className="p-4">
-        <div ref={chartContainerRef} className="w-full relative" />
+        <div className="relative">
+          <div ref={chartContainerRef} className="w-full" />
+
+          {/* Transparent overlay for drawing */}
+          {gamePhase === 'drawing' && (
+            <div
+              onMouseDown={handleMouseDown}
+              onMouseMove={handleMouseMove}
+              onMouseUp={handleMouseUp}
+              onMouseLeave={handleMouseUp}
+              className="absolute top-0 left-0 w-full h-[500px] cursor-crosshair"
+              style={{ zIndex: 10 }}
+            >
+              {/* Projection visualization */}
+              {drawStart && drawEnd && (
+                <svg className="absolute top-0 left-0 w-full h-full pointer-events-none">
+                  {/* Calculate box dimensions */}
+                  {(() => {
+                    const y1 = drawStart.y;
+                    const y2 = drawEnd.y;
+                    const minY = Math.min(y1, y2);
+                    const maxY = Math.max(y1, y2);
+                    const height = maxY - minY;
+
+                    // For long: green above entry, red below
+                    // For short: red above entry, green below
+                    const entryY = y1;
+                    const profitY = positionType === 'long' ? minY : maxY;
+                    const lossY = positionType === 'long' ? maxY : minY;
+
+                    return (
+                      <>
+                        {/* Profit zone (green) */}
+                        <rect
+                          x="0"
+                          y={Math.min(entryY, profitY)}
+                          width="100%"
+                          height={Math.abs(profitY - entryY)}
+                          fill="rgba(16, 185, 129, 0.15)"
+                          stroke="rgba(16, 185, 129, 0.5)"
+                          strokeWidth="2"
+                        />
+
+                        {/* Loss zone (red) */}
+                        <rect
+                          x="0"
+                          y={Math.min(entryY, lossY)}
+                          width="100%"
+                          height={Math.abs(lossY - entryY)}
+                          fill="rgba(239, 68, 68, 0.15)"
+                          stroke="rgba(239, 68, 68, 0.5)"
+                          strokeWidth="2"
+                        />
+
+                        {/* Entry line (white) */}
+                        <line
+                          x1="0"
+                          y1={entryY}
+                          x2="100%"
+                          y2={entryY}
+                          stroke="white"
+                          strokeWidth="2"
+                          strokeDasharray="5,5"
+                        />
+
+                        {/* Take Profit line (green) */}
+                        <line
+                          x1="0"
+                          y1={profitY}
+                          x2="100%"
+                          y2={profitY}
+                          stroke="#10b981"
+                          strokeWidth="3"
+                        />
+
+                        {/* Stop Loss line (red) */}
+                        <line
+                          x1="0"
+                          y1={lossY}
+                          x2="100%"
+                          y2={lossY}
+                          stroke="#ef4444"
+                          strokeWidth="3"
+                        />
+
+                        {/* Price labels */}
+                        <text x="10" y={entryY - 5} fill="white" fontSize="12" fontWeight="bold">
+                          Entry: {drawStart.price.toFixed(5)}
+                        </text>
+                        <text x="10" y={profitY - 5} fill="#10b981" fontSize="12" fontWeight="bold">
+                          TP: {(positionType === 'long' ? Math.max(drawStart.price, drawEnd.price) : Math.min(drawStart.price, drawEnd.price)).toFixed(5)}
+                        </text>
+                        <text x="10" y={lossY + 15} fill="#ef4444" fontSize="12" fontWeight="bold">
+                          SL: {(positionType === 'long' ? Math.min(drawStart.price, drawEnd.price) : Math.max(drawStart.price, drawEnd.price)).toFixed(5)}
+                        </text>
+                      </>
+                    );
+                  })()}
+                </svg>
+              )}
+            </div>
+          )}
+        </div>
 
         {gamePhase === 'drawing' && (
           <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
             <p className="text-sm text-blue-900">
               <strong>How to draw:</strong> Click and drag on the chart. Starting point = Entry, drag up/down to set TP and SL.
+              {drawStart && drawEnd && (
+                <span className="block mt-2 font-semibold">
+                  Risk/Reward: {((Math.abs(drawEnd.price - drawStart.price) / Math.abs(drawStart.price - drawEnd.price)) || 1).toFixed(2)}:1
+                </span>
+              )}
             </p>
           </div>
         )}
