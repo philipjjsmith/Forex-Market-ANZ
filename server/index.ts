@@ -1,11 +1,14 @@
 import "dotenv/config";
 import express, { type Request, Response, NextFunction } from "express";
 import session from "express-session";
+import connectPgSimple from "connect-pg-simple";
 import passport from "./passport-config";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 
 // CORS Configuration Active - Build v2
+
+const PgSession = connectPgSimple(session);
 
 const app = express();
 app.use(express.json());
@@ -37,8 +40,12 @@ app.use((req, res, next) => {
   next();
 });
 
-// Session configuration
+// Session configuration with PostgreSQL store
 app.use(session({
+  store: new PgSession({
+    conString: process.env.DATABASE_URL,
+    createTableIfMissing: true,
+  }),
   secret: process.env.SESSION_SECRET || 'forex-secret-key-change-in-production',
   resave: false,
   saveUninitialized: false,
