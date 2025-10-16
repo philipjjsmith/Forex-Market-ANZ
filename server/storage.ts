@@ -2,10 +2,13 @@ import { type User, type InsertUser, type SavedSignal } from "@shared/schema";
 import { randomUUID } from "crypto";
 import bcrypt from "bcrypt";
 
-// Database imports for DrizzleStorage
-import { users, savedSignals } from "@shared/schema";
-import { eq, and, gt } from "drizzle-orm";
-import { db } from "./db";
+// Database imports for DrizzleStorage (commented out - using Supabase client instead)
+// import { users, savedSignals } from "@shared/schema";
+// import { eq, and, gt } from "drizzle-orm";
+// import { db } from "./db";
+
+// Supabase client for REST API access (avoids IPv6 networking issues)
+import { supabase } from "./supabase";
 
 const SALT_ROUNDS = 10;
 
@@ -252,5 +255,159 @@ export class DrizzleStorage implements IStorage {
   }
 }
 
-// Use PostgreSQL database storage
-export const storage = new DrizzleStorage();
+// SupabaseStorage - Uses Supabase REST API (avoids IPv6 networking issues)
+export class SupabaseStorage implements IStorage {
+  async getUser(id: string): Promise<User | undefined> {
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error || !data) return undefined;
+    return data as User;
+  }
+
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('username', username)
+      .single();
+
+    if (error || !data) return undefined;
+    return data as User;
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('email', email)
+      .single();
+
+    if (error || !data) return undefined;
+    return data as User;
+  }
+
+  async getUserByGoogleId(googleId: string): Promise<User | undefined> {
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('google_id', googleId)
+      .single();
+
+    if (error || !data) return undefined;
+    return data as User;
+  }
+
+  async createUser(insertUser: InsertUser, googleId?: string): Promise<User> {
+    // Hash password if provided
+    let hashedPassword: string | null = null;
+    if (insertUser.password) {
+      hashedPassword = await bcrypt.hash(insertUser.password, SALT_ROUNDS);
+    }
+
+    const { data, error } = await supabase
+      .from('users')
+      .insert({
+        username: insertUser.username,
+        email: insertUser.email,
+        password: hashedPassword,
+        google_id: googleId || null,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      throw new Error(`Failed to create user: ${error.message}`);
+    }
+
+    return data as User;
+  }
+
+  async updateUserGoogleId(userId: string, googleId: string): Promise<void> {
+    await supabase
+      .from('users')
+      .update({ google_id: googleId })
+      .eq('id', userId);
+  }
+
+  async updateUserPassword(userId: string, hashedPassword: string): Promise<void> {
+    await supabase
+      .from('users')
+      .update({ password: hashedPassword })
+      .eq('id', userId);
+  }
+
+  async setPasswordResetToken(userId: string, token: string, expires: Date): Promise<void> {
+    await supabase
+      .from('users')
+      .update({
+        reset_password_token: token,
+        reset_password_expires: expires.toISOString(),
+      })
+      .eq('id', userId);
+  }
+
+  async getUserByResetToken(token: string): Promise<User | undefined> {
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('reset_password_token', token)
+      .gt('reset_password_expires', new Date().toISOString())
+      .single();
+
+    if (error || !data) return undefined;
+    return data as User;
+  }
+
+  async clearPasswordResetToken(userId: string): Promise<void> {
+    await supabase
+      .from('users')
+      .update({
+        reset_password_token: null,
+        reset_password_expires: null,
+      })
+      .eq('id', userId);
+  }
+
+  // Saved signals methods
+  async getSavedSignals(userId: string): Promise<SavedSignal[]> {
+    const { data, error } = await supabase
+      .from('saved_signals')
+      .select('*')
+      .eq('user_id', userId);
+
+    if (error || !data) return [];
+    return data as SavedSignal[];
+  }
+
+  async saveSignal(userId: string, signalData: any, candles: any): Promise<SavedSignal> {
+    const { data, error } = await supabase
+      .from('saved_signals')
+      .insert({
+        user_id: userId,
+        signal_data: signalData,
+        candles: candles,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      throw new Error(`Failed to save signal: ${error.message}`);
+    }
+
+    return data as SavedSignal;
+  }
+
+  async unsaveSignal(signalId: string): Promise<void> {
+    await supabase
+      .from('saved_signals')
+      .delete()
+      .eq('id', signalId);
+  }
+}
+
+// Use Supabase client storage (avoids IPv6 networking issues)
+export const storage = new SupabaseStorage();
