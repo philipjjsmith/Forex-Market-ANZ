@@ -5,7 +5,7 @@ import passport from "./passport-config";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 
-// Force rebuild to clear old passport-google-oauth20 reference
+// CORS Configuration Active - Build v2
 
 const app = express();
 app.use(express.json());
