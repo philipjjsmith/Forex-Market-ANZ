@@ -41,6 +41,8 @@ app.use(session({
   secret: process.env.SESSION_SECRET || 'forex-secret-key-change-in-production',
   resave: false,
   saveUninitialized: false,
+  name: 'forex.sid', // Custom session cookie name
+  proxy: true, // Trust proxy (required for Render)
   cookie: {
     secure: process.env.NODE_ENV === 'production',
     httpOnly: true,
