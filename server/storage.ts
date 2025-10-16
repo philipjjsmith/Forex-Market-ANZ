@@ -257,6 +257,20 @@ export class DrizzleStorage implements IStorage {
 
 // SupabaseStorage - Uses Supabase REST API (avoids IPv6 networking issues)
 export class SupabaseStorage implements IStorage {
+  // Helper to convert snake_case DB columns to camelCase User type
+  private mapToUser(data: any): User {
+    return {
+      id: data.id,
+      username: data.username,
+      email: data.email,
+      password: data.password,
+      googleId: data.google_id,
+      resetPasswordToken: data.reset_password_token,
+      resetPasswordExpires: data.reset_password_expires ? new Date(data.reset_password_expires) : null,
+      createdAt: new Date(data.created_at),
+    };
+  }
+
   async getUser(id: string): Promise<User | undefined> {
     const { data, error } = await supabase
       .from('users')
@@ -265,7 +279,7 @@ export class SupabaseStorage implements IStorage {
       .single();
 
     if (error || !data) return undefined;
-    return data as User;
+    return this.mapToUser(data);
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
@@ -276,7 +290,7 @@ export class SupabaseStorage implements IStorage {
       .single();
 
     if (error || !data) return undefined;
-    return data as User;
+    return this.mapToUser(data);
   }
 
   async getUserByEmail(email: string): Promise<User | undefined> {
@@ -287,7 +301,7 @@ export class SupabaseStorage implements IStorage {
       .single();
 
     if (error || !data) return undefined;
-    return data as User;
+    return this.mapToUser(data);
   }
 
   async getUserByGoogleId(googleId: string): Promise<User | undefined> {
@@ -298,7 +312,7 @@ export class SupabaseStorage implements IStorage {
       .single();
 
     if (error || !data) return undefined;
-    return data as User;
+    return this.mapToUser(data);
   }
 
   async createUser(insertUser: InsertUser, googleId?: string): Promise<User> {
@@ -323,7 +337,7 @@ export class SupabaseStorage implements IStorage {
       throw new Error(`Failed to create user: ${error.message}`);
     }
 
-    return data as User;
+    return this.mapToUser(data);
   }
 
   async updateUserGoogleId(userId: string, googleId: string): Promise<void> {
@@ -359,7 +373,7 @@ export class SupabaseStorage implements IStorage {
       .single();
 
     if (error || !data) return undefined;
-    return data as User;
+    return this.mapToUser(data);
   }
 
   async clearPasswordResetToken(userId: string): Promise<void> {
@@ -372,6 +386,17 @@ export class SupabaseStorage implements IStorage {
       .eq('id', userId);
   }
 
+  // Helper to convert snake_case DB columns to camelCase SavedSignal type
+  private mapToSavedSignal(data: any): SavedSignal {
+    return {
+      id: data.id,
+      userId: data.user_id,
+      signalData: data.signal_data,
+      candles: data.candles,
+      savedAt: new Date(data.saved_at),
+    };
+  }
+
   // Saved signals methods
   async getSavedSignals(userId: string): Promise<SavedSignal[]> {
     const { data, error } = await supabase
@@ -380,7 +405,7 @@ export class SupabaseStorage implements IStorage {
       .eq('user_id', userId);
 
     if (error || !data) return [];
-    return data as SavedSignal[];
+    return data.map(item => this.mapToSavedSignal(item));
   }
 
   async saveSignal(userId: string, signalData: any, candles: any): Promise<SavedSignal> {
@@ -398,7 +423,7 @@ export class SupabaseStorage implements IStorage {
       throw new Error(`Failed to save signal: ${error.message}`);
     }
 
-    return data as SavedSignal;
+    return this.mapToSavedSignal(data);
   }
 
   async unsaveSignal(signalId: string): Promise<void> {
