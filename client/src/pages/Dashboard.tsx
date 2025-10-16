@@ -253,11 +253,11 @@ export default function Dashboard() {
   const currentData = marketData[selectedPair];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 text-white p-6">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 text-white p-3 md:p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between mb-2 gap-4">
             <div className="flex items-center gap-3">
               <div className="p-3 bg-blue-500 rounded-lg">
                 <Activity className="w-8 h-8" />
@@ -267,7 +267,7 @@ export default function Dashboard() {
                 <p className="text-blue-300">Multi-Timeframe Analysis Platform</p>
               </div>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center gap-2 lg:gap-4">
               {/* Learn Button */}
               <button
                 onClick={() => setLocation('/learn')}
@@ -332,7 +332,7 @@ export default function Dashboard() {
         </div>
 
         {/* Stats Overview */}
-        <div className="grid grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
             <div className="flex items-center justify-between mb-2">
               <span className="text-slate-400 text-sm">Active Signals</span>
@@ -376,7 +376,7 @@ export default function Dashboard() {
 
         {/* Pair Selector */}
         <div className="mb-6">
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {pairs.map(pair => (
               <button
                 key={pair}
@@ -401,7 +401,7 @@ export default function Dashboard() {
 
         {/* Filter Section */}
         <div className="mb-6 bg-slate-800 rounded-lg p-4 border border-slate-700">
-          <div className="flex items-center gap-6">
+          <div className="flex flex-col lg:flex-row items-start lg:items-center gap-4 lg:gap-6">
             <div className="flex items-center gap-3">
               <span className="text-sm text-slate-400 font-semibold">Confidence Level:</span>
               <select
@@ -417,7 +417,7 @@ export default function Dashboard() {
               </select>
             </div>
 
-            <div className="border-l border-slate-600 pl-6 flex items-center gap-3">
+            <div className="lg:border-l border-slate-600 lg:pl-6 flex items-center gap-3">
               <span className="text-sm text-slate-400 font-semibold">Signal Type:</span>
               <select
                 value={signalTypeFilter}
@@ -431,7 +431,7 @@ export default function Dashboard() {
               </select>
             </div>
 
-            <div className="border-l border-slate-600 pl-6 flex items-center gap-3">
+            <div className="lg:border-l border-slate-600 lg:pl-6 flex items-center gap-3">
               <button
                 onClick={() => setActiveTab('signals')}
                 className={`px-4 py-2 rounded-lg transition-all ${
@@ -453,7 +453,7 @@ export default function Dashboard() {
               </button>
             </div>
 
-            <div className="ml-auto flex items-center gap-3">
+            <div className="lg:ml-auto flex items-center gap-3">
               <div className="text-sm text-slate-400">
                 Showing <span className="font-bold text-white text-lg">{displaySignals.length}</span> signal{displaySignals.length !== 1 ? 's' : ''}
               </div>
@@ -474,9 +474,9 @@ export default function Dashboard() {
         </div>
 
         {/* Main Content Grid */}
-        <div className="grid grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Signals List */}
-          <div className="col-span-2 space-y-4">
+          <div className="lg:col-span-2 space-y-4">
             <h2 className="text-xl font-bold flex items-center gap-2">
               <Target className="w-5 h-5 text-blue-400" />
               {activeTab === 'saved' ? 'Saved Trading Signals' : 'Active Trading Signals'}
