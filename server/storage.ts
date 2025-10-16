@@ -322,6 +322,13 @@ export class SupabaseStorage implements IStorage {
       hashedPassword = await bcrypt.hash(insertUser.password, SALT_ROUNDS);
     }
 
+    console.log('🔐 Creating user:', {
+      email: insertUser.email,
+      username: insertUser.username,
+      hasPassword: !!insertUser.password,
+      hashedPasswordLength: hashedPassword?.length || 0,
+    });
+
     const { data, error } = await supabase
       .from('users')
       .insert({
@@ -334,8 +341,15 @@ export class SupabaseStorage implements IStorage {
       .single();
 
     if (error) {
+      console.error('❌ Supabase insert error:', error);
       throw new Error(`Failed to create user: ${error.message}`);
     }
+
+    console.log('✅ User created successfully:', {
+      id: data.id,
+      hasPasswordInDB: !!data.password,
+      passwordLengthInDB: data.password?.length || 0,
+    });
 
     return this.mapToUser(data);
   }
