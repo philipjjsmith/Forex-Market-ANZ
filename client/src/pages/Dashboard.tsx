@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useLocation } from 'wouter';
-import { Activity, TrendingUp, TrendingDown, Target, BarChart3, AlertTriangle, CheckCircle, XCircle, Star, Clock, Zap, LogOut, User } from 'lucide-react';
+import { Activity, TrendingUp, TrendingDown, Target, BarChart3, AlertTriangle, CheckCircle, XCircle, Star, Clock, Zap, LogOut, User, GraduationCap } from 'lucide-react';
 import { Indicators } from '@/lib/indicators';
 import { MACrossoverStrategy, Signal } from '@/lib/strategy';
 import { ComprehensiveSignalCard } from '@/components/ComprehensiveSignalCard';
@@ -268,6 +268,16 @@ export default function Dashboard() {
               </div>
             </div>
             <div className="flex items-center gap-4">
+              {/* Learn Button */}
+              <button
+                onClick={() => setLocation('/learn')}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
+                title="Learn Forex Trading"
+              >
+                <GraduationCap className="w-4 h-4" />
+                <span className="text-sm font-medium">Learn</span>
+              </button>
+
               {/* User Info & Logout */}
               {user && (
                 <div className="flex items-center gap-3 px-4 py-2 bg-slate-800 rounded-lg border border-slate-700">

@@ -1,15 +1,26 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { GraduationCap, TrendingUp, TrendingDown, PlayCircle } from "lucide-react";
+import { GraduationCap, TrendingUp, TrendingDown, PlayCircle, ArrowLeft } from "lucide-react";
 import TradingSimulator from "@/components/TradingSimulator";
 
 export default function Learn() {
   const [showSimulator, setShowSimulator] = useState(false);
+  const [, setLocation] = useLocation();
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white p-6">
       <div className="max-w-7xl mx-auto space-y-8">
+        {/* Back Button */}
+        <button
+          onClick={() => setLocation('/')}
+          className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
+        >
+          <ArrowLeft className="w-5 h-5" />
+          <span className="font-medium">Back to Dashboard</span>
+        </button>
+
         {/* Header */}
         <div className="text-center space-y-4">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 mb-4">
