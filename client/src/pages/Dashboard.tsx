@@ -1,13 +1,18 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Activity, TrendingUp, TrendingDown, Target, BarChart3, AlertTriangle, CheckCircle, XCircle, Star, Clock, Zap } from 'lucide-react';
+import { useLocation } from 'wouter';
+import { Activity, TrendingUp, TrendingDown, Target, BarChart3, AlertTriangle, CheckCircle, XCircle, Star, Clock, Zap, LogOut, User } from 'lucide-react';
 import { Indicators } from '@/lib/indicators';
 import { MACrossoverStrategy, Signal } from '@/lib/strategy';
 import { ComprehensiveSignalCard } from '@/components/ComprehensiveSignalCard';
 import { useQuotaTracker } from '@/hooks/use-quota-tracker';
 import { generateCandlesFromQuote } from '@/lib/candle-generator';
 import { API_ENDPOINTS } from '@/config/api';
+import { getCurrentUser, logout, type User as AuthUser } from '@/lib/auth';
 
 export default function Dashboard() {
+  const [, setLocation] = useLocation();
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [pairs] = useState(['EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'USD/CHF']);
   const [selectedPair, setSelectedPair] = useState('EUR/USD');
   const [signals, setSignals] = useState<Signal[]>([]);
@@ -123,6 +128,27 @@ export default function Dashboard() {
       version: '1.0.0',
       status: 'active'
     };
+  };
+
+  // Check authentication on mount
+  useEffect(() => {
+    const checkAuth = async () => {
+      const currentUser = await getCurrentUser();
+      if (!currentUser) {
+        setLocation('/login');
+      } else {
+        setUser(currentUser);
+      }
+      setIsCheckingAuth(false);
+    };
+
+    checkAuth();
+  }, [setLocation]);
+
+  // Handle logout
+  const handleLogout = async () => {
+    await logout();
+    setLocation('/login');
   };
 
   const analyzeMarket = useCallback(async () => {
@@ -242,6 +268,20 @@ export default function Dashboard() {
               </div>
             </div>
             <div className="flex items-center gap-4">
+              {/* User Info & Logout */}
+              {user && (
+                <div className="flex items-center gap-3 px-4 py-2 bg-slate-800 rounded-lg border border-slate-700">
+                  <User className="w-4 h-4 text-blue-400" />
+                  <span className="text-sm font-medium">{user.username}</span>
+                  <button
+                    onClick={handleLogout}
+                    className="p-2 hover:bg-slate-700 rounded-lg transition-colors"
+                    title="Logout"
+                  >
+                    <LogOut className="w-4 h-4 text-slate-400 hover:text-red-400" />
+                  </button>
+                </div>
+              )}
               {/* Quota Display */}
               <div className="flex flex-col items-end">
                 <div className="flex items-center gap-2">
