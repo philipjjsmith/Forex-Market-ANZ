@@ -470,95 +470,107 @@ export default function ProjectionTradingGame() {
               onMouseLeave={handleMouseUp}
               className="absolute top-0 left-0 w-full h-[500px] cursor-crosshair"
               style={{ zIndex: 10 }}
-            >
-              {/* Projection visualization */}
-              {drawStart && drawEnd && (
-                <svg className="absolute top-0 left-0 w-full h-full pointer-events-none">
-                  {/* Calculate box dimensions */}
-                  {(() => {
-                    const y1 = drawStart.y;
-                    const y2 = drawEnd.y;
-                    const minY = Math.min(y1, y2);
-                    const maxY = Math.max(y1, y2);
-                    const height = maxY - minY;
+            />
+          )}
 
-                    // For long: green above entry, red below
-                    // For short: red above entry, green below
-                    const entryY = y1;
-                    const profitY = positionType === 'long' ? minY : maxY;
-                    const lossY = positionType === 'long' ? maxY : minY;
+          {/* Projection visualization (shows during drawing AND after confirmation) */}
+          {(gamePhase === 'drawing' || gamePhase === 'confirmed') && drawStart && drawEnd && (
+            <svg className="absolute top-0 left-0 w-full h-[500px] pointer-events-none" style={{ zIndex: 5 }}>
+              {(() => {
+                const y1 = drawStart.y;
+                const y2 = drawEnd.y;
 
-                    return (
-                      <>
-                        {/* Profit zone (green) */}
-                        <rect
-                          x="0"
-                          y={Math.min(entryY, profitY)}
-                          width="100%"
-                          height={Math.abs(profitY - entryY)}
-                          fill="rgba(16, 185, 129, 0.15)"
-                          stroke="rgba(16, 185, 129, 0.5)"
-                          strokeWidth="2"
-                        />
+                // Calculate where the "future area" starts (60% from left for historical data)
+                const chartWidth = chartContainerRef.current?.clientWidth || 1000;
+                const futureStartX = chartWidth * 0.6; // Future area starts at 60%
+                const futureEndX = chartWidth;
 
-                        {/* Loss zone (red) */}
-                        <rect
-                          x="0"
-                          y={Math.min(entryY, lossY)}
-                          width="100%"
-                          height={Math.abs(lossY - entryY)}
-                          fill="rgba(239, 68, 68, 0.15)"
-                          stroke="rgba(239, 68, 68, 0.5)"
-                          strokeWidth="2"
-                        />
+                // For long: green above entry, red below
+                // For short: red above entry, green below
+                const entryY = y1;
+                const profitY = positionType === 'long' ? Math.min(y1, y2) : Math.max(y1, y2);
+                const lossY = positionType === 'long' ? Math.max(y1, y2) : Math.min(y1, y2);
 
-                        {/* Entry line (white) */}
-                        <line
-                          x1="0"
-                          y1={entryY}
-                          x2="100%"
-                          y2={entryY}
-                          stroke="white"
-                          strokeWidth="2"
-                          strokeDasharray="5,5"
-                        />
+                return (
+                  <>
+                    {/* Profit zone (green) - only in future area */}
+                    <rect
+                      x={futureStartX}
+                      y={Math.min(entryY, profitY)}
+                      width={futureEndX - futureStartX}
+                      height={Math.abs(profitY - entryY)}
+                      fill="rgba(16, 185, 129, 0.2)"
+                      stroke="rgba(16, 185, 129, 0.6)"
+                      strokeWidth="2"
+                    />
 
-                        {/* Take Profit line (green) */}
-                        <line
-                          x1="0"
-                          y1={profitY}
-                          x2="100%"
-                          y2={profitY}
-                          stroke="#10b981"
-                          strokeWidth="3"
-                        />
+                    {/* Loss zone (red) - only in future area */}
+                    <rect
+                      x={futureStartX}
+                      y={Math.min(entryY, lossY)}
+                      width={futureEndX - futureStartX}
+                      height={Math.abs(lossY - entryY)}
+                      fill="rgba(239, 68, 68, 0.2)"
+                      stroke="rgba(239, 68, 68, 0.6)"
+                      strokeWidth="2"
+                    />
 
-                        {/* Stop Loss line (red) */}
-                        <line
-                          x1="0"
-                          y1={lossY}
-                          x2="100%"
-                          y2={lossY}
-                          stroke="#ef4444"
-                          strokeWidth="3"
-                        />
+                    {/* Vertical line showing "present moment" */}
+                    <line
+                      x1={futureStartX}
+                      y1="0"
+                      x2={futureStartX}
+                      y2="500"
+                      stroke="#94a3b8"
+                      strokeWidth="2"
+                      strokeDasharray="10,5"
+                    />
 
-                        {/* Price labels */}
-                        <text x="10" y={entryY - 5} fill="white" fontSize="12" fontWeight="bold">
-                          Entry: {drawStart.price.toFixed(5)}
-                        </text>
-                        <text x="10" y={profitY - 5} fill="#10b981" fontSize="12" fontWeight="bold">
-                          TP: {(positionType === 'long' ? Math.max(drawStart.price, drawEnd.price) : Math.min(drawStart.price, drawEnd.price)).toFixed(5)}
-                        </text>
-                        <text x="10" y={lossY + 15} fill="#ef4444" fontSize="12" fontWeight="bold">
-                          SL: {(positionType === 'long' ? Math.min(drawStart.price, drawEnd.price) : Math.max(drawStart.price, drawEnd.price)).toFixed(5)}
-                        </text>
-                      </>
-                    );
-                  })()}
-                </svg>
-              )}
-            </div>
+                    {/* Entry line (white) - only in future */}
+                    <line
+                      x1={futureStartX}
+                      y1={entryY}
+                      x2={futureEndX}
+                      y2={entryY}
+                      stroke="white"
+                      strokeWidth="2"
+                      strokeDasharray="5,5"
+                    />
+
+                    {/* Take Profit line (green) - only in future */}
+                    <line
+                      x1={futureStartX}
+                      y1={profitY}
+                      x2={futureEndX}
+                      y2={profitY}
+                      stroke="#10b981"
+                      strokeWidth="3"
+                    />
+
+                    {/* Stop Loss line (red) - only in future */}
+                    <line
+                      x1={futureStartX}
+                      y1={lossY}
+                      x2={futureEndX}
+                      y2={lossY}
+                      stroke="#ef4444"
+                      strokeWidth="3"
+                    />
+
+                    {/* Price labels on the right side */}
+                    <text x={futureStartX + 10} y={entryY - 5} fill="white" fontSize="12" fontWeight="bold">
+                      Entry: {drawStart.price.toFixed(5)}
+                    </text>
+                    <text x={futureStartX + 10} y={profitY - 5} fill="#10b981" fontSize="12" fontWeight="bold">
+                      TP: {(positionType === 'long' ? Math.max(drawStart.price, drawEnd.price) : Math.min(drawStart.price, drawEnd.price)).toFixed(5)}
+                    </text>
+                    <text x={futureStartX + 10} y={lossY + 15} fill="#ef4444" fontSize="12" fontWeight="bold">
+                      SL: {(positionType === 'long' ? Math.min(drawStart.price, drawEnd.price) : Math.max(drawStart.price, drawEnd.price)).toFixed(5)}
+                    </text>
+                  </>
+                );
+              })()}
+            </svg>
           )}
         </div>
 
