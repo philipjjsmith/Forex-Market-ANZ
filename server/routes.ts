@@ -54,15 +54,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         console.log('✅ Registration successful, session ID:', req.sessionID);
         console.log('   Session:', req.session);
-        console.log('   Set-Cookie will be:', res.getHeader('Set-Cookie'));
 
-        res.json({
-          success: true,
-          user: {
-            id: user.id,
-            username: user.username,
-            email: user.email,
-          },
+        // CRITICAL: Manually save session before sending response
+        req.session.save((saveErr) => {
+          if (saveErr) {
+            console.error('❌ Session save error:', saveErr);
+            return res.status(500).json({
+              success: false,
+              error: 'Failed to save session',
+            });
+          }
+
+          console.log('✅ Session manually saved');
+          console.log('   Set-Cookie will be:', res.getHeader('Set-Cookie'));
+
+          res.json({
+            success: true,
+            user: {
+              id: user.id,
+              username: user.username,
+              email: user.email,
+            },
+          });
         });
       });
     } catch (error: any) {
@@ -102,15 +115,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         console.log('✅ Login successful, session ID:', req.sessionID);
         console.log('   Session:', req.session);
-        console.log('   Set-Cookie will be:', res.getHeader('Set-Cookie'));
 
-        res.json({
-          success: true,
-          user: {
-            id: user.id,
-            username: user.username,
-            email: user.email,
-          },
+        // CRITICAL: Manually save session before sending response
+        req.session.save((saveErr) => {
+          if (saveErr) {
+            console.error('❌ Session save error:', saveErr);
+            return res.status(500).json({
+              success: false,
+              error: 'Failed to save session',
+            });
+          }
+
+          console.log('✅ Session manually saved');
+          console.log('   Set-Cookie will be:', res.getHeader('Set-Cookie'));
+
+          res.json({
+            success: true,
+            user: {
+              id: user.id,
+              username: user.username,
+              email: user.email,
+            },
+          });
         });
       });
     })(req, res, next);
