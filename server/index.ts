@@ -1,12 +1,13 @@
 import "dotenv/config";
 import express, { type Request, Response, NextFunction } from "express";
 import session from "express-session";
+import cors from "cors";
 import passport from "./passport-config";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { supabase } from "./supabase";
 
-// CORS Configuration Active - Build v2
+// CORS Configuration Active - Build v3
 
 // Custom Supabase session store (avoids PostgreSQL direct connection issues)
 class SupabaseSessionStore extends session.Store {
@@ -86,34 +87,23 @@ class SupabaseSessionStore extends session.Store {
 }
 
 const app = express();
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
 
-// CORS middleware - MUST be before session/passport
-app.use((req, res, next) => {
-  const allowedOrigins = [
+// CORS middleware - MUST be before session/passport and body parsers
+app.use(cors({
+  origin: [
     'https://forex-market-anz.pages.dev',
     'http://localhost:5000',
     'http://localhost:5173'
-  ];
+  ],
+  credentials: true, // CRITICAL: Allow cookies to be sent
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'],
+  exposedHeaders: ['Set-Cookie'],
+  maxAge: 86400, // 24 hours
+}));
 
-  const origin = req.headers.origin;
-
-  // Always set CORS headers for allowed origins
-  if (origin && allowedOrigins.includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Cookie');
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-  }
-
-  // Handle preflight requests
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-
-  next();
-});
+app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
 
 // Session configuration with Supabase REST API store
 app.use(session({
