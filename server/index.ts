@@ -1,14 +1,69 @@
 import "dotenv/config";
 import express, { type Request, Response, NextFunction } from "express";
 import session from "express-session";
-import connectPgSimple from "connect-pg-simple";
 import passport from "./passport-config";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { supabase } from "./supabase";
 
 // CORS Configuration Active - Build v2
 
-const PgSession = connectPgSimple(session);
+// Custom Supabase session store (avoids PostgreSQL direct connection issues)
+class SupabaseSessionStore extends session.Store {
+  async get(sid: string, callback: (err?: any, session?: any) => void) {
+    try {
+      const { data, error } = await supabase
+        .from('sessions')
+        .select('sess, expire')
+        .eq('sid', sid)
+        .single();
+
+      if (error || !data) {
+        return callback(null, null);
+      }
+
+      if (data.expire && new Date(data.expire) < new Date()) {
+        return callback(null, null);
+      }
+
+      callback(null, data.sess);
+    } catch (err) {
+      callback(err);
+    }
+  }
+
+  async set(sid: string, session: any, callback?: (err?: any) => void) {
+    try {
+      const expire = session.cookie?.expires ? new Date(session.cookie.expires) : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+      const { error } = await supabase
+        .from('sessions')
+        .upsert({
+          sid,
+          sess: session,
+          expire: expire.toISOString(),
+        });
+
+      if (error) throw error;
+      callback?.();
+    } catch (err) {
+      callback?.(err);
+    }
+  }
+
+  async destroy(sid: string, callback?: (err?: any) => void) {
+    try {
+      await supabase
+        .from('sessions')
+        .delete()
+        .eq('sid', sid);
+
+      callback?.();
+    } catch (err) {
+      callback?.(err);
+    }
+  }
+}
 
 const app = express();
 app.use(express.json());
@@ -40,12 +95,9 @@ app.use((req, res, next) => {
   next();
 });
 
-// Session configuration with PostgreSQL store
+// Session configuration with Supabase REST API store
 app.use(session({
-  store: new PgSession({
-    conString: process.env.DATABASE_URL,
-    createTableIfMissing: true,
-  }),
+  store: new SupabaseSessionStore(),
   secret: process.env.SESSION_SECRET || 'forex-secret-key-change-in-production',
   resave: false,
   saveUninitialized: false,
