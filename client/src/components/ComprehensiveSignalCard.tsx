@@ -12,11 +12,25 @@ interface ComprehensiveSignalCardProps {
 
 export function ComprehensiveSignalCard({ signal, candles, onToggleSave, isSaved }: ComprehensiveSignalCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [timeframe, setTimeframe] = useState<'1H' | '4H' | '1D'>('1H');
+
+  // Filter candles based on timeframe
+  const filteredCandles = candles ? (() => {
+    if (timeframe === '1H') {
+      return candles; // Show all candles (1H)
+    } else if (timeframe === '4H') {
+      // Show every 4th candle for 4H
+      return candles.filter((_, idx) => idx % 4 === 0);
+    } else {
+      // Show every 24th candle for 1D
+      return candles.filter((_, idx) => idx % 24 === 0);
+    }
+  })() : undefined;
 
   // Create position object for chart
-  const position: Position | undefined = candles ? {
+  const position: Position | undefined = filteredCandles ? {
     entryPrice: signal.entry,
-    entryTime: candles.length - 1,
+    entryTime: filteredCandles.length - 1,
     type: signal.type === 'LONG' ? 'long' : 'short',
     stopLoss: signal.stop,
     takeProfit: signal.targets[0], // Use first target
@@ -337,12 +351,40 @@ export function ComprehensiveSignalCard({ signal, candles, onToggleSave, isSaved
       </div>
 
       {/* Price Chart */}
-      {candles && candles.length > 0 && (
+      {filteredCandles && filteredCandles.length > 0 && (
         <div className="mb-4 bg-slate-900 rounded-lg p-3 border border-slate-700">
-          <p className="text-xs text-slate-400 mb-2">Price Chart with Entry/SL/TP Levels</p>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs text-slate-400">Price Chart with Entry/SL/TP Levels</p>
+            <div className="flex gap-1">
+              <button
+                onClick={() => setTimeframe('1H')}
+                className={`px-2 py-1 text-xs rounded ${
+                  timeframe === '1H' ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                }`}
+              >
+                1H
+              </button>
+              <button
+                onClick={() => setTimeframe('4H')}
+                className={`px-2 py-1 text-xs rounded ${
+                  timeframe === '4H' ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                }`}
+              >
+                4H
+              </button>
+              <button
+                onClick={() => setTimeframe('1D')}
+                className={`px-2 py-1 text-xs rounded ${
+                  timeframe === '1D' ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                }`}
+              >
+                1D
+              </button>
+            </div>
+          </div>
           <div className="rounded overflow-hidden">
             <TradingChartWidget
-              candles={candles}
+              candles={filteredCandles}
               height={300}
               position={position}
             />
