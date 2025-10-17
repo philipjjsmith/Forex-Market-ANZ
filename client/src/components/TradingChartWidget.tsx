@@ -248,8 +248,9 @@ const TradingChartWidget = forwardRef<TradingChartHandle, TradingChartWidgetProp
 
       setPriceLines(newPriceLines);
 
-      // Draw profit/loss zones (filled areas) - TradingView style
-      if (candles.length > 0) {
+      // DISABLED: Draw profit/loss zones causing null value errors
+      // TODO: Fix zone rendering
+      if (false && candles.length > 0) {
         // Find the entry time index to only show zones from entry forward
         const entryIndex = candles.findIndex(c => {
           const dateValue = c.date || c.timestamp;
