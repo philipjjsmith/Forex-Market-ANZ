@@ -25,7 +25,6 @@ export function ComprehensiveSignalCard({ signal, candles, onToggleSave, isSaved
         const chunk = candles.slice(i, i + 4);
         if (chunk.length === 4) {
           aggregated.push({
-            date: chunk[3].date,
             timestamp: chunk[3].timestamp,
             open: chunk[0].open,
             high: Math.max(...chunk.map(c => c.high)),
@@ -42,7 +41,6 @@ export function ComprehensiveSignalCard({ signal, candles, onToggleSave, isSaved
         const chunk = candles.slice(i, i + 24);
         if (chunk.length === 24) {
           aggregated.push({
-            date: chunk[23].date,
             timestamp: chunk[23].timestamp,
             open: chunk[0].open,
             high: Math.max(...chunk.map(c => c.high)),
