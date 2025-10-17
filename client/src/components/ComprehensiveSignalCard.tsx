@@ -1,7 +1,7 @@
 import { TrendingUp, TrendingDown, BarChart3, Target, Shield, AlertTriangle, CheckCircle, XCircle, Star } from 'lucide-react';
 import { useState } from 'react';
 import { Signal } from '@/lib/strategy';
-import { TradingChartWidget, Position } from './TradingChartWidget';
+import TradingChartWidget, { Position } from './TradingChartWidget';
 
 interface ComprehensiveSignalCardProps {
   signal: Signal;
