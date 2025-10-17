@@ -2,7 +2,8 @@ import { useEffect, useRef, useState, useImperativeHandle, forwardRef } from "re
 import { createChart, IChartApi, ISeriesApi, CandlestickData, CandlestickSeries, LineSeries, AreaSeries, LineData, Time, MouseEventParams, IPriceLine } from "lightweight-charts";
 
 interface Candle {
-  date: string;
+  date?: string;
+  timestamp?: Date;
   open: number;
   high: number;
   low: number;
@@ -142,13 +143,23 @@ const TradingChartWidget = forwardRef<TradingChartHandle, TradingChartWidgetProp
       if (!candlestickSeriesRef.current || candles.length === 0) return;
 
       // Convert candles to Lightweight Charts format
-      const chartData: CandlestickData[] = candles.map((candle) => ({
-        time: (new Date(candle.date).getTime() / 1000) as Time,
-        open: candle.open,
-        high: candle.high,
-        low: candle.low,
-        close: candle.close,
-      }));
+      const chartData: CandlestickData[] = candles.map((candle) => {
+        // Handle both date string and timestamp formats
+        const dateValue = candle.date || candle.timestamp;
+        if (!dateValue) {
+          console.error('Candle missing date/timestamp:', candle);
+          return null;
+        }
+
+        const time = (new Date(dateValue).getTime() / 1000) as Time;
+        return {
+          time,
+          open: candle.open,
+          high: candle.high,
+          low: candle.low,
+          close: candle.close,
+        };
+      }).filter(Boolean) as CandlestickData[];
 
       candlestickSeriesRef.current.setData(chartData);
 
@@ -240,9 +251,10 @@ const TradingChartWidget = forwardRef<TradingChartHandle, TradingChartWidgetProp
       // Draw profit/loss zones (filled areas) - TradingView style
       if (candles.length > 0) {
         // Find the entry time index to only show zones from entry forward
-        const entryIndex = candles.findIndex(c =>
-          (new Date(c.date).getTime() / 1000) >= position.entryTime
-        );
+        const entryIndex = candles.findIndex(c => {
+          const dateValue = c.date || c.timestamp;
+          return dateValue ? (new Date(dateValue).getTime() / 1000) >= position.entryTime : false;
+        });
 
         // Only show zones from entry point forward (like TradingView)
         const relevantCandles = entryIndex >= 0
@@ -256,7 +268,9 @@ const TradingChartWidget = forwardRef<TradingChartHandle, TradingChartWidgetProp
           // Create profit zone data (green - from entry to TP)
           const profitZoneData: LineData[] = [];
           relevantCandles.forEach(c => {
-            const time = (new Date(c.date).getTime() / 1000) as Time;
+            const dateValue = c.date || c.timestamp;
+            if (!dateValue) return;
+            const time = (new Date(dateValue).getTime() / 1000) as Time;
             // Add entry price point
             profitZoneData.push({ time, value: position.entryPrice });
             // Add top point
@@ -296,7 +310,9 @@ const TradingChartWidget = forwardRef<TradingChartHandle, TradingChartWidgetProp
           // Create loss zone data (red - from entry to SL)
           const lossZoneData: LineData[] = [];
           relevantCandles.forEach(c => {
-            const time = (new Date(c.date).getTime() / 1000) as Time;
+            const dateValue = c.date || c.timestamp;
+            if (!dateValue) return;
+            const time = (new Date(dateValue).getTime() / 1000) as Time;
             // Add entry price point
             lossZoneData.push({ time, value: position.entryPrice });
             // Add top point
