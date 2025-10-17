@@ -493,9 +493,10 @@ export default function Dashboard() {
               </div>
             ) : (
               displaySignals.map(signal => (
-                <ComprehensiveSignalCard 
-                  key={signal.id} 
+                <ComprehensiveSignalCard
+                  key={signal.id}
                   signal={signal}
+                  candles={marketData[signal.symbol]?.candles}
                   onToggleSave={toggleSaveSignal}
                   isSaved={savedSignals.includes(signal.id)}
                 />

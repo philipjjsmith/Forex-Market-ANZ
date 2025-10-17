@@ -1,15 +1,26 @@
 import { TrendingUp, TrendingDown, BarChart3, Target, Shield, AlertTriangle, CheckCircle, XCircle, Star } from 'lucide-react';
 import { useState } from 'react';
 import { Signal } from '@/lib/strategy';
+import { TradingChartWidget, Position } from './TradingChartWidget';
 
 interface ComprehensiveSignalCardProps {
   signal: Signal;
+  candles?: any[];
   onToggleSave?: (signalId: string) => void;
   isSaved?: boolean;
 }
 
-export function ComprehensiveSignalCard({ signal, onToggleSave, isSaved }: ComprehensiveSignalCardProps) {
+export function ComprehensiveSignalCard({ signal, candles, onToggleSave, isSaved }: ComprehensiveSignalCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
+
+  // Create position object for chart
+  const position: Position | undefined = candles ? {
+    entryPrice: signal.entry,
+    entryTime: candles.length - 1,
+    type: signal.type === 'LONG' ? 'long' : 'short',
+    stopLoss: signal.stop,
+    takeProfit: signal.targets[0], // Use first target
+  } : undefined;
 
   const getOrderTypeInfo = (orderType: string) => {
     const orderTypes: Record<string, { color: string; icon: string; description: string }> = {
@@ -324,6 +335,20 @@ export function ComprehensiveSignalCard({ signal, onToggleSave, isSaved }: Compr
         <p className="text-xs text-slate-400 mb-2">Analysis Rationale</p>
         <p className="text-sm text-slate-300">{signal.rationale}</p>
       </div>
+
+      {/* Price Chart */}
+      {candles && candles.length > 0 && (
+        <div className="mb-4 bg-slate-900 rounded-lg p-3 border border-slate-700">
+          <p className="text-xs text-slate-400 mb-2">Price Chart with Entry/SL/TP Levels</p>
+          <div className="rounded overflow-hidden">
+            <TradingChartWidget
+              candles={candles}
+              height={300}
+              position={position}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Explanation Toggle Button */}
       <button
