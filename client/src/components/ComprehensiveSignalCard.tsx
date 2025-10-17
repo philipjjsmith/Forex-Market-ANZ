@@ -14,16 +14,44 @@ export function ComprehensiveSignalCard({ signal, candles, onToggleSave, isSaved
   const [isExpanded, setIsExpanded] = useState(false);
   const [timeframe, setTimeframe] = useState<'1H' | '4H' | '1D'>('1H');
 
-  // Filter candles based on timeframe
+  // Aggregate candles based on timeframe
   const filteredCandles = candles ? (() => {
     if (timeframe === '1H') {
       return candles; // Show all candles (1H)
     } else if (timeframe === '4H') {
-      // Show every 4th candle for 4H
-      return candles.filter((_, idx) => idx % 4 === 0);
+      // Aggregate 4 consecutive 1H candles into 1 4H candle
+      const aggregated = [];
+      for (let i = 0; i < candles.length; i += 4) {
+        const chunk = candles.slice(i, i + 4);
+        if (chunk.length === 4) {
+          aggregated.push({
+            date: chunk[3].date,
+            timestamp: chunk[3].timestamp,
+            open: chunk[0].open,
+            high: Math.max(...chunk.map(c => c.high)),
+            low: Math.min(...chunk.map(c => c.low)),
+            close: chunk[3].close,
+          });
+        }
+      }
+      return aggregated;
     } else {
-      // Show every 24th candle for 1D
-      return candles.filter((_, idx) => idx % 24 === 0);
+      // Aggregate 24 consecutive 1H candles into 1 1D candle
+      const aggregated = [];
+      for (let i = 0; i < candles.length; i += 24) {
+        const chunk = candles.slice(i, i + 24);
+        if (chunk.length === 24) {
+          aggregated.push({
+            date: chunk[23].date,
+            timestamp: chunk[23].timestamp,
+            open: chunk[0].open,
+            high: Math.max(...chunk.map(c => c.high)),
+            low: Math.min(...chunk.map(c => c.low)),
+            close: chunk[23].close,
+          });
+        }
+      }
+      return aggregated;
     }
   })() : undefined;
 
