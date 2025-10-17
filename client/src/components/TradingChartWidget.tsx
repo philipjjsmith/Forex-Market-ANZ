@@ -163,9 +163,14 @@ const TradingChartWidget = forwardRef<TradingChartHandle, TradingChartWidgetProp
 
       candlestickSeriesRef.current.setData(chartData);
 
-      // Fit content to visible range
-      if (chartRef.current) {
-        chartRef.current.timeScale().fitContent();
+      // Set a fixed visible range to show last 60 candles for consistent zoom level
+      if (chartRef.current && chartData.length > 0) {
+        const visibleBars = Math.min(60, chartData.length); // Show max 60 bars, or all if less
+        const from = Math.max(0, chartData.length - visibleBars);
+        chartRef.current.timeScale().setVisibleLogicalRange({
+          from: from,
+          to: chartData.length - 1,
+        });
       }
     }, [candles]);
 
