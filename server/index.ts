@@ -119,6 +119,9 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
+// Explicit OPTIONS handler for all routes (backup CORS handling)
+app.options('*', cors());
+
 // Session configuration with Supabase REST API store
 app.use(session({
   store: new SupabaseSessionStore(),
