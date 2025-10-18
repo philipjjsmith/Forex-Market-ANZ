@@ -93,46 +93,48 @@ const TradingChartWidget = forwardRef<TradingChartHandle, TradingChartWidgetProp
 
       candlestickSeriesRef.current = candlestickSeries;
 
-      // Add profit zone series (green shaded area with baseline) - TradingView style
+      // Add profit zone series (green/cyan shaded area) - TradingView style
       const profitZoneSeries = chart.addSeries(LineSeries, {
-        color: 'rgba(76, 175, 80, 0.4)',      // Green profit zone
-        lineWidth: 1,
-        lineStyle: 2, // Dashed
+        color: 'rgba(128, 203, 196, 0)',      // Teal/cyan - invisible border
+        lineWidth: 0,
         crosshairMarkerVisible: false,
         lastValueVisible: false,
         priceLineVisible: false,
         // @ts-ignore - baseLineVisible is valid but not in types
-        baseLineVisible: true,
+        baseLineVisible: false,
         // @ts-ignore
-        baseLineColor: 'rgba(76, 175, 80, 0)',
+        lineType: 2, // Step line
+        // @ts-ignore - Fill area between baseline and line
+        topFillColor1: 'rgba(128, 203, 196, 0.35)',  // Light cyan/teal
         // @ts-ignore
-        baseLineStyle: 0,
+        topFillColor2: 'rgba(128, 203, 196, 0.15)',
         // @ts-ignore
-        topColor: 'rgba(76, 175, 80, 0.2)',
+        bottomFillColor1: 'rgba(128, 203, 196, 0.15)',
         // @ts-ignore
-        bottomColor: 'rgba(76, 175, 80, 0.05)',
+        bottomFillColor2: 'rgba(128, 203, 196, 0.35)',
       });
 
       profitZoneSeriesRef.current = profitZoneSeries;
 
-      // Add loss zone series (red shaded area with baseline) - TradingView style
+      // Add loss zone series (red/pink shaded area) - TradingView style
       const lossZoneSeries = chart.addSeries(LineSeries, {
-        color: 'rgba(244, 67, 54, 0.4)',       // Red loss zone
-        lineWidth: 1,
-        lineStyle: 2, // Dashed
+        color: 'rgba(255, 193, 204, 0)',       // Pink/red - invisible border
+        lineWidth: 0,
         crosshairMarkerVisible: false,
         lastValueVisible: false,
         priceLineVisible: false,
         // @ts-ignore - baseLineVisible is valid but not in types
-        baseLineVisible: true,
+        baseLineVisible: false,
         // @ts-ignore
-        baseLineColor: 'rgba(244, 67, 54, 0)',
+        lineType: 2, // Step line
+        // @ts-ignore - Fill area between baseline and line
+        topFillColor1: 'rgba(255, 193, 204, 0.35)',  // Light pink/red
         // @ts-ignore
-        baseLineStyle: 0,
+        topFillColor2: 'rgba(255, 193, 204, 0.15)',
         // @ts-ignore
-        topColor: 'rgba(244, 67, 54, 0.2)',
+        bottomFillColor1: 'rgba(255, 193, 204, 0.15)',
         // @ts-ignore
-        bottomColor: 'rgba(244, 67, 54, 0.05)',
+        bottomFillColor2: 'rgba(255, 193, 204, 0.35)',
       });
 
       lossZoneSeriesRef.current = lossZoneSeries;
