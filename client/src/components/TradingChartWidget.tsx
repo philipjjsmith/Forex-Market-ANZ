@@ -291,26 +291,70 @@ const TradingChartWidget = forwardRef<TradingChartHandle, TradingChartWidgetProp
         profitZoneSeriesRef.current.setData(profitZoneData);
         lossZoneSeriesRef.current.setData(lossZoneData);
 
-        // Configure the separate price scales - use simple fixed margins
-        // Margins must be between 0 and 1, and top + bottom must be < 1
+        // Calculate dynamic margins based on actual price levels
+        // Get the visible price range from the candlestick data
+        const prices = candles.map(c => [c.high, c.low]).flat();
+        const minPrice = Math.min(...prices, position.stopLoss || position.entryPrice * 0.95);
+        const maxPrice = Math.max(...prices, position.takeProfit || position.entryPrice * 1.05);
+        const priceRange = maxPrice - minPrice;
 
-        // For profit zone: position in upper part of visible range
-        profitZoneSeriesRef.current.priceScale().applyOptions({
-          scaleMargins: {
-            top: 0.1,    // 10% margin from top
-            bottom: 0.6, // 60% margin from bottom (zone in upper 30% of chart)
-          },
-          autoScale: false,
-        });
+        if (position.type === "long") {
+          // LONG: Green zone from Entry to TP, Red zone from SL to Entry
+          const profitTop = position.takeProfit || position.entryPrice * 1.002;
+          const lossBottom = position.stopLoss || position.entryPrice * 0.998;
 
-        // For loss zone: position in lower part of visible range
-        lossZoneSeriesRef.current.priceScale().applyOptions({
-          scaleMargins: {
-            top: 0.6,   // 60% margin from top (zone in lower 30% of chart)
-            bottom: 0.1, // 10% margin from bottom
-          },
-          autoScale: false,
-        });
+          // Calculate where profit zone should appear (Entry to TP)
+          const profitZoneTop = (maxPrice - position.entryPrice) / priceRange;
+          const profitZoneBottom = (maxPrice - profitTop) / priceRange;
+
+          profitZoneSeriesRef.current.priceScale().applyOptions({
+            scaleMargins: {
+              top: Math.max(0.05, Math.min(0.45, profitZoneBottom)),
+              bottom: Math.max(0.05, Math.min(0.45, profitZoneTop)),
+            },
+            autoScale: false,
+          });
+
+          // Calculate where loss zone should appear (SL to Entry)
+          const lossZoneTop = (maxPrice - lossBottom) / priceRange;
+          const lossZoneBottom = (maxPrice - position.entryPrice) / priceRange;
+
+          lossZoneSeriesRef.current.priceScale().applyOptions({
+            scaleMargins: {
+              top: Math.max(0.05, Math.min(0.45, lossZoneTop)),
+              bottom: Math.max(0.05, Math.min(0.45, lossZoneBottom)),
+            },
+            autoScale: false,
+          });
+        } else {
+          // SHORT: Green zone from TP to Entry, Red zone from Entry to SL
+          const profitBottom = position.takeProfit || position.entryPrice * 0.998;
+          const lossTop = position.stopLoss || position.entryPrice * 1.002;
+
+          // Calculate where profit zone should appear (TP to Entry)
+          const profitZoneTop = (maxPrice - profitBottom) / priceRange;
+          const profitZoneBottom = (maxPrice - position.entryPrice) / priceRange;
+
+          profitZoneSeriesRef.current.priceScale().applyOptions({
+            scaleMargins: {
+              top: Math.max(0.05, Math.min(0.45, profitZoneTop)),
+              bottom: Math.max(0.05, Math.min(0.45, profitZoneBottom)),
+            },
+            autoScale: false,
+          });
+
+          // Calculate where loss zone should appear (Entry to SL)
+          const lossZoneTop = (maxPrice - position.entryPrice) / priceRange;
+          const lossZoneBottom = (maxPrice - lossTop) / priceRange;
+
+          lossZoneSeriesRef.current.priceScale().applyOptions({
+            scaleMargins: {
+              top: Math.max(0.05, Math.min(0.45, lossZoneBottom)),
+              bottom: Math.max(0.05, Math.min(0.45, lossZoneTop)),
+            },
+            autoScale: false,
+          });
+        }
       }
     }, [position, candles]);
 
