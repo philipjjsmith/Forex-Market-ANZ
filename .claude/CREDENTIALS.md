@@ -41,17 +41,20 @@ This file documents where credentials and access information are stored for the 
 - **Project Name**: forex-market-anz
 - **Domain**: [Set in Vercel dashboard]
 
-**Cloudflare Pages** (Alternative Frontend Hosting)
+**Cloudflare Pages** (Frontend Hosting - ACTIVE)
 - **Dashboard**: https://dash.cloudflare.com
 - **Login Method**: GitHub OAuth (philipsmith33105@gmail.com)
 - **Project Name**: forex-market-anz
-- **Domain**: forex-market-anz.pages.dev
+- **Domain**: https://forex-market-anz.pages.dev
+- **Auto-Deploy**: Connected to GitHub main branch
 
-**Railway** (Backend Hosting)
-- **Dashboard**: https://railway.app/dashboard
+**Render** (Backend Hosting - ACTIVE)
+- **Dashboard**: https://dashboard.render.com
 - **Login Method**: GitHub OAuth (philipsmith33105@gmail.com)
-- **Project**: Forex-Market-ANZ
-- **Environment Variables**: Set in Railway dashboard
+- **Service Name**: forex-market-anz
+- **Service URL**: https://forex-market-anz.onrender.com
+- **Environment Variables**: Set in Render dashboard → Environment tab
+- **Auto-Deploy**: Connected to GitHub main branch
 
 ## Email Service (Password Reset Feature)
 
@@ -71,9 +74,9 @@ All sensitive credentials stored locally in `.env` (never committed to git).
 
 ### Production Deployments
 Environment variables set in respective platform dashboards:
-- **Railway**: Settings → Variables tab
-- **Vercel**: Project Settings → Environment Variables
-- **Cloudflare**: Settings → Environment Variables
+- **Render**: Dashboard → Environment tab
+- **Cloudflare Pages**: Settings → Environment Variables
+- **Vercel**: Project Settings → Environment Variables (if used)
 
 ## Security Best Practices
 
@@ -91,14 +94,14 @@ Environment variables set in respective platform dashboards:
 # Login to GitHub CLI (for git operations)
 gh auth login
 
-# Login to Vercel CLI (for deployments)
-npx vercel login
-
-# Login to Railway CLI (for deployments)
-npm i -g @railway/cli && railway login
+# Login to Render CLI (for deployments)
+npm i -g render-cli && render login
 
 # Login to Cloudflare Wrangler (for deployments)
 npx wrangler login
+
+# Login to Vercel CLI (if using for frontend)
+npx vercel login
 ```
 
 ## Contact Information
