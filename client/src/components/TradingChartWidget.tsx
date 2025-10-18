@@ -291,50 +291,26 @@ const TradingChartWidget = forwardRef<TradingChartHandle, TradingChartWidgetProp
         profitZoneSeriesRef.current.setData(profitZoneData);
         lossZoneSeriesRef.current.setData(lossZoneData);
 
-        // Configure the separate price scales to map 0-100 to the actual price ranges
-        if (position.type === "long") {
-          const profitTop = position.takeProfit || position.entryPrice * 1.002;
-          const lossBottom = position.stopLoss || position.entryPrice * 0.998;
+        // Configure the separate price scales - use simple fixed margins
+        // Margins must be between 0 and 1, and top + bottom must be < 1
 
-          // Map profit zone's 0-100 to Entry-TP range
-          profitZoneSeriesRef.current.priceScale().applyOptions({
-            scaleMargins: {
-              top: 1 - ((profitTop - position.entryPrice) / (profitTop - lossBottom)),
-              bottom: (position.entryPrice - lossBottom) / (profitTop - lossBottom),
-            },
-            autoScale: false,
-          });
+        // For profit zone: position in upper part of visible range
+        profitZoneSeriesRef.current.priceScale().applyOptions({
+          scaleMargins: {
+            top: 0.1,    // 10% margin from top
+            bottom: 0.6, // 60% margin from bottom (zone in upper 30% of chart)
+          },
+          autoScale: false,
+        });
 
-          // Map loss zone's 0-100 to SL-Entry range
-          lossZoneSeriesRef.current.priceScale().applyOptions({
-            scaleMargins: {
-              top: 1 - ((position.entryPrice - lossBottom) / (profitTop - lossBottom)),
-              bottom: 0,
-            },
-            autoScale: false,
-          });
-        } else {
-          const profitBottom = position.takeProfit || position.entryPrice * 0.998;
-          const lossTop = position.stopLoss || position.entryPrice * 1.002;
-
-          // Map profit zone's 0-100 to TP-Entry range
-          profitZoneSeriesRef.current.priceScale().applyOptions({
-            scaleMargins: {
-              top: 1 - ((position.entryPrice - profitBottom) / (lossTop - profitBottom)),
-              bottom: 0,
-            },
-            autoScale: false,
-          });
-
-          // Map loss zone's 0-100 to Entry-SL range
-          lossZoneSeriesRef.current.priceScale().applyOptions({
-            scaleMargins: {
-              top: 1,
-              bottom: (position.entryPrice - profitBottom) / (lossTop - profitBottom),
-            },
-            autoScale: false,
-          });
-        }
+        // For loss zone: position in lower part of visible range
+        lossZoneSeriesRef.current.priceScale().applyOptions({
+          scaleMargins: {
+            top: 0.6,   // 60% margin from top (zone in lower 30% of chart)
+            bottom: 0.1, // 10% margin from bottom
+          },
+          autoScale: false,
+        });
       }
     }, [position, candles]);
 
