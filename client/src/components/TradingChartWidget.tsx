@@ -37,18 +37,18 @@ const TradingChartWidget = forwardRef<TradingChartHandle, TradingChartWidgetProp
     const candlestickSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
     const profitZoneSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
     const lossZoneSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
-    const [priceLines, setPriceLines] = useState<IPriceLine[]>([]);
+    const priceLinesRef = useRef<IPriceLine[]>([]);
 
     // Expose methods to parent component
     useImperativeHandle(ref, () => ({
       clearPosition: () => {
         // Clear price lines
-        priceLines.forEach(line => {
+        priceLinesRef.current.forEach(line => {
           if (candlestickSeriesRef.current) {
             candlestickSeriesRef.current.removePriceLine(line);
           }
         });
-        setPriceLines([]);
+        priceLinesRef.current = [];
       },
     }));
 
@@ -228,10 +228,19 @@ const TradingChartWidget = forwardRef<TradingChartHandle, TradingChartWidgetProp
 
     // Draw position lines and zones
     useEffect(() => {
-      if (!candlestickSeriesRef.current || !position?.entryPrice || !position?.type) return;
+      if (!candlestickSeriesRef.current || !position?.entryPrice || !position?.type) {
+        // Clear any existing lines if position is removed
+        priceLinesRef.current.forEach(line => {
+          if (candlestickSeriesRef.current) {
+            candlestickSeriesRef.current.removePriceLine(line);
+          }
+        });
+        priceLinesRef.current = [];
+        return;
+      }
 
       // Clear old price lines
-      priceLines.forEach(line => {
+      priceLinesRef.current.forEach(line => {
         candlestickSeriesRef.current!.removePriceLine(line);
       });
 
@@ -274,7 +283,7 @@ const TradingChartWidget = forwardRef<TradingChartHandle, TradingChartWidgetProp
         newPriceLines.push(tpLine);
       }
 
-      setPriceLines(newPriceLines);
+      priceLinesRef.current = newPriceLines;
 
       // Draw profit/loss projection zones (TradingView style) - SUBTLE zones only in future
       if (candles.length > 0 && profitZoneSeriesRef.current && lossZoneSeriesRef.current) {
@@ -343,7 +352,7 @@ const TradingChartWidget = forwardRef<TradingChartHandle, TradingChartWidgetProp
           lossZoneSeriesRef.current.setData(lossZoneData);
         }
       }
-    }, [position, candles, priceLines]);
+    }, [position, candles]);
 
     return (
       <div className="relative">
