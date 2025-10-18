@@ -90,16 +90,30 @@ const app = express();
 
 // CORS middleware - MUST be before session/passport and body parsers
 app.use(cors({
-  origin: [
-    'https://forex-market-anz.pages.dev',
-    'http://localhost:5000',
-    'http://localhost:5173'
-  ],
+  origin: function(origin, callback) {
+    // Allow requests with no origin (mobile apps, curl, etc)
+    if (!origin) return callback(null, true);
+
+    const allowedOrigins = [
+      'https://forex-market-anz.pages.dev',
+      'http://localhost:5000',
+      'http://localhost:5173'
+    ];
+
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      console.log('❌ CORS blocked origin:', origin);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true, // CRITICAL: Allow cookies to be sent
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'],
   exposedHeaders: ['Set-Cookie'],
   maxAge: 86400, // 24 hours
+  preflightContinue: false,
+  optionsSuccessStatus: 204
 }));
 
 app.use(express.json());
