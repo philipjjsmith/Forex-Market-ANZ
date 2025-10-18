@@ -35,12 +35,6 @@ This file documents where credentials and access information are stored for the 
 - **Username**: philipjjsmith
 - **CLI Auth**: Use `gh auth login` for terminal access
 
-**Vercel** (Frontend Hosting Option)
-- **Dashboard**: https://vercel.com/dashboard
-- **Login Method**: GitHub OAuth (philipsmith33105@gmail.com)
-- **Project Name**: forex-market-anz
-- **Domain**: [Set in Vercel dashboard]
-
 **Cloudflare Pages** (Frontend Hosting - ACTIVE)
 - **Dashboard**: https://dash.cloudflare.com
 - **Login Method**: GitHub OAuth (philipsmith33105@gmail.com)
@@ -76,7 +70,6 @@ All sensitive credentials stored locally in `.env` (never committed to git).
 Environment variables set in respective platform dashboards:
 - **Render**: Dashboard → Environment tab
 - **Cloudflare Pages**: Settings → Environment Variables
-- **Vercel**: Project Settings → Environment Variables (if used)
 
 ## Security Best Practices
 
@@ -99,9 +92,6 @@ npm i -g render-cli && render login
 
 # Login to Cloudflare Wrangler (for deployments)
 npx wrangler login
-
-# Login to Vercel CLI (if using for frontend)
-npx vercel login
 ```
 
 ## Contact Information
