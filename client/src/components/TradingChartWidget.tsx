@@ -253,80 +253,62 @@ const TradingChartWidget = forwardRef<TradingChartHandle, TradingChartWidgetProp
 
       setPriceLines(newPriceLines);
 
-      // DISABLED: Draw profit/loss zones causing null value errors
-      // TODO: Fix zone rendering
-      if (false && candles.length > 0) {
-        // Find the entry time index to only show zones from entry forward
-        const entryIndex = candles.findIndex(c => {
-          const dateValue = c.date || c.timestamp;
-          return dateValue ? (new Date(dateValue).getTime() / 1000) >= position.entryTime : false;
-        });
+      // Draw profit/loss projection zones (TradingView style)
+      if (candles.length > 0 && profitZoneSeriesRef.current && lossZoneSeriesRef.current) {
+        // Get the last candle time as the starting point for projections
+        const lastCandle = candles[candles.length - 1];
+        const lastCandleTime = new Date(lastCandle.timestamp || lastCandle.date).getTime() / 1000;
 
-        // Only show zones from entry point forward (like TradingView)
-        const relevantCandles = entryIndex >= 0
-          ? candles.slice(entryIndex)
-          : candles;
+        // Current price from last candle
+        const currentPrice = lastCandle.close;
+
+        // Create future time points for projection (extend into future)
+        const timeInterval = 300; // 5 minutes in seconds (base interval)
+        const projectionSteps = 30; // Number of future intervals to show
 
         if (position.type === "long") {
-          // For LONG: Green zone above entry (to TP), Red zone below entry (to SL)
-          const profitTop = position.takeProfit || position.entryPrice * 1.05;
+          // LONG: Green zone above entry (profit area), Red zone below entry (loss area)
+          const profitTop = position.takeProfit || position.entryPrice * 1.002;
+          const lossBottom = position.stopLoss || position.entryPrice * 0.998;
 
-          // Create profit zone data (green - from entry to TP)
+          // Profit zone: Area chart showing zone from current price to TP
           const profitZoneData: LineData[] = [];
-          relevantCandles.forEach(c => {
-            const dateValue = c.date || c.timestamp;
-            if (!dateValue) return;
-            const time = (new Date(dateValue).getTime() / 1000) as Time;
-            // Add entry price point
-            profitZoneData.push({ time, value: position.entryPrice });
-            // Add top point
+          for (let i = 0; i <= projectionSteps; i++) {
+            const time = (lastCandleTime + (i * timeInterval)) as Time;
+            // Area series displays from this value down to zero, so we set it to the top of profit zone
             profitZoneData.push({ time, value: profitTop });
-          });
+          }
 
-          const lossBottom = position.stopLoss || position.entryPrice * 0.95;
-
-          // Create loss zone data (red - from SL to entry)
+          // Loss zone: Area chart showing zone from SL to current price
           const lossZoneData: LineData[] = [];
-          relevantCandles.forEach(c => {
-            const time = (new Date(c.date).getTime() / 1000) as Time;
-            // Add bottom point
+          for (let i = 0; i <= projectionSteps; i++) {
+            const time = (lastCandleTime + (i * timeInterval)) as Time;
             lossZoneData.push({ time, value: lossBottom });
-            // Add entry price point
-            lossZoneData.push({ time, value: position.entryPrice });
-          });
+          }
 
-          profitZoneSeriesRef.current?.setData(profitZoneData);
-          lossZoneSeriesRef.current?.setData(lossZoneData);
+          profitZoneSeriesRef.current.setData(profitZoneData);
+          lossZoneSeriesRef.current.setData(lossZoneData);
         } else {
-          // For SHORT: Green zone below entry (to TP), Red zone above entry (to SL)
-          const profitBottom = position.takeProfit || position.entryPrice * 0.95;
+          // SHORT: Green zone below entry (profit area), Red zone above entry (loss area)
+          const profitBottom = position.takeProfit || position.entryPrice * 0.998;
+          const lossTop = position.stopLoss || position.entryPrice * 1.002;
 
-          // Create profit zone data (green - from TP to entry)
+          // Profit zone: from TP to entry
           const profitZoneData: LineData[] = [];
-          relevantCandles.forEach(c => {
-            const time = (new Date(c.date).getTime() / 1000) as Time;
-            // Add bottom point
+          for (let i = 0; i <= projectionSteps; i++) {
+            const time = (lastCandleTime + (i * timeInterval)) as Time;
             profitZoneData.push({ time, value: profitBottom });
-            // Add entry price point
-            profitZoneData.push({ time, value: position.entryPrice });
-          });
+          }
 
-          const lossTop = position.stopLoss || position.entryPrice * 1.05;
-
-          // Create loss zone data (red - from entry to SL)
+          // Loss zone: from entry to SL
           const lossZoneData: LineData[] = [];
-          relevantCandles.forEach(c => {
-            const dateValue = c.date || c.timestamp;
-            if (!dateValue) return;
-            const time = (new Date(dateValue).getTime() / 1000) as Time;
-            // Add entry price point
-            lossZoneData.push({ time, value: position.entryPrice });
-            // Add top point
+          for (let i = 0; i <= projectionSteps; i++) {
+            const time = (lastCandleTime + (i * timeInterval)) as Time;
             lossZoneData.push({ time, value: lossTop });
-          });
+          }
 
-          profitZoneSeriesRef.current?.setData(profitZoneData);
-          lossZoneSeriesRef.current?.setData(lossZoneData);
+          profitZoneSeriesRef.current.setData(profitZoneData);
+          lossZoneSeriesRef.current.setData(lossZoneData);
         }
       }
     }, [position, candles, priceLines]);
