@@ -299,8 +299,8 @@ const TradingChartWidget = forwardRef<TradingChartHandle, TradingChartWidgetProp
         const maxChartPrice = Math.max(slPrice, tpPrice);
         const chartPriceRange = maxChartPrice - minChartPrice;
 
-        // Add 15% padding so zones are clearly visible
-        const paddingPercent = 0.15;
+        // Add 10% padding so zones are clearly visible (reduced from 15% to prevent negative margins)
+        const paddingPercent = 0.10;
         const topMargin = paddingPercent;
         const bottomMargin = paddingPercent;
 
@@ -338,8 +338,8 @@ const TradingChartWidget = forwardRef<TradingChartHandle, TradingChartWidgetProp
           // - top margin = 1 - (1 - entryPosition) = entryPosition (space above Entry)
           profitZoneSeriesRef.current.priceScale().applyOptions({
             scaleMargins: {
-              top: 1 - tpPosition - topMargin,      // Space above TP
-              bottom: entryPosition + bottomMargin,  // Space below Entry
+              top: Math.max(0, Math.min(0.9, 1 - tpPosition - topMargin)),      // Clamp between 0-0.9
+              bottom: Math.max(0.1, Math.min(1, entryPosition + bottomMargin)),  // Clamp between 0.1-1
             },
             autoScale: false,
           });
@@ -347,8 +347,8 @@ const TradingChartWidget = forwardRef<TradingChartHandle, TradingChartWidgetProp
           // Red loss zone: from SL up to Entry
           lossZoneSeriesRef.current.priceScale().applyOptions({
             scaleMargins: {
-              top: 1 - entryPosition - topMargin,    // Space above Entry
-              bottom: slPosition + bottomMargin,      // Space below SL
+              top: Math.max(0, Math.min(0.9, 1 - entryPosition - topMargin)),    // Clamp between 0-0.9
+              bottom: Math.max(0.1, Math.min(1, slPosition + bottomMargin)),      // Clamp between 0.1-1
             },
             autoScale: false,
           });
@@ -364,8 +364,8 @@ const TradingChartWidget = forwardRef<TradingChartHandle, TradingChartWidgetProp
           // Green profit zone: from TP up to Entry
           profitZoneSeriesRef.current.priceScale().applyOptions({
             scaleMargins: {
-              top: 1 - entryPosition - topMargin,     // Space above Entry
-              bottom: tpPosition + bottomMargin,       // Space below TP
+              top: Math.max(0, Math.min(0.9, 1 - entryPosition - topMargin)),     // Clamp between 0-0.9
+              bottom: Math.max(0.1, Math.min(1, tpPosition + bottomMargin)),       // Clamp between 0.1-1
             },
             autoScale: false,
           });
@@ -373,8 +373,8 @@ const TradingChartWidget = forwardRef<TradingChartHandle, TradingChartWidgetProp
           // Red loss zone: from Entry up to SL
           lossZoneSeriesRef.current.priceScale().applyOptions({
             scaleMargins: {
-              top: 1 - slPosition - topMargin,        // Space above SL
-              bottom: entryPosition + bottomMargin,    // Space below Entry
+              top: Math.max(0, Math.min(0.9, 1 - slPosition - topMargin)),        // Clamp between 0-0.9
+              bottom: Math.max(0.1, Math.min(1, entryPosition + bottomMargin)),    // Clamp between 0.1-1
             },
             autoScale: false,
           });
