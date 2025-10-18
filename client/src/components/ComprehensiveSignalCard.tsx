@@ -14,38 +14,52 @@ export function ComprehensiveSignalCard({ signal, candles, onToggleSave, isSaved
   const [isExpanded, setIsExpanded] = useState(false);
   const [timeframe, setTimeframe] = useState<'1H' | '4H' | '1D'>('1H');
 
-  // Aggregate candles based on timeframe
+  // Aggregate candles based on timeframe (base candles are 5-minute intervals)
   const filteredCandles = candles ? (() => {
     if (timeframe === '1H') {
-      return candles; // Show all candles (1H)
-    } else if (timeframe === '4H') {
-      // Aggregate 4 consecutive 1H candles into 1 4H candle
+      // Aggregate 12 consecutive 5-min candles into 1 1H candle (12 × 5min = 60min)
       const aggregated = [];
-      for (let i = 0; i < candles.length; i += 4) {
-        const chunk = candles.slice(i, i + 4);
-        if (chunk.length === 4) {
+      for (let i = 0; i < candles.length; i += 12) {
+        const chunk = candles.slice(i, i + 12);
+        if (chunk.length === 12) {
           aggregated.push({
-            timestamp: chunk[3].timestamp,
+            timestamp: chunk[11].timestamp,
             open: chunk[0].open,
             high: Math.max(...chunk.map(c => c.high)),
             low: Math.min(...chunk.map(c => c.low)),
-            close: chunk[3].close,
+            close: chunk[11].close,
+          });
+        }
+      }
+      return aggregated;
+    } else if (timeframe === '4H') {
+      // Aggregate 48 consecutive 5-min candles into 1 4H candle (48 × 5min = 240min)
+      const aggregated = [];
+      for (let i = 0; i < candles.length; i += 48) {
+        const chunk = candles.slice(i, i + 48);
+        if (chunk.length === 48) {
+          aggregated.push({
+            timestamp: chunk[47].timestamp,
+            open: chunk[0].open,
+            high: Math.max(...chunk.map(c => c.high)),
+            low: Math.min(...chunk.map(c => c.low)),
+            close: chunk[47].close,
           });
         }
       }
       return aggregated;
     } else {
-      // Aggregate 24 consecutive 1H candles into 1 1D candle
+      // Aggregate 288 consecutive 5-min candles into 1 1D candle (288 × 5min = 1440min = 24h)
       const aggregated = [];
-      for (let i = 0; i < candles.length; i += 24) {
-        const chunk = candles.slice(i, i + 24);
-        if (chunk.length === 24) {
+      for (let i = 0; i < candles.length; i += 288) {
+        const chunk = candles.slice(i, i + 288);
+        if (chunk.length === 288) {
           aggregated.push({
-            timestamp: chunk[23].timestamp,
+            timestamp: chunk[287].timestamp,
             open: chunk[0].open,
             high: Math.max(...chunk.map(c => c.high)),
             low: Math.min(...chunk.map(c => c.low)),
-            close: chunk[23].close,
+            close: chunk[287].close,
           });
         }
       }

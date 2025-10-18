@@ -194,8 +194,8 @@ export default function Dashboard() {
         const pair = quote.symbol;
         const currentPrice = quote.exchangeRate;
 
-        // Generate candles based on real price
-        const primaryCandles = generateCandlesFromQuote(pair, currentPrice, 200);
+        // Generate candles based on real price (5-minute intervals, 1440 candles = 5 days)
+        const primaryCandles = generateCandlesFromQuote(pair, currentPrice, 1440);
         const higherCandles = primaryCandles.filter((_, idx) => idx % 4 === 0);
 
         newMarketData[pair] = {

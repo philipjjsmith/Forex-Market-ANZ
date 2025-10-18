@@ -12,7 +12,7 @@ interface Candle {
   volume: number;
 }
 
-export function generateCandlesFromRealPrice(currentPrice: number, count = 200): Candle[] {
+export function generateCandlesFromRealPrice(currentPrice: number, count = 1440): Candle[] {
   const candles: Candle[] = [];
   const now = Date.now();
 
@@ -38,7 +38,7 @@ export function generateCandlesFromRealPrice(currentPrice: number, count = 200):
     const open = price - change / 2;
 
     candles.push({
-      timestamp: new Date(now - i * 3600000), // 1 hour per candle
+      timestamp: new Date(now - i * 300000), // 5 minutes per candle (300000ms)
       open: parseFloat(open.toFixed(5)),
       high: parseFloat(high.toFixed(5)),
       low: parseFloat(low.toFixed(5)),
@@ -56,8 +56,8 @@ export function generateCandlesFromRealPrice(currentPrice: number, count = 200):
 export function generateCandlesFromQuote(
   symbol: string,
   exchangeRate: number,
-  count = 200
+  count = 1440
 ): Candle[] {
-  console.log(`📊 Generating ${count} candles for ${symbol} at ${exchangeRate}`);
+  console.log(`📊 Generating ${count} 5-minute candles (5 days) for ${symbol} at ${exchangeRate}`);
   return generateCandlesFromRealPrice(exchangeRate, count);
 }
