@@ -183,10 +183,10 @@ const TradingChartWidget = forwardRef<TradingChartHandle, TradingChartWidgetProp
 
       candlestickSeriesRef.current.setData(chartData);
 
-      // Set a fixed visible range - show last 80 candles + projection area
+      // Set a fixed visible range - show last 80 candles + compact projection area
       if (chartRef.current && chartData.length > 0) {
         const visibleHistoricalBars = 80; // Show 80 candles
-        const projectionBars = 20; // Plus 20 bars of projection space
+        const projectionBars = 12; // Plus 12 bars of projection space (slightly more than 10 for padding)
         const from = Math.max(0, chartData.length - visibleHistoricalBars);
         const to = chartData.length - 1 + projectionBars; // Extend into future for projections
 
@@ -285,17 +285,17 @@ const TradingChartWidget = forwardRef<TradingChartHandle, TradingChartWidgetProp
 
       priceLinesRef.current = newPriceLines;
 
-      // Draw profit/loss projection zones (TradingView style) - SUBTLE zones only in future
+      // Draw profit/loss projection zones - compact and clear
       if (candles.length > 0 && profitZoneSeriesRef.current && lossZoneSeriesRef.current) {
         // Get the last candle time as the starting point for projections
         const lastCandle = candles[candles.length - 1];
         const lastCandleTime = new Date(lastCandle.timestamp || lastCandle.date).getTime() / 1000;
 
-        // Create future time points for projection - make zones SHORT and SUBTLE
+        // Create compact future projection - 10 bars into future
         const timeInterval = 300; // 5 minutes in seconds (base interval)
-        const projectionSteps = 20; // Only 20 steps into future (100 minutes / ~1.5 hours)
+        const projectionSteps = 10; // 10 bars = 50 minutes projection
 
-        // Set baselines for the zones
+        // Set baselines: Entry price is the dividing line between profit and loss
         // @ts-ignore
         profitZoneSeriesRef.current.applyOptions({
           // @ts-ignore
@@ -309,18 +309,18 @@ const TradingChartWidget = forwardRef<TradingChartHandle, TradingChartWidgetProp
         });
 
         if (position.type === "long") {
-          // LONG: Green zone above entry (profit area), Red zone below entry (loss area)
+          // LONG: Green zone from Entry UP to TP, Red zone from SL UP to Entry
           const profitTop = position.takeProfit || position.entryPrice * 1.002;
           const lossBottom = position.stopLoss || position.entryPrice * 0.998;
 
-          // Create profit zone - line at TP, fills down to entry (baseline)
+          // Green profit zone: Entry (baseline) to TP (top)
           const profitZoneData: LineData[] = [];
           for (let i = 0; i <= projectionSteps; i++) {
             const time = (lastCandleTime + (i * timeInterval)) as Time;
             profitZoneData.push({ time, value: profitTop });
           }
 
-          // Create loss zone - line at SL, fills up to entry (baseline)
+          // Red loss zone: SL (bottom) to Entry (baseline)
           const lossZoneData: LineData[] = [];
           for (let i = 0; i <= projectionSteps; i++) {
             const time = (lastCandleTime + (i * timeInterval)) as Time;
@@ -330,18 +330,18 @@ const TradingChartWidget = forwardRef<TradingChartHandle, TradingChartWidgetProp
           profitZoneSeriesRef.current.setData(profitZoneData);
           lossZoneSeriesRef.current.setData(lossZoneData);
         } else {
-          // SHORT: Green zone below entry (profit area), Red zone above entry (loss area)
+          // SHORT: Green zone from TP UP to Entry, Red zone from Entry UP to SL
           const profitBottom = position.takeProfit || position.entryPrice * 0.998;
           const lossTop = position.stopLoss || position.entryPrice * 1.002;
 
-          // Profit zone - line at TP (below entry), fills up to entry (baseline)
+          // Green profit zone: TP (bottom) to Entry (baseline)
           const profitZoneData: LineData[] = [];
           for (let i = 0; i <= projectionSteps; i++) {
             const time = (lastCandleTime + (i * timeInterval)) as Time;
             profitZoneData.push({ time, value: profitBottom });
           }
 
-          // Loss zone - line at SL (above entry), fills down to entry (baseline)
+          // Red loss zone: Entry (baseline) to SL (top)
           const lossZoneData: LineData[] = [];
           for (let i = 0; i <= projectionSteps; i++) {
             const time = (lastCandleTime + (i * timeInterval)) as Time;
