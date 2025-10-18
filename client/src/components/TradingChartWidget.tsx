@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useImperativeHandle, forwardRef } from "react";
-import { createChart, IChartApi, ISeriesApi, CandlestickData, CandlestickSeries, LineSeries, LineData, Time, MouseEventParams, IPriceLine } from "lightweight-charts";
+import { createChart, IChartApi, ISeriesApi, CandlestickData, CandlestickSeries, LineSeries, AreaSeries, LineData, Time, MouseEventParams, IPriceLine } from "lightweight-charts";
 
 interface Candle {
   date?: string;
@@ -35,8 +35,8 @@ const TradingChartWidget = forwardRef<TradingChartHandle, TradingChartWidgetProp
     const chartContainerRef = useRef<HTMLDivElement>(null);
     const chartRef = useRef<IChartApi | null>(null);
     const candlestickSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
-    const profitZoneSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
-    const lossZoneSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
+    const profitZoneSeriesRef = useRef<ISeriesApi<"Area"> | null>(null);
+    const lossZoneSeriesRef = useRef<ISeriesApi<"Area"> | null>(null);
     const priceLinesRef = useRef<IPriceLine[]>([]);
 
     // Expose methods to parent component
@@ -93,48 +93,28 @@ const TradingChartWidget = forwardRef<TradingChartHandle, TradingChartWidgetProp
 
       candlestickSeriesRef.current = candlestickSeries;
 
-      // Add profit zone series (green/cyan shaded area) - TradingView style
-      const profitZoneSeries = chart.addSeries(LineSeries, {
-        color: 'rgba(128, 203, 196, 0)',      // Teal/cyan - invisible border
-        lineWidth: 0,
+      // Add profit zone series (green shaded area) - Area series for visible fill
+      const profitZoneSeries = chart.addSeries(AreaSeries, {
+        topColor: 'rgba(76, 175, 80, 0.4)',      // Green profit zone - visible
+        bottomColor: 'rgba(76, 175, 80, 0.1)',
+        lineColor: 'rgba(76, 175, 80, 0.6)',     // Slightly visible border
+        lineWidth: 1,
         crosshairMarkerVisible: false,
         lastValueVisible: false,
         priceLineVisible: false,
-        // @ts-ignore - baseLineVisible is valid but not in types
-        baseLineVisible: false,
-        // @ts-ignore
-        lineType: 2, // Step line
-        // @ts-ignore - Fill area between baseline and line
-        topFillColor1: 'rgba(128, 203, 196, 0.35)',  // Light cyan/teal
-        // @ts-ignore
-        topFillColor2: 'rgba(128, 203, 196, 0.15)',
-        // @ts-ignore
-        bottomFillColor1: 'rgba(128, 203, 196, 0.15)',
-        // @ts-ignore
-        bottomFillColor2: 'rgba(128, 203, 196, 0.35)',
       });
 
       profitZoneSeriesRef.current = profitZoneSeries;
 
-      // Add loss zone series (red/pink shaded area) - TradingView style
-      const lossZoneSeries = chart.addSeries(LineSeries, {
-        color: 'rgba(255, 193, 204, 0)',       // Pink/red - invisible border
-        lineWidth: 0,
+      // Add loss zone series (red shaded area) - Area series for visible fill
+      const lossZoneSeries = chart.addSeries(AreaSeries, {
+        topColor: 'rgba(244, 67, 54, 0.4)',       // Red loss zone - visible
+        bottomColor: 'rgba(244, 67, 54, 0.1)',
+        lineColor: 'rgba(244, 67, 54, 0.6)',      // Slightly visible border
+        lineWidth: 1,
         crosshairMarkerVisible: false,
         lastValueVisible: false,
         priceLineVisible: false,
-        // @ts-ignore - baseLineVisible is valid but not in types
-        baseLineVisible: false,
-        // @ts-ignore
-        lineType: 2, // Step line
-        // @ts-ignore - Fill area between baseline and line
-        topFillColor1: 'rgba(255, 193, 204, 0.35)',  // Light pink/red
-        // @ts-ignore
-        topFillColor2: 'rgba(255, 193, 204, 0.15)',
-        // @ts-ignore
-        bottomFillColor1: 'rgba(255, 193, 204, 0.15)',
-        // @ts-ignore
-        bottomFillColor2: 'rgba(255, 193, 204, 0.35)',
       });
 
       lossZoneSeriesRef.current = lossZoneSeries;
@@ -285,7 +265,7 @@ const TradingChartWidget = forwardRef<TradingChartHandle, TradingChartWidgetProp
 
       priceLinesRef.current = newPriceLines;
 
-      // Draw profit/loss projection zones - compact and clear
+      // Draw profit/loss projection zones - compact shaded areas
       if (candles.length > 0 && profitZoneSeriesRef.current && lossZoneSeriesRef.current) {
         // Get the last candle time as the starting point for projections
         const lastCandle = candles[candles.length - 1];
@@ -295,34 +275,38 @@ const TradingChartWidget = forwardRef<TradingChartHandle, TradingChartWidgetProp
         const timeInterval = 300; // 5 minutes in seconds (base interval)
         const projectionSteps = 10; // 10 bars = 50 minutes projection
 
-        // Set baselines: Entry price is the dividing line between profit and loss
-        // @ts-ignore
-        profitZoneSeriesRef.current.applyOptions({
-          // @ts-ignore
-          baseValue: { type: 'price', price: position.entryPrice }
-        });
-
-        // @ts-ignore
-        lossZoneSeriesRef.current.applyOptions({
-          // @ts-ignore
-          baseValue: { type: 'price', price: position.entryPrice }
-        });
-
         if (position.type === "long") {
           // LONG: Green zone from Entry UP to TP, Red zone from SL UP to Entry
           const profitTop = position.takeProfit || position.entryPrice * 1.002;
           const lossBottom = position.stopLoss || position.entryPrice * 0.998;
 
-          // Green profit zone: Entry (baseline) to TP (top)
+          // Green profit zone: Create area that covers Entry to TP
+          // We create TWO points at each time - one at entry, one at TP
           const profitZoneData: LineData[] = [];
-          for (let i = 0; i <= projectionSteps; i++) {
+
+          // Start with entry price
+          profitZoneData.push({
+            time: lastCandleTime as Time,
+            value: position.entryPrice
+          });
+
+          // Create the projection zone
+          for (let i = 1; i <= projectionSteps; i++) {
             const time = (lastCandleTime + (i * timeInterval)) as Time;
             profitZoneData.push({ time, value: profitTop });
           }
 
-          // Red loss zone: SL (bottom) to Entry (baseline)
+          // Red loss zone: Create area that covers SL to Entry
           const lossZoneData: LineData[] = [];
-          for (let i = 0; i <= projectionSteps; i++) {
+
+          // Start with entry price
+          lossZoneData.push({
+            time: lastCandleTime as Time,
+            value: position.entryPrice
+          });
+
+          // Create the projection zone
+          for (let i = 1; i <= projectionSteps; i++) {
             const time = (lastCandleTime + (i * timeInterval)) as Time;
             lossZoneData.push({ time, value: lossBottom });
           }
@@ -334,16 +318,28 @@ const TradingChartWidget = forwardRef<TradingChartHandle, TradingChartWidgetProp
           const profitBottom = position.takeProfit || position.entryPrice * 0.998;
           const lossTop = position.stopLoss || position.entryPrice * 1.002;
 
-          // Green profit zone: TP (bottom) to Entry (baseline)
+          // Green profit zone: TP to Entry
           const profitZoneData: LineData[] = [];
-          for (let i = 0; i <= projectionSteps; i++) {
+
+          profitZoneData.push({
+            time: lastCandleTime as Time,
+            value: position.entryPrice
+          });
+
+          for (let i = 1; i <= projectionSteps; i++) {
             const time = (lastCandleTime + (i * timeInterval)) as Time;
             profitZoneData.push({ time, value: profitBottom });
           }
 
-          // Red loss zone: Entry (baseline) to SL (top)
+          // Red loss zone: Entry to SL
           const lossZoneData: LineData[] = [];
-          for (let i = 0; i <= projectionSteps; i++) {
+
+          lossZoneData.push({
+            time: lastCandleTime as Time,
+            value: position.entryPrice
+          });
+
+          for (let i = 1; i <= projectionSteps; i++) {
             const time = (lastCandleTime + (i * timeInterval)) as Time;
             lossZoneData.push({ time, value: lossTop });
           }
