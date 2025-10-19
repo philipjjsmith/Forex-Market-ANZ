@@ -404,78 +404,78 @@ export default function Analytics() {
 
         {/* Performance Overview */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <Card className="bg-white/5 border-white/10 backdrop-blur-sm">
+          <Card className="bg-white/15 border-white/30 backdrop-blur-md shadow-lg hover:shadow-xl transition-all duration-300">
             <CardHeader className="pb-2">
-              <CardDescription className="text-blue-200">Total Signals</CardDescription>
-              <CardTitle className="text-3xl text-white">
+              <CardDescription className="text-blue-200 font-medium">Total Signals</CardDescription>
+              <CardTitle className="text-3xl text-white font-bold">
                 {performance?.overall.totalSignals || 0}
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-2 text-sm">
                 <Clock className="w-4 h-4 text-yellow-400" />
-                <span className="text-yellow-200">
+                <span className="text-yellow-200 font-medium">
                   {performance?.overall.pending || 0} pending
                 </span>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="bg-white/5 border-white/10 backdrop-blur-sm">
+          <Card className="bg-white/15 border-white/30 backdrop-blur-md shadow-lg hover:shadow-xl transition-all duration-300">
             <CardHeader className="pb-2">
-              <CardDescription className="text-blue-200">Win Rate</CardDescription>
-              <CardTitle className="text-3xl text-white">
+              <CardDescription className="text-blue-200 font-medium">Win Rate</CardDescription>
+              <CardTitle className="text-3xl text-white font-bold">
                 {performance?.overall.winRate.toFixed(1) || 0}%
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-2 text-sm">
                 <TrendingUp className="w-4 h-4 text-green-400" />
-                <span className="text-green-200">
+                <span className="text-green-200 font-medium">
                   {performance?.overall.wins || 0} wins
                 </span>
                 <TrendingDown className="w-4 h-4 text-red-400" />
-                <span className="text-red-200">
+                <span className="text-red-200 font-medium">
                   {performance?.overall.losses || 0} losses
                 </span>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="bg-white/5 border-white/10 backdrop-blur-sm">
+          <Card className="bg-white/15 border-white/30 backdrop-blur-md shadow-lg hover:shadow-xl transition-all duration-300">
             <CardHeader className="pb-2">
-              <CardDescription className="text-blue-200">Avg Win</CardDescription>
-              <CardTitle className="text-3xl text-green-400">
+              <CardDescription className="text-blue-200 font-medium">Avg Win</CardDescription>
+              <CardTitle className="text-3xl text-green-400 font-bold">
                 +{performance?.overall.avgWinPips.toFixed(1) || 0}
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-green-200">pips per winning trade</p>
+              <p className="text-sm text-green-200 font-medium">pips per winning trade</p>
             </CardContent>
           </Card>
 
-          <Card className="bg-white/5 border-white/10 backdrop-blur-sm">
+          <Card className="bg-white/15 border-white/30 backdrop-blur-md shadow-lg hover:shadow-xl transition-all duration-300">
             <CardHeader className="pb-2">
-              <CardDescription className="text-blue-200">Avg Loss</CardDescription>
-              <CardTitle className="text-3xl text-red-400">
+              <CardDescription className="text-blue-200 font-medium">Avg Loss</CardDescription>
+              <CardTitle className="text-3xl text-red-400 font-bold">
                 -{performance?.overall.avgLossPips.toFixed(1) || 0}
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-red-200">pips per losing trade</p>
+              <p className="text-sm text-red-200 font-medium">pips per losing trade</p>
             </CardContent>
           </Card>
         </div>
 
         {/* AI Unlock Progress */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <Card className="bg-gradient-to-br from-blue-500/10 to-purple-500/10 border-blue-500/20 backdrop-blur-sm">
+          <Card className="bg-gradient-to-br from-blue-500/20 to-purple-500/20 border-blue-500/40 backdrop-blur-md shadow-lg hover:shadow-xl transition-all duration-300">
             <CardHeader>
-              <CardTitle className="text-white flex items-center gap-2">
+              <CardTitle className="text-white flex items-center gap-2 font-bold">
                 <BarChart3 className="w-5 h-5 text-blue-400" />
                 AI Insights
               </CardTitle>
-              <CardDescription className="text-blue-200">
+              <CardDescription className="text-blue-200 font-medium">
                 {performance?.unlocks.insightsUnlocked
                   ? '✅ Unlocked - View performance patterns'
                   : `${performance?.unlocks.signalsNeededForInsights || 10} more signals needed`}
@@ -483,19 +483,19 @@ export default function Analytics() {
             </CardHeader>
             <CardContent>
               <Progress value={insightsProgress} className="h-2" />
-              <p className="text-sm text-blue-200 mt-2">
+              <p className="text-sm text-blue-200 mt-2 font-medium">
                 {totalCompleted} / 10 completed signals
               </p>
             </CardContent>
           </Card>
 
-          <Card className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 border-purple-500/20 backdrop-blur-sm">
+          <Card className="bg-gradient-to-br from-purple-500/20 to-pink-500/20 border-purple-500/40 backdrop-blur-md shadow-lg hover:shadow-xl transition-all duration-300">
             <CardHeader>
-              <CardTitle className="text-white flex items-center gap-2">
+              <CardTitle className="text-white flex items-center gap-2 font-bold">
                 <Target className="w-5 h-5 text-purple-400" />
                 AI Auto-Optimization
               </CardTitle>
-              <CardDescription className="text-purple-200">
+              <CardDescription className="text-purple-200 font-medium">
                 {performance?.unlocks.advancedUnlocked
                   ? '✅ Unlocked - AI recommendations active'
                   : `${performance?.unlocks.signalsNeededForAdvanced || 30} more signals needed`}
@@ -503,7 +503,7 @@ export default function Analytics() {
             </CardHeader>
             <CardContent>
               <Progress value={advancedProgress} className="h-2" />
-              <p className="text-sm text-purple-200 mt-2">
+              <p className="text-sm text-purple-200 mt-2 font-medium">
                 {totalCompleted} / 30 completed signals
               </p>
             </CardContent>
@@ -511,10 +511,10 @@ export default function Analytics() {
         </div>
 
         {/* Active Signals */}
-        <Card className="bg-white/5 border-white/10 backdrop-blur-sm">
+        <Card className="bg-white/15 border-white/30 backdrop-blur-md shadow-lg">
           <CardHeader>
-            <CardTitle className="text-white">Active Signals ({activeSignals.length})</CardTitle>
-            <CardDescription className="text-blue-200">
+            <CardTitle className="text-white font-bold">Active Signals ({activeSignals.length})</CardTitle>
+            <CardDescription className="text-blue-200 font-medium">
               Real-time monitoring • Updates every 30s
             </CardDescription>
           </CardHeader>
@@ -533,10 +533,10 @@ export default function Analytics() {
         </Card>
 
         {/* Signal History */}
-        <Card className="bg-white/5 border-white/10 backdrop-blur-sm">
+        <Card className="bg-white/15 border-white/30 backdrop-blur-md shadow-lg">
           <CardHeader>
-            <CardTitle className="text-white">Signal History</CardTitle>
-            <CardDescription className="text-blue-200">
+            <CardTitle className="text-white font-bold">Signal History</CardTitle>
+            <CardDescription className="text-blue-200 font-medium">
               Last 50 completed signals
             </CardDescription>
           </CardHeader>
