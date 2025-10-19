@@ -134,7 +134,7 @@ export function registerSignalRoutes(app: Express) {
       `);
 
       res.json({
-        signals: (result as any).rows
+        signals: result as any
       });
 
     } catch (error: any) {
@@ -178,7 +178,7 @@ export function registerSignalRoutes(app: Express) {
           AND outcome != 'PENDING'
       `);
 
-      const overall = (overallResult as any).rows[0];
+      const overall = (overallResult as any)[0];
 
       // Get per-symbol breakdown
       const symbolResult = await db.execute(sql`
@@ -196,7 +196,7 @@ export function registerSignalRoutes(app: Express) {
         ORDER BY symbol, confidence_bracket
       `);
 
-      const bySymbol = (symbolResult as any).rows;
+      const bySymbol = symbolResult as any;
 
       // Check if user has enough data for insights
       const totalCompleted = parseInt(overall.total_signals) - parseInt(overall.pending);
@@ -258,7 +258,7 @@ export function registerSignalRoutes(app: Express) {
         LIMIT 1
       `);
 
-      const signal = (signalResult as any).rows[0];
+      const signal = (signalResult as any)[0];
 
       if (!signal) {
         return res.status(404).json({ message: "Signal not found" });
@@ -342,7 +342,7 @@ export function registerSignalRoutes(app: Express) {
       `);
 
       res.json({
-        history: (result as any).rows
+        history: result as any
       });
 
     } catch (error: any) {

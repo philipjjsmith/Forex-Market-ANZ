@@ -108,7 +108,7 @@ export class OutcomeValidator {
       ORDER BY created_at DESC
     `);
 
-    return (result as any).rows as any[];
+    return result as any[];
   }
 
   /**
@@ -302,7 +302,7 @@ export class OutcomeValidator {
       LIMIT 1
     `);
 
-    return (result as any).rows[0];
+    return (result as any)[0];
   }
 
   /**
