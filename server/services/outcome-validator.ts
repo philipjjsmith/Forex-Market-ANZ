@@ -1,6 +1,7 @@
 import { db } from '../db';
 import { sql } from 'drizzle-orm';
 import { API_ENDPOINTS } from '../../client/src/config/api';
+import { exchangeRateAPI } from './exchangerate-api';
 
 /**
  * Outcome Validator Service
@@ -124,41 +125,17 @@ export class OutcomeValidator {
     const priceMap = new Map<string, number>();
 
     try {
-      // In production, use the actual API endpoint
-      // For now, we'll make a fetch to the backend API
-      const apiKey = process.env.FOREX_API_KEY;
-      const provider = process.env.FOREX_API_PROVIDER || 'alphavantage';
+      console.log('📡 Fetching current prices from ExchangeRate-API...');
 
-      if (provider === 'alphavantage') {
-        // Alpha Vantage doesn't have a bulk quote endpoint, so we fetch individually
-        // This is not ideal for production - consider switching to a provider with bulk quotes
-        for (const symbol of symbols) {
-          try {
-            // Convert EUR/USD to EURUSD format for Alpha Vantage
-            const cleanSymbol = symbol.replace('/', '');
-            const fromCurrency = cleanSymbol.slice(0, 3);
-            const toCurrency = cleanSymbol.slice(3, 6);
+      // Use the existing exchangeRateAPI service (has 15-min caching!)
+      const quotes = await exchangeRateAPI.fetchAllQuotes();
 
-            const url = `https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency=${fromCurrency}&to_currency=${toCurrency}&apikey=${apiKey}`;
-
-            const response = await fetch(url);
-            const data = await response.json();
-
-            if (data['Realtime Currency Exchange Rate']) {
-              const price = parseFloat(data['Realtime Currency Exchange Rate']['5. Exchange Rate']);
-              priceMap.set(symbol, price);
-            } else {
-              console.warn(`⚠️  No price data for ${symbol}`);
-            }
-
-            // Rate limiting - wait 1 second between requests (Alpha Vantage free tier limit)
-            await new Promise(resolve => setTimeout(resolve, 1000));
-
-          } catch (error) {
-            console.error(`❌ Error fetching price for ${symbol}:`, error);
-          }
-        }
+      // Map quotes to price map
+      for (const quote of quotes) {
+        priceMap.set(quote.symbol, quote.exchangeRate);
       }
+
+      console.log(`✅ Fetched prices for ${priceMap.size} currency pairs`);
 
     } catch (error) {
       console.error('❌ Error fetching forex prices:', error);
