@@ -6,6 +6,7 @@ import { twelveDataAPI } from '../services/twelve-data';
 import { exchangeRateAPI } from '../services/exchangerate-api';
 
 export function registerAdminRoutes(app: Express) {
+  console.log('✅ Admin routes registered');
 
   /**
    * GET /api/admin/health
