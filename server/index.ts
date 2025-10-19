@@ -7,6 +7,7 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { supabase } from "./supabase";
 import { outcomeValidator } from "./services/outcome-validator";
+import { signalGenerator } from "./services/signal-generator";
 
 // CORS Configuration Active - Build v3
 
@@ -205,5 +206,13 @@ app.use((req, res, next) => {
 
     // Start the outcome validator service (checks signals every 5 min)
     outcomeValidator.start();
+
+    // Start automated signal generation (runs every 2 hours in production)
+    if (process.env.NODE_ENV === 'production') {
+      signalGenerator.start(2); // Generate signals every 2 hours
+    } else {
+      console.log('⚠️  Signal generator disabled in development mode');
+      console.log('   Set NODE_ENV=production to enable automated signal generation');
+    }
   });
 })();
