@@ -46,6 +46,12 @@ export class OutcomeValidator {
     try {
       // 1. Fetch all PENDING signals
       const pendingSignals = await this.fetchPendingSignals();
+
+      if (!pendingSignals || !Array.isArray(pendingSignals)) {
+        console.log('⚠️  No pending signals data returned');
+        return;
+      }
+
       console.log(`📊 Found ${pendingSignals.length} pending signals`);
 
       if (pendingSignals.length === 0) {

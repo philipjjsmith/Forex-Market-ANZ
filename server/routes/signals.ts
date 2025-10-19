@@ -8,6 +8,17 @@ import { requireAuth } from "../auth-middleware";
  * Handles saving signals to database and fetching performance data
  */
 
+// Helper to convert string numbers to actual numbers
+function parseNumericFields(obj: any, fields: string[]): any {
+  const parsed = { ...obj };
+  fields.forEach(field => {
+    if (parsed[field] !== null && parsed[field] !== undefined) {
+      parsed[field] = parseFloat(parsed[field]);
+    }
+  });
+  return parsed;
+}
+
 export function registerSignalRoutes(app: Express) {
 
   /**
@@ -133,8 +144,15 @@ export function registerSignalRoutes(app: Express) {
         ORDER BY created_at DESC
       `);
 
+      // Parse numeric fields (postgres returns DECIMAL as strings)
+      const signals = (result as any[]).map((signal: any) =>
+        parseNumericFields(signal, [
+          'confidence', 'entry_price', 'current_price', 'stop_loss', 'tp1', 'tp2', 'tp3'
+        ])
+      );
+
       res.json({
-        signals: result as any
+        signals
       });
 
     } catch (error: any) {
@@ -341,8 +359,15 @@ export function registerSignalRoutes(app: Express) {
         LIMIT ${limit}
       `);
 
+      // Parse numeric fields
+      const history = (result as any[]).map((signal: any) =>
+        parseNumericFields(signal, [
+          'confidence', 'entry_price', 'stop_loss', 'tp1', 'outcome_price', 'profit_loss_pips'
+        ])
+      );
+
       res.json({
-        history: result as any
+        history
       });
 
     } catch (error: any) {
