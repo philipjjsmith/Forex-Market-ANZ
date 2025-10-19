@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useLocation } from 'wouter';
-import { Activity, TrendingUp, TrendingDown, Target, BarChart3, AlertTriangle, CheckCircle, XCircle, Star, Clock, Zap, LogOut, User, GraduationCap } from 'lucide-react';
+import { Activity, TrendingUp, TrendingDown, Target, BarChart3, AlertTriangle, CheckCircle, XCircle, Star, Clock, Zap, LogOut, User, GraduationCap, Settings } from 'lucide-react';
 import { Indicators } from '@/lib/indicators';
 import { MACrossoverStrategy, Signal } from '@/lib/strategy';
 import { ComprehensiveSignalCard } from '@/components/ComprehensiveSignalCard';
@@ -331,6 +331,16 @@ export default function Dashboard() {
               >
                 <GraduationCap className="w-4 h-4" />
                 <span className="text-sm font-medium">Learn</span>
+              </button>
+
+              {/* Admin Button */}
+              <button
+                onClick={() => setLocation('/admin')}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg transition-colors"
+                title="Admin Dashboard"
+              >
+                <Settings className="w-4 h-4" />
+                <span className="text-sm font-medium">Admin</span>
               </button>
 
               {/* User Info & Logout */}

@@ -7,10 +7,14 @@ import { generateToken } from "./jwt";
 import { requireAuth } from "./auth-middleware";
 import bcrypt from "bcrypt";
 import { registerSignalRoutes } from "./routes/signals";
+import { registerAdminRoutes } from "./routes/admin";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Register signal tracking routes
   registerSignalRoutes(app);
+
+  // Register admin routes
+  registerAdminRoutes(app);
   // ========== AUTHENTICATION ROUTES ==========
 
   // Register new user
