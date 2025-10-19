@@ -29,4 +29,9 @@ export const API_ENDPOINTS = {
   SIGNALS_PERFORMANCE: `${API_BASE_URL}/api/signals/performance`,
   SIGNALS_HISTORY: `${API_BASE_URL}/api/signals/history`,
   SIGNALS_CLOSE: (signalId: string) => `${API_BASE_URL}/api/signals/${signalId}/close`,
+
+  // Admin endpoints
+  ADMIN_HEALTH: `${API_BASE_URL}/api/admin/health`,
+  ADMIN_LOGS: `${API_BASE_URL}/api/admin/logs`,
+  ADMIN_TRIGGER_GENERATION: `${API_BASE_URL}/api/admin/trigger-generation`,
 };

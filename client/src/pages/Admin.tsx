@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Activity, TrendingUp, AlertCircle, RefreshCw, Play, Pause } from 'lucide-react';
 import { useState } from 'react';
+import { API_ENDPOINTS } from '@/config/api';
 
 interface SystemHealth {
   status: 'healthy' | 'warning' | 'error';
@@ -51,20 +52,20 @@ export default function Admin() {
 
   // Fetch system health
   const { data: health, isLoading: healthLoading } = useQuery<SystemHealth>({
-    queryKey: ['/api/admin/health'],
+    queryKey: [API_ENDPOINTS.ADMIN_HEALTH],
     refetchInterval: 10000, // Refresh every 10 seconds
   });
 
   // Fetch generation logs
   const { data: logs, isLoading: logsLoading } = useQuery<GenerationLog[]>({
-    queryKey: ['/api/admin/logs'],
+    queryKey: [API_ENDPOINTS.ADMIN_LOGS],
     refetchInterval: 30000, // Refresh every 30 seconds
   });
 
   // Manual trigger mutation
   const triggerGeneration = useMutation({
     mutationFn: async () => {
-      const response = await fetch('/api/admin/trigger-generation', {
+      const response = await fetch(API_ENDPOINTS.ADMIN_TRIGGER_GENERATION, {
         method: 'POST',
         credentials: 'include',
       });
@@ -77,8 +78,8 @@ export default function Admin() {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/admin/health'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/admin/logs'] });
+      queryClient.invalidateQueries({ queryKey: [API_ENDPOINTS.ADMIN_HEALTH] });
+      queryClient.invalidateQueries({ queryKey: [API_ENDPOINTS.ADMIN_LOGS] });
     },
     onError: (error: Error) => {
       alert(error.message);
