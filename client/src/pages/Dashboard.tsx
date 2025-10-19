@@ -8,6 +8,7 @@ import { useQuotaTracker } from '@/hooks/use-quota-tracker';
 import { generateCandlesFromQuote } from '@/lib/candle-generator';
 import { API_ENDPOINTS } from '@/config/api';
 import { getCurrentUser, logout, getToken, type User as AuthUser } from '@/lib/auth';
+import { useToast } from '@/hooks/use-toast';
 
 export default function Dashboard() {
   const [, setLocation] = useLocation();
@@ -23,6 +24,9 @@ export default function Dashboard() {
   const [savedSignals, setSavedSignals] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<'signals' | 'saved'>('signals');
   const [apiError, setApiError] = useState<string | null>(null);
+
+  // Toast notifications
+  const { toast } = useToast();
 
   // Quota tracking
   const { remainingAnalyses, canAnalyze, useAnalysis, dailyLimit, timeUntilReset } = useQuotaTracker();
@@ -226,6 +230,7 @@ export default function Dashboard() {
       if (signalsToTrack.length > 0) {
         console.log(`📊 Auto-tracking ${signalsToTrack.length} signals with 70%+ confidence`);
 
+        let trackedCount = 0;
         for (const signal of signalsToTrack) {
           try {
             const candles = newMarketData[signal.symbol]?.candles || [];
@@ -245,9 +250,19 @@ export default function Dashboard() {
             });
 
             console.log(`✅ Tracked signal ${signal.id} (${signal.confidence}% confidence)`);
+            trackedCount++;
           } catch (trackError) {
             console.error(`❌ Failed to track signal ${signal.id}:`, trackError);
           }
+        }
+
+        // Show success toast
+        if (trackedCount > 0) {
+          toast({
+            title: "🤖 AI Learning Active",
+            description: `Auto-tracked ${trackedCount} signal${trackedCount > 1 ? 's' : ''} (70%+ confidence) for AI analysis`,
+            duration: 5000,
+          });
         }
       }
 
