@@ -296,7 +296,8 @@ export class SignalGenerator {
         // Analyze with strategy
         const signal = strategy.analyze(primaryCandles, higherCandles);
 
-        if (signal && signal.confidence >= 70) {
+        // Temporarily use 50% threshold for testing (normally 70%)
+        if (signal && signal.confidence >= 50) {
           signalsGenerated++;
           signal.symbol = symbol; // Set the correct symbol
 
