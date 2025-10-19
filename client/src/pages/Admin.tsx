@@ -122,13 +122,14 @@ export default function Admin() {
   };
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-white">Admin Dashboard</h1>
-          <p className="text-blue-200 mt-1">Monitor system health and signal generation</p>
-        </div>
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900">
+      <div className="container mx-auto p-6 space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-white">Admin Dashboard</h1>
+            <p className="text-blue-200 mt-1">Monitor system health and signal generation</p>
+          </div>
         <Button
           onClick={handleTriggerGeneration}
           disabled={triggeringGeneration || health?.signalGenerator.isRunning}
@@ -151,7 +152,7 @@ export default function Admin() {
       {/* System Status */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Overall Health */}
-        <Card className="bg-white/15 border-white/30 backdrop-blur-md shadow-lg">
+        <Card className="bg-slate-800/80 border-slate-600/50 backdrop-blur-md shadow-xl">
           <CardHeader>
             <CardTitle className="text-white flex items-center gap-2">
               {getStatusIcon(health?.status)}
@@ -166,7 +167,7 @@ export default function Admin() {
         </Card>
 
         {/* Signal Generator */}
-        <Card className="bg-white/15 border-white/30 backdrop-blur-md shadow-lg">
+        <Card className="bg-slate-800/80 border-slate-600/50 backdrop-blur-md shadow-xl">
           <CardHeader>
             <CardTitle className="text-white flex items-center gap-2">
               <TrendingUp className="h-4 w-4" />
@@ -196,7 +197,7 @@ export default function Admin() {
         </Card>
 
         {/* Outcome Validator */}
-        <Card className="bg-white/15 border-white/30 backdrop-blur-md shadow-lg">
+        <Card className="bg-slate-800/80 border-slate-600/50 backdrop-blur-md shadow-xl">
           <CardHeader>
             <CardTitle className="text-white flex items-center gap-2">
               <RefreshCw className="h-4 w-4" />
@@ -229,7 +230,7 @@ export default function Admin() {
       {/* API Usage */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* ExchangeRate API */}
-        <Card className="bg-white/15 border-white/30 backdrop-blur-md shadow-lg">
+        <Card className="bg-slate-800/80 border-slate-600/50 backdrop-blur-md shadow-xl">
           <CardHeader>
             <CardTitle className="text-white">ExchangeRate API</CardTitle>
             <CardDescription className="text-blue-200">Real-time forex quotes</CardDescription>
@@ -261,7 +262,7 @@ export default function Admin() {
         </Card>
 
         {/* Twelve Data API */}
-        <Card className="bg-white/15 border-white/30 backdrop-blur-md shadow-lg">
+        <Card className="bg-slate-800/80 border-slate-600/50 backdrop-blur-md shadow-xl">
           <CardHeader>
             <CardTitle className="text-white">Twelve Data API</CardTitle>
             <CardDescription className="text-blue-200">Historical candle data</CardDescription>
@@ -294,7 +295,7 @@ export default function Admin() {
       </div>
 
       {/* Recent Generation Logs */}
-      <Card className="bg-white/15 border-white/30 backdrop-blur-md shadow-lg">
+      <Card className="bg-slate-800/80 border-slate-600/50 backdrop-blur-md shadow-xl">
         <CardHeader>
           <CardTitle className="text-white">Recent Generation Logs</CardTitle>
           <CardDescription className="text-blue-200">Last 10 signal generation cycles</CardDescription>
@@ -309,7 +310,7 @@ export default function Admin() {
               {logs.map((log) => (
                 <div
                   key={log.id}
-                  className="bg-white/5 border border-white/10 rounded-lg p-4 hover:bg-white/10 transition-all"
+                  className="bg-slate-700/50 border border-slate-600/50 rounded-lg p-4 hover:bg-slate-700/70 transition-all"
                 >
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-3">
@@ -360,6 +361,7 @@ export default function Admin() {
           )}
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }
