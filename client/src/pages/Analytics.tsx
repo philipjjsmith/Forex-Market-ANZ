@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
-import { Activity, TrendingUp, TrendingDown, Clock, Target, BarChart3, LogOut, User, Home, DollarSign, Wallet } from 'lucide-react';
+import { Activity, TrendingUp, TrendingDown, Clock, Target, BarChart3, LogOut, User, Home, DollarSign, Wallet, CheckCircle, XCircle } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -274,71 +274,129 @@ export default function Analytics() {
         {/* Account Size Selector & Profit Summary */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Account Size Selector */}
-          <Card className="bg-gradient-to-br from-blue-500/10 to-indigo-500/10 border-blue-500/30 backdrop-blur-sm">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-white flex items-center gap-2">
-                <Wallet className="w-5 h-5 text-blue-400" />
-                Account Size
-              </CardTitle>
-              <CardDescription className="text-blue-200">
+          <Card className="bg-gradient-to-br from-blue-900/40 to-indigo-900/40 border-blue-500/50 backdrop-blur-sm shadow-xl">
+            <CardHeader className="pb-4">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="p-2 bg-cyan-500/20 rounded-lg">
+                  <Wallet className="w-6 h-6 text-cyan-400" />
+                </div>
+                <CardTitle className="text-xl font-bold text-white">
+                  Account Size
+                </CardTitle>
+              </div>
+              <CardDescription className="text-slate-300 text-sm">
                 Select your trading capital
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="pt-2">
               <Select
                 value={accountSize.toString()}
                 onValueChange={(value) => setAccountSize(parseInt(value))}
               >
-                <SelectTrigger className="bg-slate-800 border-white/20 text-white">
+                <SelectTrigger className="bg-slate-800/80 border-cyan-500/30 text-white h-12 text-lg font-semibold hover:border-cyan-400/50 transition-colors">
                   <SelectValue placeholder="Select account size" />
                 </SelectTrigger>
-                <SelectContent className="bg-slate-800 border-white/20">
-                  <SelectItem value="1000" className="text-white hover:bg-white/10">
+                <SelectContent className="bg-slate-800 border-cyan-500/30">
+                  <SelectItem value="1000" className="text-white hover:bg-cyan-500/20 text-lg">
                     $1,000
                   </SelectItem>
-                  <SelectItem value="10000" className="text-white hover:bg-white/10">
+                  <SelectItem value="10000" className="text-white hover:bg-cyan-500/20 text-lg">
                     $10,000
                   </SelectItem>
-                  <SelectItem value="100000" className="text-white hover:bg-white/10">
+                  <SelectItem value="100000" className="text-white hover:bg-cyan-500/20 text-lg">
                     $100,000
                   </SelectItem>
                 </SelectContent>
               </Select>
+              <div className="mt-3 text-center">
+                <p className="text-5xl font-black text-cyan-400 tracking-tight">
+                  ${accountSize.toLocaleString()}
+                </p>
+              </div>
             </CardContent>
           </Card>
 
           {/* Total Profit */}
-          <Card className="bg-gradient-to-br from-green-500/10 to-emerald-500/10 border-green-500/30 backdrop-blur-sm">
-            <CardHeader className="pb-2">
-              <CardDescription className="text-green-200">Total Profit</CardDescription>
-              <CardTitle className={`text-4xl font-bold ${profitData.totalProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {profitData.totalProfit >= 0 ? '+' : ''}${profitData.totalProfit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </CardTitle>
+          <Card className={`backdrop-blur-sm shadow-xl border-2 transition-all ${
+            profitData.totalProfit > 0
+              ? 'bg-gradient-to-br from-emerald-900/50 to-green-900/50 border-emerald-500/50'
+              : profitData.totalProfit < 0
+              ? 'bg-gradient-to-br from-red-900/50 to-rose-900/50 border-red-500/50'
+              : 'bg-gradient-to-br from-slate-800/50 to-slate-900/50 border-slate-600/50'
+          }`}>
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-3 mb-1">
+                <div className={`p-2 rounded-lg ${
+                  profitData.totalProfit > 0 ? 'bg-emerald-500/20' : profitData.totalProfit < 0 ? 'bg-red-500/20' : 'bg-slate-500/20'
+                }`}>
+                  <DollarSign className={`w-6 h-6 ${
+                    profitData.totalProfit > 0 ? 'text-emerald-400' : profitData.totalProfit < 0 ? 'text-red-400' : 'text-slate-400'
+                  }`} />
+                </div>
+                <CardDescription className={`text-base font-medium ${
+                  profitData.totalProfit > 0 ? 'text-emerald-200' : profitData.totalProfit < 0 ? 'text-red-200' : 'text-slate-300'
+                }`}>
+                  Total Profit/Loss
+                </CardDescription>
+              </div>
             </CardHeader>
             <CardContent>
-              <div className="flex items-center gap-2 text-sm">
-                <DollarSign className="w-4 h-4 text-green-400" />
-                <span className="text-green-200">
-                  {profitData.winningTrades} wins / {profitData.losingTrades} losses
+              <div className="text-center mb-3">
+                <p className={`text-6xl font-black tracking-tight ${
+                  profitData.totalProfit > 0 ? 'text-emerald-400 drop-shadow-[0_0_15px_rgba(52,211,153,0.5)]' :
+                  profitData.totalProfit < 0 ? 'text-red-400 drop-shadow-[0_0_15px_rgba(248,113,113,0.5)]' :
+                  'text-slate-400'
+                }`}>
+                  {profitData.totalProfit >= 0 ? '+' : ''}${Math.abs(profitData.totalProfit).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+              </div>
+              <div className={`flex items-center justify-center gap-2 text-sm font-medium ${
+                profitData.totalProfit > 0 ? 'text-emerald-300' : profitData.totalProfit < 0 ? 'text-red-300' : 'text-slate-400'
+              }`}>
+                <span className="flex items-center gap-1">
+                  <CheckCircle className="w-4 h-4" />
+                  {profitData.winningTrades} wins
+                </span>
+                <span className="text-slate-500">•</span>
+                <span className="flex items-center gap-1">
+                  <XCircle className="w-4 h-4" />
+                  {profitData.losingTrades} losses
                 </span>
               </div>
             </CardContent>
           </Card>
 
           {/* Account Balance */}
-          <Card className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 border-purple-500/30 backdrop-blur-sm">
-            <CardHeader className="pb-2">
-              <CardDescription className="text-purple-200">Account Balance</CardDescription>
-              <CardTitle className="text-4xl font-bold text-white">
-                ${accountBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </CardTitle>
+          <Card className="bg-gradient-to-br from-purple-900/40 to-pink-900/40 border-purple-500/50 backdrop-blur-sm shadow-xl border-2">
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-3 mb-1">
+                <div className="p-2 bg-purple-500/20 rounded-lg">
+                  <Wallet className="w-6 h-6 text-purple-400" />
+                </div>
+                <CardDescription className="text-base font-medium text-purple-200">
+                  Account Balance
+                </CardDescription>
+              </div>
             </CardHeader>
             <CardContent>
-              <div className="flex items-center gap-2 text-sm">
-                <TrendingUp className="w-4 h-4 text-purple-400" />
-                <span className="text-purple-200">
-                  {accountBalance > accountSize ? '+' : ''}{((profitData.totalProfit / accountSize) * 100).toFixed(2)}% ROI
-                </span>
+              <div className="text-center mb-3">
+                <p className="text-6xl font-black text-white tracking-tight drop-shadow-[0_0_15px_rgba(168,85,247,0.4)]">
+                  ${accountBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+              </div>
+              <div className="flex items-center justify-center gap-2">
+                <div className={`flex items-center gap-1 px-3 py-1 rounded-full font-semibold text-sm ${
+                  profitData.totalProfit > 0
+                    ? 'bg-emerald-500/20 text-emerald-300'
+                    : profitData.totalProfit < 0
+                    ? 'bg-red-500/20 text-red-300'
+                    : 'bg-slate-500/20 text-slate-300'
+                }`}>
+                  {profitData.totalProfit > 0 ? <TrendingUp className="w-4 h-4" /> : profitData.totalProfit < 0 ? <TrendingDown className="w-4 h-4" /> : <Target className="w-4 h-4" />}
+                  <span>
+                    {profitData.totalProfit >= 0 ? '+' : ''}{((profitData.totalProfit / accountSize) * 100).toFixed(2)}% ROI
+                  </span>
+                </div>
               </div>
             </CardContent>
           </Card>
