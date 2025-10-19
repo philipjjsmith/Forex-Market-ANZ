@@ -207,9 +207,12 @@ app.use((req, res, next) => {
     // Start the outcome validator service (checks signals every 5 min)
     outcomeValidator.start();
 
-    // Start automated signal generation (runs every 2 hours in production)
+    // Start automated signal generation
     if (process.env.NODE_ENV === 'production') {
-      signalGenerator.start(2); // Generate signals every 2 hours
+      // Use 15-minute intervals for faster testing (can change to 2 hours later)
+      const intervalMinutes = 15; // 15 minutes = faster signal generation for testing
+      signalGenerator.start(intervalMinutes / 60); // Convert minutes to hours
+      console.log(`🎯 Signal generator set to ${intervalMinutes} minute intervals for testing`);
     } else {
       console.log('⚠️  Signal generator disabled in development mode');
       console.log('   Set NODE_ENV=production to enable automated signal generation');
