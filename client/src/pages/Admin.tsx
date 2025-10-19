@@ -2,8 +2,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Activity, TrendingUp, AlertCircle, RefreshCw, Play, Pause } from 'lucide-react';
-import { useState } from 'react';
+import { Loader2, Activity, TrendingUp, AlertCircle, RefreshCw, Play, Pause, Clock, CheckCircle, Calendar, Database, Zap } from 'lucide-react';
+import { useState, useEffect } from 'react';
 import { API_ENDPOINTS } from '@/config/api';
 
 interface SystemHealth {
@@ -49,6 +49,7 @@ interface GenerationLog {
 export default function Admin() {
   const queryClient = useQueryClient();
   const [triggeringGeneration, setTriggeringGeneration] = useState(false);
+  const [countdown, setCountdown] = useState<string>('');
 
   // Fetch system health
   const { data: health, isLoading: healthLoading } = useQuery<SystemHealth>({
@@ -94,6 +95,33 @@ export default function Admin() {
       setTriggeringGeneration(false);
     }
   };
+
+  // Countdown timer effect
+  useEffect(() => {
+    const updateCountdown = () => {
+      if (!health?.signalGenerator.nextRun) {
+        setCountdown('');
+        return;
+      }
+
+      const now = new Date().getTime();
+      const nextRun = new Date(health.signalGenerator.nextRun).getTime();
+      const diff = nextRun - now;
+
+      if (diff <= 0) {
+        setCountdown('Running now...');
+        return;
+      }
+
+      const minutes = Math.floor(diff / 60000);
+      const seconds = Math.floor((diff % 60000) / 1000);
+      setCountdown(`in ${minutes}m ${seconds}s`);
+    };
+
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
+    return () => clearInterval(interval);
+  }, [health?.signalGenerator.nextRun]);
 
   if (healthLoading) {
     return (
@@ -149,6 +177,57 @@ export default function Admin() {
         </Button>
       </div>
 
+      {/* Quick Stats Summary */}
+      <Card className="bg-gradient-to-r from-blue-900/50 to-purple-900/50 border-blue-500/50 backdrop-blur-md shadow-2xl">
+        <CardContent className="p-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="text-center">
+              <div className="flex items-center justify-center gap-2 mb-2">
+                <Database className="w-5 h-5 text-blue-300" />
+                <p className="text-blue-200 text-sm font-medium">Total Signals Today</p>
+              </div>
+              <p className="text-4xl font-black text-white">
+                {logs?.reduce((sum, log) => sum + log.signalsTracked, 0) || 0}
+              </p>
+            </div>
+            <div className="text-center">
+              <div className="flex items-center justify-center gap-2 mb-2">
+                <CheckCircle className="w-5 h-5 text-green-300" />
+                <p className="text-blue-200 text-sm font-medium">Success Rate</p>
+              </div>
+              <p className="text-4xl font-black text-green-400">
+                {logs?.filter(log => log.status === 'success').length === logs?.length ? '100' : '0'}%
+              </p>
+            </div>
+            <div className="text-center">
+              <div className="flex items-center justify-center gap-2 mb-2">
+                <Clock className="w-5 h-5 text-yellow-300" />
+                <p className="text-blue-200 text-sm font-medium">Next Generation</p>
+              </div>
+              <p className="text-3xl font-black text-yellow-400">
+                {countdown || 'Calculating...'}
+              </p>
+            </div>
+            <div className="text-center">
+              <div className="flex items-center justify-center gap-2 mb-2">
+                <Activity className="w-5 h-5 text-emerald-300" />
+                <p className="text-blue-200 text-sm font-medium">System Status</p>
+              </div>
+              <Badge className={`${getStatusColor(health?.status)} text-lg px-4 py-1 font-bold`}>
+                {health?.status?.toUpperCase() || 'UNKNOWN'}
+              </Badge>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Section Divider */}
+      <div className="flex items-center gap-3 mt-8 mb-4">
+        <Zap className="w-5 h-5 text-blue-400" />
+        <h2 className="text-xl font-bold text-white">System Health</h2>
+        <div className="flex-1 h-px bg-gradient-to-r from-blue-500/50 to-transparent"></div>
+      </div>
+
       {/* System Status */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Overall Health */}
@@ -174,24 +253,38 @@ export default function Admin() {
               Signal Generator
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2">
+          <CardContent className="space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-blue-200 text-sm">Status:</span>
+              <div className="flex items-center gap-2">
+                <Activity className="w-4 h-4 text-blue-400" />
+                <span className="text-blue-200 text-sm">Status:</span>
+              </div>
               <Badge className={health?.signalGenerator.isRunning ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'}>
                 {health?.signalGenerator.isRunning ? 'Running' : 'Idle'}
               </Badge>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-blue-200 text-sm">Last Run:</span>
-              <span className="text-white text-sm font-medium">
+              <div className="flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-blue-400" />
+                <span className="text-blue-200 text-sm">Last Run:</span>
+              </div>
+              <span className="text-white text-base font-bold">
                 {health?.signalGenerator.lastRun ? new Date(health.signalGenerator.lastRun).toLocaleTimeString() : 'Never'}
               </span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-blue-200 text-sm">Next Run:</span>
-              <span className="text-white text-sm font-medium">
-                {health?.signalGenerator.nextRun ? new Date(health.signalGenerator.nextRun).toLocaleTimeString() : 'N/A'}
-              </span>
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4 text-yellow-400" />
+                <span className="text-blue-200 text-sm">Next Run:</span>
+              </div>
+              <div className="text-right">
+                <p className="text-white text-base font-bold">
+                  {health?.signalGenerator.nextRun ? new Date(health.signalGenerator.nextRun).toLocaleTimeString() : 'N/A'}
+                </p>
+                {countdown && (
+                  <p className="text-yellow-400 text-xs font-semibold">{countdown}</p>
+                )}
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -204,27 +297,43 @@ export default function Admin() {
               Outcome Validator
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2">
+          <CardContent className="space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-blue-200 text-sm">Pending:</span>
-              <span className="text-white text-sm font-bold">
+              <div className="flex items-center gap-2">
+                <Database className="w-4 h-4 text-yellow-400" />
+                <span className="text-blue-200 text-sm">Pending:</span>
+              </div>
+              <span className="text-white text-3xl font-black">
                 {health?.outcomeValidator.pendingSignals || 0}
               </span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-blue-200 text-sm">Validated Today:</span>
-              <span className="text-white text-sm font-bold">
+              <div className="flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 text-green-400" />
+                <span className="text-blue-200 text-sm">Validated Today:</span>
+              </div>
+              <span className="text-green-400 text-3xl font-black">
                 {health?.outcomeValidator.validatedToday || 0}
               </span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-blue-200 text-sm">Last Run:</span>
-              <span className="text-white text-sm font-medium">
+              <div className="flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-blue-400" />
+                <span className="text-blue-200 text-sm">Last Run:</span>
+              </div>
+              <span className="text-white text-base font-bold">
                 {health?.outcomeValidator.lastRun ? new Date(health.outcomeValidator.lastRun).toLocaleTimeString() : 'Never'}
               </span>
             </div>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Section Divider */}
+      <div className="flex items-center gap-3 mt-8 mb-4">
+        <TrendingUp className="w-5 h-5 text-purple-400" />
+        <h2 className="text-xl font-bold text-white">API Monitoring</h2>
+        <div className="flex-1 h-px bg-gradient-to-r from-purple-500/50 to-transparent"></div>
       </div>
 
       {/* API Usage */}
@@ -238,14 +347,17 @@ export default function Admin() {
           <CardContent className="space-y-3">
             <div>
               <div className="flex items-center justify-between mb-2">
-                <span className="text-blue-200 text-sm">Daily Usage</span>
-                <span className="text-white font-bold">
+                <div className="flex items-center gap-2">
+                  <Database className="w-4 h-4 text-blue-400" />
+                  <span className="text-blue-200 text-sm">Daily Usage</span>
+                </div>
+                <span className="text-white text-lg font-black">
                   {health?.apiUsage.exchangeRateAPI.callsToday || 0} / {health?.apiUsage.exchangeRateAPI.limit || 1500}
                 </span>
               </div>
-              <div className="w-full bg-white/10 rounded-full h-2">
+              <div className="w-full bg-white/10 rounded-full h-3">
                 <div
-                  className="bg-blue-500 h-2 rounded-full transition-all"
+                  className="bg-blue-500 h-3 rounded-full transition-all"
                   style={{
                     width: `${Math.min(((health?.apiUsage.exchangeRateAPI.callsToday || 0) / (health?.apiUsage.exchangeRateAPI.limit || 1500)) * 100, 100)}%`
                   }}
@@ -253,8 +365,11 @@ export default function Admin() {
               </div>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-blue-200 text-sm">Cache Hit Rate:</span>
-              <span className="text-green-400 font-bold">
+              <div className="flex items-center gap-2">
+                <Zap className="w-4 h-4 text-green-400" />
+                <span className="text-blue-200 text-sm">Cache Hit Rate:</span>
+              </div>
+              <span className="text-green-400 text-2xl font-black">
                 {health?.apiUsage.exchangeRateAPI.cacheHitRate || 0}%
               </span>
             </div>
@@ -270,14 +385,17 @@ export default function Admin() {
           <CardContent className="space-y-3">
             <div>
               <div className="flex items-center justify-between mb-2">
-                <span className="text-blue-200 text-sm">Daily Usage</span>
-                <span className="text-white font-bold">
+                <div className="flex items-center gap-2">
+                  <Database className="w-4 h-4 text-purple-400" />
+                  <span className="text-blue-200 text-sm">Daily Usage</span>
+                </div>
+                <span className="text-white text-lg font-black">
                   {health?.apiUsage.twelveDataAPI.callsToday || 0} / {health?.apiUsage.twelveDataAPI.limit || 800}
                 </span>
               </div>
-              <div className="w-full bg-white/10 rounded-full h-2">
+              <div className="w-full bg-white/10 rounded-full h-3">
                 <div
-                  className="bg-purple-500 h-2 rounded-full transition-all"
+                  className="bg-purple-500 h-3 rounded-full transition-all"
                   style={{
                     width: `${Math.min(((health?.apiUsage.twelveDataAPI.callsToday || 0) / (health?.apiUsage.twelveDataAPI.limit || 800)) * 100, 100)}%`
                   }}
@@ -285,13 +403,23 @@ export default function Admin() {
               </div>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-blue-200 text-sm">Cache Hit Rate:</span>
-              <span className="text-green-400 font-bold">
+              <div className="flex items-center gap-2">
+                <Zap className="w-4 h-4 text-green-400" />
+                <span className="text-blue-200 text-sm">Cache Hit Rate:</span>
+              </div>
+              <span className="text-green-400 text-2xl font-black">
                 {health?.apiUsage.twelveDataAPI.cacheHitRate || 0}%
               </span>
             </div>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Section Divider */}
+      <div className="flex items-center gap-3 mt-8 mb-4">
+        <RefreshCw className="w-5 h-5 text-green-400" />
+        <h2 className="text-xl font-bold text-white">Generation History</h2>
+        <div className="flex-1 h-px bg-gradient-to-r from-green-500/50 to-transparent"></div>
       </div>
 
       {/* Recent Generation Logs */}
