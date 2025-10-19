@@ -221,6 +221,32 @@ export default function Dashboard() {
       setMarketData(newMarketData);
       console.log(`✅ Generated ${newSignals.length} signals from real data`);
 
+      // Auto-track signals with 70%+ confidence
+      const signalsToTrack = newSignals.filter(s => s.confidence >= 70);
+      if (signalsToTrack.length > 0) {
+        console.log(`📊 Auto-tracking ${signalsToTrack.length} signals with 70%+ confidence`);
+
+        for (const signal of signalsToTrack) {
+          try {
+            const candles = newMarketData[signal.symbol]?.candles || [];
+
+            await fetch(API_ENDPOINTS.SIGNALS_TRACK, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
+              body: JSON.stringify({
+                signal,
+                candles: candles.slice(-200) // Store last 200 candles for AI learning
+              })
+            });
+
+            console.log(`✅ Tracked signal ${signal.id} (${signal.confidence}% confidence)`);
+          } catch (trackError) {
+            console.error(`❌ Failed to track signal ${signal.id}:`, trackError);
+          }
+        }
+      }
+
     } catch (error: any) {
       console.error('❌ Error analyzing market:', error);
       setApiError(error.message || 'Failed to fetch market data. Please try again.');

@@ -6,6 +6,7 @@ import passport from "./passport-config";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { supabase } from "./supabase";
+import { outcomeValidator } from "./services/outcome-validator";
 
 // CORS Configuration Active - Build v3
 
@@ -201,5 +202,8 @@ app.use((req, res, next) => {
   const port = parseInt(process.env.PORT || '5000', 10);
   server.listen(port, "0.0.0.0", () => {
     log(`serving on port ${port}`);
+
+    // Start the outcome validator service (checks signals every 5 min)
+    outcomeValidator.start();
   });
 })();

@@ -6,8 +6,11 @@ import { insertUserSchema } from "@shared/schema";
 import { generateToken } from "./jwt";
 import { requireAuth } from "./auth-middleware";
 import bcrypt from "bcrypt";
+import { registerSignalRoutes } from "./routes/signals";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Register signal tracking routes
+  registerSignalRoutes(app);
   // ========== AUTHENTICATION ROUTES ==========
 
   // Register new user

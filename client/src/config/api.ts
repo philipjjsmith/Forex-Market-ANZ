@@ -22,4 +22,11 @@ export const API_ENDPOINTS = {
   AUTH_LOGIN: `${API_BASE_URL}/api/auth/login`,
   AUTH_LOGOUT: `${API_BASE_URL}/api/auth/logout`,
   AUTH_ME: `${API_BASE_URL}/api/auth/me`,
+
+  // Signal tracking endpoints
+  SIGNALS_TRACK: `${API_BASE_URL}/api/signals/track`,
+  SIGNALS_ACTIVE: `${API_BASE_URL}/api/signals/active`,
+  SIGNALS_PERFORMANCE: `${API_BASE_URL}/api/signals/performance`,
+  SIGNALS_HISTORY: `${API_BASE_URL}/api/signals/history`,
+  SIGNALS_CLOSE: (signalId: string) => `${API_BASE_URL}/api/signals/${signalId}/close`,
 };
