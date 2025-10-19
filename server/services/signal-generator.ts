@@ -1,15 +1,13 @@
 import { db } from '../db';
 import { sql } from 'drizzle-orm';
 import { exchangeRateAPI } from './exchangerate-api';
+import { twelveDataAPI } from './twelve-data';
 
 /**
  * Automated Signal Generator Service
  * Runs on schedule to generate and track signals 24/7
+ * Now using REAL historical market data from Twelve Data API
  */
-
-// Import strategy and candle generator from client lib
-// We'll need to make these server-compatible
-import { generateCandlesFromQuote } from '../../client/src/lib/candle-generator';
 
 interface ForexQuote {
   symbol: string;
@@ -289,26 +287,42 @@ export class SignalGenerator {
       for (const quote of quotes) {
         const { symbol, exchangeRate } = quote;
 
-        // Generate candles from current price
-        const primaryCandles = generateCandlesFromQuote(symbol, exchangeRate, 1440);
-        const higherCandles = primaryCandles.filter((_, idx) => idx % 4 === 0);
+        try {
+          // Fetch REAL historical candles from Twelve Data API
+          console.log(`📊 Fetching real historical data for ${symbol}...`);
+          const primaryCandles = await twelveDataAPI.fetchHistoricalCandles(symbol, '5min', 1440);
 
-        // Analyze with strategy
-        const signal = strategy.analyze(primaryCandles, higherCandles);
-
-        // Temporarily use 50% threshold for testing (normally 70%)
-        if (signal && signal.confidence >= 50) {
-          signalsGenerated++;
-          signal.symbol = symbol; // Set the correct symbol
-
-          // Track signal to database
-          try {
-            await this.trackSignal(signal, symbol, exchangeRate, primaryCandles);
-            signalsTracked++;
-            console.log(`✅ Tracked ${symbol} signal (${signal.confidence}% confidence)`);
-          } catch (error) {
-            console.error(`❌ Failed to track ${symbol} signal:`, error);
+          if (!primaryCandles || primaryCandles.length < 200) {
+            console.warn(`⚠️  Insufficient candle data for ${symbol} (${primaryCandles?.length || 0} candles)`);
+            continue;
           }
+
+          // Generate higher timeframe candles (20min from 5min)
+          const higherCandles = primaryCandles.filter((_, idx) => idx % 4 === 0);
+
+          // Analyze with strategy
+          const signal = strategy.analyze(primaryCandles, higherCandles);
+
+          // Temporarily use 50% threshold for testing (normally 70%)
+          if (signal && signal.confidence >= 50) {
+            signalsGenerated++;
+            signal.symbol = symbol; // Set the correct symbol
+
+            // Track signal to database
+            try {
+              await this.trackSignal(signal, symbol, exchangeRate, primaryCandles);
+              signalsTracked++;
+              console.log(`✅ Tracked ${symbol} signal (${signal.confidence}% confidence)`);
+            } catch (error) {
+              console.error(`❌ Failed to track ${symbol} signal:`, error);
+            }
+          }
+
+          // Rate limiting - Twelve Data free tier: 8 calls/minute
+          await new Promise(resolve => setTimeout(resolve, 8000)); // 8 seconds between pairs
+
+        } catch (error) {
+          console.error(`❌ Error processing ${symbol}:`, error);
         }
       }
 
