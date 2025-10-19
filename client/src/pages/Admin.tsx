@@ -54,12 +54,26 @@ export default function Admin() {
   // Fetch system health
   const { data: health, isLoading: healthLoading } = useQuery<SystemHealth>({
     queryKey: [API_ENDPOINTS.ADMIN_HEALTH],
+    queryFn: async () => {
+      const response = await fetch(API_ENDPOINTS.ADMIN_HEALTH, {
+        credentials: 'include',
+      });
+      if (!response.ok) throw new Error('Failed to fetch health');
+      return response.json();
+    },
     refetchInterval: 10000, // Refresh every 10 seconds
   });
 
   // Fetch generation logs
   const { data: logs, isLoading: logsLoading } = useQuery<GenerationLog[]>({
     queryKey: [API_ENDPOINTS.ADMIN_LOGS],
+    queryFn: async () => {
+      const response = await fetch(API_ENDPOINTS.ADMIN_LOGS, {
+        credentials: 'include',
+      });
+      if (!response.ok) throw new Error('Failed to fetch logs');
+      return response.json();
+    },
     refetchInterval: 30000, // Refresh every 30 seconds
   });
 
