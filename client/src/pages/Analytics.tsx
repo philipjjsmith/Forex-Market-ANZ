@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { API_ENDPOINTS } from '@/config/api';
-import { getCurrentUser, logout, type User as AuthUser } from '@/lib/auth';
+import { getCurrentUser, logout, getToken, type User as AuthUser } from '@/lib/auth';
 import { ActiveSignalsTable } from '@/components/ActiveSignalsTable';
 import { SignalHistoryTable } from '@/components/SignalHistoryTable';
 
@@ -101,7 +101,11 @@ export default function Analytics() {
   // Fetch performance data
   const fetchPerformance = async () => {
     try {
+      const token = getToken();
       const response = await fetch(API_ENDPOINTS.SIGNALS_PERFORMANCE, {
+        headers: {
+          ...(token && { 'Authorization': `Bearer ${token}` }),
+        },
         credentials: 'include',
       });
 
@@ -119,7 +123,11 @@ export default function Analytics() {
   // Fetch active signals
   const fetchActiveSignals = async () => {
     try {
+      const token = getToken();
       const response = await fetch(API_ENDPOINTS.SIGNALS_ACTIVE, {
+        headers: {
+          ...(token && { 'Authorization': `Bearer ${token}` }),
+        },
         credentials: 'include',
       });
 
@@ -137,7 +145,11 @@ export default function Analytics() {
   // Fetch signal history
   const fetchHistory = async () => {
     try {
+      const token = getToken();
       const response = await fetch(API_ENDPOINTS.SIGNALS_HISTORY + '?limit=50', {
+        headers: {
+          ...(token && { 'Authorization': `Bearer ${token}` }),
+        },
         credentials: 'include',
       });
 

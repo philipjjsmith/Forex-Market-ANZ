@@ -7,7 +7,7 @@ import { ComprehensiveSignalCard } from '@/components/ComprehensiveSignalCard';
 import { useQuotaTracker } from '@/hooks/use-quota-tracker';
 import { generateCandlesFromQuote } from '@/lib/candle-generator';
 import { API_ENDPOINTS } from '@/config/api';
-import { getCurrentUser, logout, type User as AuthUser } from '@/lib/auth';
+import { getCurrentUser, logout, getToken, type User as AuthUser } from '@/lib/auth';
 
 export default function Dashboard() {
   const [, setLocation] = useLocation();
@@ -229,10 +229,14 @@ export default function Dashboard() {
         for (const signal of signalsToTrack) {
           try {
             const candles = newMarketData[signal.symbol]?.candles || [];
+            const token = getToken();
 
             await fetch(API_ENDPOINTS.SIGNALS_TRACK, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: {
+                'Content-Type': 'application/json',
+                ...(token && { 'Authorization': `Bearer ${token}` }),
+              },
               credentials: 'include',
               body: JSON.stringify({
                 signal,

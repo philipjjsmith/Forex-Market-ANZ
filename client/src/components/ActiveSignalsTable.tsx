@@ -21,6 +21,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { API_ENDPOINTS } from '@/config/api';
+import { getToken } from '@/lib/auth';
 
 interface ActiveSignal {
   signal_id: string;
@@ -103,9 +104,13 @@ export function ActiveSignalsTable({ signals, onSignalClosed }: ActiveSignalsTab
         throw new Error('Invalid price');
       }
 
+      const token = getToken();
       const response = await fetch(API_ENDPOINTS.SIGNALS_CLOSE(selectedSignal.signal_id), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` }),
+        },
         credentials: 'include',
         body: JSON.stringify({ closePrice: price }),
       });
