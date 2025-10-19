@@ -68,12 +68,20 @@ export default function Admin() {
         method: 'POST',
         credentials: 'include',
       });
-      if (!response.ok) throw new Error('Failed to trigger generation');
+      if (!response.ok) {
+        if (response.status === 405) {
+          throw new Error('Server is redeploying. Please wait 2-3 minutes and try again.');
+        }
+        throw new Error('Failed to trigger generation');
+      }
       return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/health'] });
       queryClient.invalidateQueries({ queryKey: ['/api/admin/logs'] });
+    },
+    onError: (error: Error) => {
+      alert(error.message);
     },
   });
 
