@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { TrendingUp, TrendingDown, CheckCircle, XCircle, Clock, User, BarChart3 } from 'lucide-react';
+import { TrendingUp, TrendingDown, CheckCircle, XCircle, Clock, User, BarChart3, DollarSign } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import {
   Table,
@@ -16,6 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { calculateActualProfit } from '@/lib/profit-calculator';
 
 interface HistorySignal {
   signal_id: string;
@@ -33,11 +34,19 @@ interface HistorySignal {
   created_at: string;
 }
 
-interface SignalHistoryTableProps {
-  signals: HistorySignal[];
+interface PerformanceData {
+  confidence_bracket: string;
+  win_rate: number;
+  total_signals: number;
 }
 
-export function SignalHistoryTable({ signals }: SignalHistoryTableProps) {
+interface SignalHistoryTableProps {
+  signals: HistorySignal[];
+  accountSize: number;
+  performanceData: PerformanceData[];
+}
+
+export function SignalHistoryTable({ signals, accountSize, performanceData }: SignalHistoryTableProps) {
   const [symbolFilter, setSymbolFilter] = useState<string>('all');
   const [outcomeFilter, setOutcomeFilter] = useState<string>('all');
 
@@ -167,10 +176,14 @@ export function SignalHistoryTable({ signals }: SignalHistoryTableProps) {
               <TableHead className="text-blue-200">Exit</TableHead>
               <TableHead className="text-blue-200">Outcome</TableHead>
               <TableHead className="text-blue-200 text-right">P/L (pips)</TableHead>
+              <TableHead className="text-blue-200 text-right">Profit (USD)</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredSignals.map((signal) => (
+            {filteredSignals.map((signal) => {
+              const actualProfit = calculateActualProfit(accountSize, signal, performanceData);
+
+              return (
               <TableRow key={signal.signal_id} className="border-white/10 hover:bg-white/5">
                 <TableCell className="text-gray-300 text-sm">
                   {formatDate(signal.outcome_time)}
@@ -232,8 +245,28 @@ export function SignalHistoryTable({ signals }: SignalHistoryTableProps) {
                     {signal.profit_loss_pips?.toFixed(1) || '0.0'}
                   </span>
                 </TableCell>
+                <TableCell className="text-right">
+                  <div className="flex items-center justify-end gap-1">
+                    <DollarSign className={`w-3 h-3 ${actualProfit.profitUSD >= 0 ? 'text-green-400' : 'text-red-400'}`} />
+                    <span
+                      className={`font-mono font-semibold ${
+                        actualProfit.profitUSD > 0
+                          ? 'text-green-400'
+                          : actualProfit.profitUSD < 0
+                          ? 'text-red-400'
+                          : 'text-gray-400'
+                      }`}
+                    >
+                      {actualProfit.profitUSD > 0 ? '+' : ''}${actualProfit.profitUSD.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                  <div className="text-xs text-gray-400 text-right mt-1">
+                    {actualProfit.riskPercent.toFixed(1)}% risk
+                  </div>
+                </TableCell>
               </TableRow>
-            ))}
+              );
+            })}
           </TableBody>
         </Table>
       </div>

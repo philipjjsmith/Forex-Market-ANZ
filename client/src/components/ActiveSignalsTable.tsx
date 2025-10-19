@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Clock, TrendingUp, TrendingDown, Target, X } from 'lucide-react';
+import { Clock, TrendingUp, TrendingDown, Target, X, DollarSign } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -22,6 +22,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { API_ENDPOINTS } from '@/config/api';
 import { getToken } from '@/lib/auth';
+import { calculatePotentialProfit } from '@/lib/profit-calculator';
 
 interface ActiveSignal {
   signal_id: string;
@@ -41,12 +42,20 @@ interface ActiveSignal {
   indicators: any;
 }
 
+interface PerformanceData {
+  confidence_bracket: string;
+  win_rate: number;
+  total_signals: number;
+}
+
 interface ActiveSignalsTableProps {
   signals: ActiveSignal[];
+  accountSize: number;
+  performanceData: PerformanceData[];
   onSignalClosed: () => void;
 }
 
-export function ActiveSignalsTable({ signals, onSignalClosed }: ActiveSignalsTableProps) {
+export function ActiveSignalsTable({ signals, accountSize, performanceData, onSignalClosed }: ActiveSignalsTableProps) {
   const [isCloseDialogOpen, setIsCloseDialogOpen] = useState(false);
   const [selectedSignal, setSelectedSignal] = useState<ActiveSignal | null>(null);
   const [closePrice, setClosePrice] = useState('');
@@ -155,6 +164,7 @@ export function ActiveSignalsTable({ signals, onSignalClosed }: ActiveSignalsTab
               <TableHead className="text-blue-200">TP1</TableHead>
               <TableHead className="text-blue-200">Stop Loss</TableHead>
               <TableHead className="text-blue-200">Current P/L</TableHead>
+              <TableHead className="text-blue-200">Potential Profit</TableHead>
               <TableHead className="text-blue-200">Time Left</TableHead>
               <TableHead className="text-blue-200">Action</TableHead>
             </TableRow>
@@ -163,6 +173,7 @@ export function ActiveSignalsTable({ signals, onSignalClosed }: ActiveSignalsTab
             {signals.map((signal) => {
               const currentPL = calculateCurrentPL(signal);
               const timeLeft = calculateTimeRemaining(signal.expires_at);
+              const potentialProfit = calculatePotentialProfit(accountSize, signal, performanceData);
 
               return (
                 <TableRow key={signal.signal_id} className="border-white/10 hover:bg-white/5">
@@ -222,6 +233,17 @@ export function ActiveSignalsTable({ signals, onSignalClosed }: ActiveSignalsTab
                       {currentPL > 0 ? '+' : ''}
                       {currentPL.toFixed(1)} pips
                     </span>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1">
+                      <DollarSign className="w-3 h-3 text-green-400" />
+                      <span className="font-mono font-semibold text-green-400">
+                        ${potentialProfit.profitUSD.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    <div className="text-xs text-gray-400 mt-1">
+                      {potentialProfit.riskPercent.toFixed(1)}% risk
+                    </div>
                   </TableCell>
                   <TableCell className="text-yellow-300">
                     <div className="flex items-center gap-1">

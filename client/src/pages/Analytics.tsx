@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
-import { Activity, TrendingUp, TrendingDown, Clock, Target, BarChart3, LogOut, User, Home } from 'lucide-react';
+import { Activity, TrendingUp, TrendingDown, Clock, Target, BarChart3, LogOut, User, Home, DollarSign, Wallet } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -9,6 +9,14 @@ import { API_ENDPOINTS } from '@/config/api';
 import { getCurrentUser, logout, getToken, type User as AuthUser } from '@/lib/auth';
 import { ActiveSignalsTable } from '@/components/ActiveSignalsTable';
 import { SignalHistoryTable } from '@/components/SignalHistoryTable';
+import { calculateTotalProfit } from '@/lib/profit-calculator';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 interface PerformanceData {
   overall: {
@@ -82,6 +90,7 @@ export default function Analytics() {
   const [historySignals, setHistorySignals] = useState<HistorySignal[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [accountSize, setAccountSize] = useState<number>(10000); // Default $10,000
 
   // Check authentication on mount
   useEffect(() => {
@@ -210,6 +219,10 @@ export default function Analytics() {
   const insightsProgress = Math.min((totalCompleted / 10) * 100, 100);
   const advancedProgress = Math.min((totalCompleted / 30) * 100, 100);
 
+  // Calculate total profit
+  const profitData = calculateTotalProfit(accountSize, historySignals, performance?.bySymbol || []);
+  const accountBalance = accountSize + profitData.totalProfit;
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900">
       {/* Header */}
@@ -257,6 +270,79 @@ export default function Analytics() {
             {error}
           </div>
         )}
+
+        {/* Account Size Selector & Profit Summary */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Account Size Selector */}
+          <Card className="bg-gradient-to-br from-blue-500/10 to-indigo-500/10 border-blue-500/30 backdrop-blur-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-white flex items-center gap-2">
+                <Wallet className="w-5 h-5 text-blue-400" />
+                Account Size
+              </CardTitle>
+              <CardDescription className="text-blue-200">
+                Select your trading capital
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Select
+                value={accountSize.toString()}
+                onValueChange={(value) => setAccountSize(parseInt(value))}
+              >
+                <SelectTrigger className="bg-slate-800 border-white/20 text-white">
+                  <SelectValue placeholder="Select account size" />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-800 border-white/20">
+                  <SelectItem value="1000" className="text-white hover:bg-white/10">
+                    $1,000
+                  </SelectItem>
+                  <SelectItem value="10000" className="text-white hover:bg-white/10">
+                    $10,000
+                  </SelectItem>
+                  <SelectItem value="100000" className="text-white hover:bg-white/10">
+                    $100,000
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </CardContent>
+          </Card>
+
+          {/* Total Profit */}
+          <Card className="bg-gradient-to-br from-green-500/10 to-emerald-500/10 border-green-500/30 backdrop-blur-sm">
+            <CardHeader className="pb-2">
+              <CardDescription className="text-green-200">Total Profit</CardDescription>
+              <CardTitle className={`text-4xl font-bold ${profitData.totalProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {profitData.totalProfit >= 0 ? '+' : ''}${profitData.totalProfit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-2 text-sm">
+                <DollarSign className="w-4 h-4 text-green-400" />
+                <span className="text-green-200">
+                  {profitData.winningTrades} wins / {profitData.losingTrades} losses
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Account Balance */}
+          <Card className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 border-purple-500/30 backdrop-blur-sm">
+            <CardHeader className="pb-2">
+              <CardDescription className="text-purple-200">Account Balance</CardDescription>
+              <CardTitle className="text-4xl font-bold text-white">
+                ${accountBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-2 text-sm">
+                <TrendingUp className="w-4 h-4 text-purple-400" />
+                <span className="text-purple-200">
+                  {accountBalance > accountSize ? '+' : ''}{((profitData.totalProfit / accountSize) * 100).toFixed(2)}% ROI
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
 
         {/* Performance Overview */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -377,6 +463,8 @@ export default function Analytics() {
           <CardContent>
             <ActiveSignalsTable
               signals={activeSignals}
+              accountSize={accountSize}
+              performanceData={performance?.bySymbol || []}
               onSignalClosed={() => {
                 fetchActiveSignals();
                 fetchHistory();
@@ -395,7 +483,11 @@ export default function Analytics() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <SignalHistoryTable signals={historySignals} />
+            <SignalHistoryTable
+              signals={historySignals}
+              accountSize={accountSize}
+              performanceData={performance?.bySymbol || []}
+            />
           </CardContent>
         </Card>
       </main>
