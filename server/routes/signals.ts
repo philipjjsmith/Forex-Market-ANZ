@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { db } from "../db";
 import { sql } from "drizzle-orm";
+import { requireAuth } from "../auth-middleware";
 
 /**
  * Signal Tracking API Routes
@@ -13,7 +14,7 @@ export function registerSignalRoutes(app: Express) {
    * POST /api/signals/track
    * Save a 70%+ confidence signal for tracking
    */
-  app.post("/api/signals/track", async (req, res) => {
+  app.post("/api/signals/track", requireAuth, async (req, res) => {
     try {
       const { signal, candles } = req.body;
 
@@ -24,8 +25,8 @@ export function registerSignalRoutes(app: Express) {
         });
       }
 
-      // Get user from session (if logged in) or use anonymous tracking
-      const userId = req.user?.id || null;
+      // Get user from authenticated request
+      const userId = req.userId!;
 
       if (!userId) {
         return res.status(401).json({
@@ -100,9 +101,9 @@ export function registerSignalRoutes(app: Express) {
    * GET /api/signals/active
    * Get all active (pending) signals for current user
    */
-  app.get("/api/signals/active", async (req, res) => {
+  app.get("/api/signals/active", requireAuth, async (req, res) => {
     try {
-      const userId = req.user?.id;
+      const userId = req.userId!;
 
       if (!userId) {
         return res.status(401).json({ message: "Must be logged in" });
@@ -149,9 +150,9 @@ export function registerSignalRoutes(app: Express) {
    * GET /api/signals/performance
    * Get performance metrics for current user
    */
-  app.get("/api/signals/performance", async (req, res) => {
+  app.get("/api/signals/performance", requireAuth, async (req, res) => {
     try {
-      const userId = req.user?.id;
+      const userId = req.userId!;
 
       if (!userId) {
         return res.status(401).json({ message: "Must be logged in" });
@@ -235,9 +236,9 @@ export function registerSignalRoutes(app: Express) {
    * POST /api/signals/:signalId/close
    * Manually close a signal (user exited early)
    */
-  app.post("/api/signals/:signalId/close", async (req, res) => {
+  app.post("/api/signals/:signalId/close", requireAuth, async (req, res) => {
     try {
-      const userId = req.user?.id;
+      const userId = req.userId!;
       const { signalId } = req.params;
       const { closePrice } = req.body;
 
@@ -309,9 +310,9 @@ export function registerSignalRoutes(app: Express) {
    * GET /api/signals/history
    * Get completed signals history
    */
-  app.get("/api/signals/history", async (req, res) => {
+  app.get("/api/signals/history", requireAuth, async (req, res) => {
     try {
-      const userId = req.user?.id;
+      const userId = req.userId!;
       const limit = parseInt(req.query.limit as string) || 50;
 
       if (!userId) {
