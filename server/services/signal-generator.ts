@@ -1,5 +1,6 @@
 import { db } from '../db';
 import { sql } from 'drizzle-orm';
+import { exchangeRateAPI } from './exchangerate-api';
 
 /**
  * Automated Signal Generator Service
@@ -321,52 +322,23 @@ export class SignalGenerator {
 
   private async fetchForexQuotes(): Promise<ForexQuote[]> {
     try {
-      const apiKey = process.env.FOREX_API_KEY;
-      const provider = process.env.FOREX_API_PROVIDER || 'alphavantage';
+      console.log('📡 Fetching forex quotes from ExchangeRate-API...');
 
-      if (!apiKey || apiKey === 'your_alphavantage_api_key_here') {
-        console.warn('⚠️  FOREX_API_KEY not configured, using mock data');
-        return this.getMockQuotes();
-      }
+      // Use the existing exchangeRateAPI service (has 15-min caching!)
+      const apiQuotes = await exchangeRateAPI.fetchAllQuotes();
 
-      // Fetch quotes for major pairs
-      const pairs = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'USD/CHF'];
-      const quotes: ForexQuote[] = [];
+      // Convert to our format
+      const quotes: ForexQuote[] = apiQuotes.map(q => ({
+        symbol: q.symbol,
+        exchangeRate: q.exchangeRate,
+        timestamp: q.lastRefreshed,
+      }));
 
-      if (provider === 'alphavantage') {
-        for (const symbol of pairs) {
-          try {
-            const cleanSymbol = symbol.replace('/', '');
-            const fromCurrency = cleanSymbol.slice(0, 3);
-            const toCurrency = cleanSymbol.slice(3, 6);
+      console.log(`✅ Fetched ${quotes.length} forex pairs from ExchangeRate-API`);
+      return quotes;
 
-            const url = `https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency=${fromCurrency}&to_currency=${toCurrency}&apikey=${apiKey}`;
-
-            const response = await fetch(url);
-            const data = await response.json();
-
-            if (data['Realtime Currency Exchange Rate']) {
-              quotes.push({
-                symbol,
-                exchangeRate: parseFloat(data['Realtime Currency Exchange Rate']['5. Exchange Rate']),
-                timestamp: new Date().toISOString(),
-              });
-            } else if (data['Note']) {
-              console.warn('⚠️  API rate limit reached, using mock data');
-              return this.getMockQuotes();
-            }
-
-            // Rate limiting - Alpha Vantage free tier = 5 calls/minute
-            await new Promise(resolve => setTimeout(resolve, 12000)); // 12 seconds between calls
-          } catch (error) {
-            console.error(`Error fetching ${symbol}:`, error);
-          }
-        }
-      }
-
-      return quotes.length > 0 ? quotes : this.getMockQuotes();
     } catch (error) {
-      console.error('Error fetching forex quotes:', error);
+      console.error('❌ Error fetching from ExchangeRate-API, using mock data:', error);
       return this.getMockQuotes();
     }
   }
