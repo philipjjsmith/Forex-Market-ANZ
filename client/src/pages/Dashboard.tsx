@@ -294,6 +294,16 @@ export default function Dashboard() {
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2 lg:gap-4">
+              {/* Analytics Button */}
+              <button
+                onClick={() => setLocation('/analytics')}
+                className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors"
+                title="View AI Analytics"
+              >
+                <BarChart3 className="w-4 h-4" />
+                <span className="text-sm font-medium">Analytics</span>
+              </button>
+
               {/* Learn Button */}
               <button
                 onClick={() => setLocation('/learn')}
