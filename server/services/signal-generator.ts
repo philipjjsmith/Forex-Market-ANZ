@@ -2,6 +2,7 @@ import { db } from '../db';
 import { sql } from 'drizzle-orm';
 import { exchangeRateAPI } from './exchangerate-api';
 import { twelveDataAPI } from './twelve-data';
+import { aiAnalyzer } from './ai-analyzer';
 
 /**
  * Automated Signal Generator Service
@@ -124,7 +125,7 @@ class MACrossoverStrategy {
   name = 'MA Crossover Multi-Timeframe';
   version = '1.0.0';
 
-  analyze(primaryCandles: Candle[], higherCandles: Candle[]): Signal | null {
+  analyze(primaryCandles: Candle[], higherCandles: Candle[], symbol: string): Signal | null {
     if (primaryCandles.length < 200) return null;
 
     const closes = primaryCandles.map(c => c.close);
@@ -153,61 +154,119 @@ class MACrossoverStrategy {
 
     const currentPrice = closes[closes.length - 1];
 
+    // 🧠 AI ENHANCEMENT: Get symbol-specific insights
+    const aiInsights = aiAnalyzer.getSymbolInsights(symbol);
+    const useAI = aiInsights.hasEnoughData; // Only use AI if 30+ signals
+
     let signalType: 'LONG' | 'SHORT' | null = null;
     let confidence = 0;
     const rationale: string[] = [];
 
-    if (bullishCross && htfTrend === 'UP') {
-      signalType = 'LONG';
-      confidence += 30;
-      rationale.push('Bullish MA crossover detected');
-
-      if (rsi && rsi > 40 && rsi < 70) {
-        confidence += 15;
-        rationale.push('RSI in favorable range');
-      }
-
-      if (adx && adx.adx > 20) {
-        confidence += 15;
-        rationale.push('Strong trend confirmed by ADX');
-      }
-
-      if (currentPrice > bb.lower && currentPrice < bb.middle) {
-        confidence += 10;
-        rationale.push('Price in lower BB region');
-      }
-
-      confidence += 20;
-      rationale.push('Higher timeframe trend is bullish');
-    } else if (bearishCross && htfTrend === 'DOWN') {
-      signalType = 'SHORT';
-      confidence += 30;
-      rationale.push('Bearish MA crossover detected');
-
-      if (rsi && rsi > 30 && rsi < 60) {
-        confidence += 15;
-        rationale.push('RSI in favorable range');
-      }
-
-      if (adx && adx.adx > 20) {
-        confidence += 15;
-        rationale.push('Strong trend confirmed by ADX');
-      }
-
-      if (currentPrice < bb.upper && currentPrice > bb.middle) {
-        confidence += 10;
-        rationale.push('Price in upper BB region');
-      }
-
-      confidence += 20;
-      rationale.push('Higher timeframe trend is bearish');
+    if (useAI) {
+      rationale.push(`AI-Enhanced (${aiInsights.totalSignals} signals analyzed, ${aiInsights.winRate.toFixed(1)}% win rate)`);
     }
 
-    if (!signalType || confidence < 50) return null;
+    if (bullishCross && htfTrend === 'UP') {
+      signalType = 'LONG';
 
+      // 🧠 AI-POWERED: Base score from historical bullish crossover performance
+      const baseScore = useAI ? aiInsights.bullishCrossoverWinRate : 30;
+      confidence += baseScore;
+      rationale.push('Bullish MA crossover detected');
+
+      // 🧠 AI-POWERED: RSI weight based on moderate RSI performance
+      if (rsi && rsi > 40 && rsi < 70) {
+        const rsiWeight = useAI ? aiInsights.rsiModerateWeight : 15;
+        confidence += rsiWeight;
+        rationale.push(useAI
+          ? `RSI in favorable range (AI weight: ${rsiWeight})`
+          : 'RSI in favorable range'
+        );
+      }
+
+      // 🧠 AI-POWERED: ADX weight based on strong trend performance
+      if (adx && adx.adx > 20) {
+        const adxWeight = useAI ? aiInsights.strongTrendWeight : 15;
+        confidence += adxWeight;
+        rationale.push(useAI
+          ? `Strong trend confirmed by ADX (AI weight: ${adxWeight})`
+          : 'Strong trend confirmed by ADX'
+        );
+      }
+
+      // 🧠 AI-POWERED: BB weight based on lower BB positioning
+      if (currentPrice > bb.lower && currentPrice < bb.middle) {
+        const bbWeight = useAI ? aiInsights.bbLowerWeight : 10;
+        confidence += bbWeight;
+        rationale.push(useAI
+          ? `Price in lower BB region (AI weight: ${bbWeight})`
+          : 'Price in lower BB region'
+        );
+      }
+
+      // 🧠 AI-POWERED: HTF trend weight
+      const htfWeight = useAI ? aiInsights.htfTrendWeight : 20;
+      confidence += htfWeight;
+      rationale.push(useAI
+        ? `Higher timeframe trend is bullish (AI weight: ${htfWeight})`
+        : 'Higher timeframe trend is bullish'
+      );
+    } else if (bearishCross && htfTrend === 'DOWN') {
+      signalType = 'SHORT';
+
+      // 🧠 AI-POWERED: Base score from historical bearish crossover performance
+      const baseScore = useAI ? aiInsights.bearishCrossoverWinRate : 30;
+      confidence += baseScore;
+      rationale.push('Bearish MA crossover detected');
+
+      // 🧠 AI-POWERED: RSI weight based on moderate RSI performance
+      if (rsi && rsi > 30 && rsi < 60) {
+        const rsiWeight = useAI ? aiInsights.rsiModerateWeight : 15;
+        confidence += rsiWeight;
+        rationale.push(useAI
+          ? `RSI in favorable range (AI weight: ${rsiWeight})`
+          : 'RSI in favorable range'
+        );
+      }
+
+      // 🧠 AI-POWERED: ADX weight based on strong trend performance
+      if (adx && adx.adx > 20) {
+        const adxWeight = useAI ? aiInsights.strongTrendWeight : 15;
+        confidence += adxWeight;
+        rationale.push(useAI
+          ? `Strong trend confirmed by ADX (AI weight: ${adxWeight})`
+          : 'Strong trend confirmed by ADX'
+        );
+      }
+
+      // 🧠 AI-POWERED: BB weight based on upper BB positioning
+      if (currentPrice < bb.upper && currentPrice > bb.middle) {
+        const bbWeight = useAI ? aiInsights.bbUpperWeight : 10;
+        confidence += bbWeight;
+        rationale.push(useAI
+          ? `Price in upper BB region (AI weight: ${bbWeight})`
+          : 'Price in upper BB region'
+        );
+      }
+
+      // 🧠 AI-POWERED: HTF trend weight
+      const htfWeight = useAI ? aiInsights.htfTrendWeight : 20;
+      confidence += htfWeight;
+      rationale.push(useAI
+        ? `Higher timeframe trend is bearish (AI weight: ${htfWeight})`
+        : 'Higher timeframe trend is bearish'
+      );
+    }
+
+    // 🧠 AI-POWERED: Use AI-optimized confidence threshold
+    const confidenceThreshold = useAI ? aiInsights.optimalConfidenceThreshold : 50;
+    if (!signalType || confidence < confidenceThreshold) return null;
+
+    // 🧠 AI-POWERED: Use AI-optimized ATR multiplier for stop loss
+    const stopMultiplier = useAI ? aiInsights.optimalStopMultiplier : 2.0;
     const stop = signalType === 'LONG'
-      ? currentPrice - (atr * 2)
-      : currentPrice + (atr * 2);
+      ? currentPrice - (atr * stopMultiplier)
+      : currentPrice + (atr * stopMultiplier);
 
     const riskPerTrade = Math.abs(currentPrice - stop);
     const tp1 = signalType === 'LONG'
@@ -300,8 +359,8 @@ export class SignalGenerator {
           // Generate higher timeframe candles (20min from 5min)
           const higherCandles = primaryCandles.filter((_, idx) => idx % 4 === 0);
 
-          // Analyze with strategy
-          const signal = strategy.analyze(primaryCandles, higherCandles);
+          // Analyze with strategy (🧠 AI-ENHANCED: Now passes symbol for AI insights)
+          const signal = strategy.analyze(primaryCandles, higherCandles, symbol);
 
           // Temporarily use 50% threshold for testing (normally 70%)
           if (signal && signal.confidence >= 50) {
