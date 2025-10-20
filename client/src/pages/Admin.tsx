@@ -2,9 +2,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Activity, TrendingUp, AlertCircle, RefreshCw, Play, Pause, Clock, CheckCircle, Calendar, Database, Zap } from 'lucide-react';
+import { Loader2, Activity, TrendingUp, AlertCircle, RefreshCw, Play, Pause, Clock, CheckCircle, Calendar, Database, Zap, Brain } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { API_ENDPOINTS } from '@/config/api';
+import { useLocation } from 'wouter';
 
 interface SystemHealth {
   status: 'healthy' | 'warning' | 'error';
@@ -48,6 +49,7 @@ interface GenerationLog {
 
 export default function Admin() {
   const queryClient = useQueryClient();
+  const [, setLocation] = useLocation();
   const [triggeringGeneration, setTriggeringGeneration] = useState(false);
   const [countdown, setCountdown] = useState<string>('');
 
@@ -172,23 +174,32 @@ export default function Admin() {
             <h1 className="text-3xl font-bold text-white">Admin Dashboard</h1>
             <p className="text-blue-200 mt-1">Monitor system health and signal generation</p>
           </div>
-        <Button
-          onClick={handleTriggerGeneration}
-          disabled={triggeringGeneration || health?.signalGenerator.isRunning}
-          className="bg-blue-600 hover:bg-blue-700"
-        >
-          {triggeringGeneration ? (
-            <>
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              Generating...
-            </>
-          ) : (
-            <>
-              <Play className="h-4 w-4 mr-2" />
-              Trigger Generation Now
-            </>
-          )}
-        </Button>
+          <div className="flex gap-3">
+            <Button
+              onClick={() => setLocation('/ai-insights')}
+              className="bg-purple-600 hover:bg-purple-700"
+            >
+              <Brain className="h-4 w-4 mr-2" />
+              AI Insights
+            </Button>
+            <Button
+              onClick={handleTriggerGeneration}
+              disabled={triggeringGeneration || health?.signalGenerator.isRunning}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              {triggeringGeneration ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <Play className="h-4 w-4 mr-2" />
+                  Trigger Generation Now
+                </>
+              )}
+            </Button>
+          </div>
       </div>
 
       {/* Quick Stats Summary */}
