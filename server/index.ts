@@ -8,6 +8,7 @@ import { setupVite, serveStatic, log } from "./vite";
 import { supabase } from "./supabase";
 import { outcomeValidator } from "./services/outcome-validator";
 import { signalGenerator } from "./services/signal-generator";
+import { aiAnalyzer } from "./services/ai-analyzer";
 
 // CORS Configuration Active - Build v3
 
@@ -213,6 +214,10 @@ app.use((req, res, next) => {
       const intervalMinutes = 15; // 15 minutes = faster signal generation for testing
       signalGenerator.start(intervalMinutes / 60); // Convert minutes to hours
       console.log(`🎯 Signal generator set to ${intervalMinutes} minute intervals for testing`);
+
+      // Start AI analyzer (runs every 6 hours)
+      aiAnalyzer.start();
+      console.log('🧠 AI Analyzer started - analyzing signal patterns every 6 hours');
     } else {
       console.log('⚠️  Signal generator disabled in development mode');
       console.log('   Set NODE_ENV=production to enable automated signal generation');

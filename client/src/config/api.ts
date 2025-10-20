@@ -34,4 +34,13 @@ export const API_ENDPOINTS = {
   ADMIN_HEALTH: `${API_BASE_URL}/api/admin/health`,
   ADMIN_LOGS: `${API_BASE_URL}/api/admin/logs`,
   ADMIN_TRIGGER_GENERATION: `${API_BASE_URL}/api/admin/trigger-generation`,
+
+  // AI Insights endpoints
+  AI_INSIGHTS: `${API_BASE_URL}/api/ai/insights`,
+  AI_INSIGHTS_SYMBOL: (symbol: string) => `${API_BASE_URL}/api/ai/insights/${symbol}`,
+  AI_RECOMMENDATIONS: `${API_BASE_URL}/api/ai/recommendations`,
+  AI_RECOMMENDATION_APPROVE: (id: string) => `${API_BASE_URL}/api/ai/recommendations/${id}/approve`,
+  AI_RECOMMENDATION_REJECT: (id: string) => `${API_BASE_URL}/api/ai/recommendations/${id}/reject`,
+  AI_ANALYZE: `${API_BASE_URL}/api/ai/analyze`,
+  AI_PERFORMANCE: (symbol: string) => `${API_BASE_URL}/api/ai/performance/${symbol}`,
 };

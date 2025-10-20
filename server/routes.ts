@@ -8,6 +8,7 @@ import { requireAuth } from "./auth-middleware";
 import bcrypt from "bcrypt";
 import { registerSignalRoutes } from "./routes/signals";
 import { registerAdminRoutes } from "./routes/admin";
+import { registerAIRoutes } from "./routes/ai-insights";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Register signal tracking routes
@@ -15,6 +16,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Register admin routes
   registerAdminRoutes(app);
+
+  // Register AI insights routes
+  registerAIRoutes(app);
   // ========== AUTHENTICATION ROUTES ==========
 
   // Register new user
