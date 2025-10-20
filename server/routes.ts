@@ -9,8 +9,132 @@ import bcrypt from "bcrypt";
 import { registerSignalRoutes } from "./routes/signals";
 import { registerAdminRoutes } from "./routes/admin";
 import { registerAIRoutes } from "./routes/ai-insights";
+import { signalGenerator } from "./services/signal-generator";
+import { outcomeValidator } from "./services/outcome-validator";
+import { aiAnalyzer } from "./services/ai-analyzer";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // ========== CRON/SCHEDULED JOB ENDPOINTS ==========
+  // These endpoints are pinged by UptimeRobot or cron services to trigger automated tasks
+  // This architecture works on Render free tier (which sleeps after 15min of inactivity)
+
+  /**
+   * Signal Generation Cron (every 15 minutes)
+   * Triggered by: UptimeRobot every 5 minutes (rate-limited to 15min)
+   */
+  app.get("/api/cron/generate-signals", async (req, res) => {
+    try {
+      const lastRun = signalGenerator.getLastRunTime();
+      const now = Date.now();
+      const fifteenMinutes = 15 * 60 * 1000;
+
+      // Only run if 15+ minutes since last run
+      if (lastRun > 0 && now - lastRun < fifteenMinutes) {
+        const minutesAgo = Math.round((now - lastRun) / 60000);
+        const nextRunIn = Math.round((fifteenMinutes - (now - lastRun)) / 60000);
+
+        return res.json({
+          skipped: true,
+          message: `Last run was ${minutesAgo} minute(s) ago`,
+          nextRunIn: `${nextRunIn} minute(s)`,
+          lastRun: new Date(lastRun).toISOString()
+        });
+      }
+
+      // Trigger generation (non-blocking)
+      signalGenerator.generateSignals().catch(error => {
+        console.error('Error in signal generation:', error);
+      });
+
+      res.json({
+        success: true,
+        message: 'Signal generation triggered',
+        timestamp: new Date().toISOString()
+      });
+    } catch (error: any) {
+      console.error('❌ Cron error (generate-signals):', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  /**
+   * Outcome Validation Cron (every 5 minutes)
+   * Triggered by: UptimeRobot every 5 minutes
+   */
+  app.get("/api/cron/validate-outcomes", async (req, res) => {
+    try {
+      const lastRun = outcomeValidator.getLastRunTime();
+      const now = Date.now();
+      const fiveMinutes = 5 * 60 * 1000;
+
+      // Only run if 5+ minutes since last run
+      if (lastRun > 0 && now - lastRun < fiveMinutes) {
+        const minutesAgo = Math.round((now - lastRun) / 60000);
+        const nextRunIn = Math.round((fiveMinutes - (now - lastRun)) / 60000);
+
+        return res.json({
+          skipped: true,
+          message: `Last run was ${minutesAgo} minute(s) ago`,
+          nextRunIn: `${nextRunIn} minute(s)`,
+          lastRun: new Date(lastRun).toISOString()
+        });
+      }
+
+      // Trigger validation (non-blocking)
+      outcomeValidator.validatePendingSignals().catch(error => {
+        console.error('Error in outcome validation:', error);
+      });
+
+      res.json({
+        success: true,
+        message: 'Outcome validation triggered',
+        timestamp: new Date().toISOString()
+      });
+    } catch (error: any) {
+      console.error('❌ Cron error (validate-outcomes):', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  /**
+   * AI Analysis Cron (every 6 hours)
+   * Triggered by: External cron service (cron-job.org) every 6 hours
+   */
+  app.get("/api/cron/analyze-ai", async (req, res) => {
+    try {
+      const lastRun = aiAnalyzer.getLastRunTime();
+      const now = Date.now();
+      const sixHours = 6 * 60 * 60 * 1000;
+
+      // Only run if 6+ hours since last run
+      if (lastRun > 0 && now - lastRun < sixHours) {
+        const hoursAgo = ((now - lastRun) / (60 * 60 * 1000)).toFixed(1);
+        const nextRunIn = ((sixHours - (now - lastRun)) / (60 * 60 * 1000)).toFixed(1);
+
+        return res.json({
+          skipped: true,
+          message: `Last run was ${hoursAgo} hour(s) ago`,
+          nextRunIn: `${nextRunIn} hour(s)`,
+          lastRun: new Date(lastRun).toISOString()
+        });
+      }
+
+      // Trigger analysis (non-blocking)
+      aiAnalyzer.analyzeAllSymbols().catch(error => {
+        console.error('Error in AI analysis:', error);
+      });
+
+      res.json({
+        success: true,
+        message: 'AI analysis triggered',
+        timestamp: new Date().toISOString()
+      });
+    } catch (error: any) {
+      console.error('❌ Cron error (analyze-ai):', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Register signal tracking routes
   registerSignalRoutes(app);
 
@@ -19,6 +143,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Register AI insights routes
   registerAIRoutes(app);
+
   // ========== AUTHENTICATION ROUTES ==========
 
   // Register new user

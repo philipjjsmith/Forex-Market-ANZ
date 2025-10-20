@@ -55,6 +55,14 @@ interface CompletedSignal {
 export class AIAnalyzer {
   private insightsCache: Map<string, SymbolInsights> = new Map();
   private isAnalyzing = false;
+  private lastRunTime = 0;
+
+  /**
+   * Get the timestamp of the last successful run
+   */
+  getLastRunTime(): number {
+    return this.lastRunTime;
+  }
 
   /**
    * Main analysis - runs every 6 hours
@@ -66,6 +74,7 @@ export class AIAnalyzer {
     }
 
     this.isAnalyzing = true;
+    this.lastRunTime = Date.now();
     console.log('🧠 [AI Analyzer] Starting analysis cycle...');
 
     try {
@@ -363,20 +372,11 @@ export class AIAnalyzer {
   }
 
   /**
-   * Start the AI analyzer service (runs every 6 hours)
+   * REMOVED: start() method no longer needed
+   * AI analysis is now triggered via HTTP endpoint /api/cron/analyze-ai
+   * This allows the service to work on Render free tier (which sleeps after 15 min)
+   * External cron service pings the endpoint every 6 hours to trigger analysis
    */
-  start(): void {
-    console.log('🧠 [AI Analyzer] Service started');
-    console.log('⏰ Running analysis every 6 hours');
-
-    // Run immediately on start
-    this.analyzeAllSymbols();
-
-    // Then run every 6 hours
-    setInterval(() => {
-      this.analyzeAllSymbols();
-    }, 6 * 60 * 60 * 1000); // 6 hours
-  }
 }
 
 // Export singleton instance

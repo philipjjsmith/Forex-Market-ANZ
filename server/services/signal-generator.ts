@@ -317,6 +317,14 @@ class MACrossoverStrategy {
 
 export class SignalGenerator {
   private isRunning = false;
+  private lastRunTime = 0;
+
+  /**
+   * Get the timestamp of the last successful run
+   */
+  getLastRunTime(): number {
+    return this.lastRunTime;
+  }
 
   async generateSignals(): Promise<void> {
     if (this.isRunning) {
@@ -325,6 +333,7 @@ export class SignalGenerator {
     }
 
     this.isRunning = true;
+    this.lastRunTime = Date.now();
     console.log('🤖 [Signal Generator] Starting automated analysis...');
 
     try {
@@ -500,20 +509,11 @@ export class SignalGenerator {
   }
 
   /**
-   * Start the service (runs every N hours)
+   * REMOVED: start() method no longer needed
+   * Signal generation is now triggered via HTTP endpoint /api/cron/generate-signals
+   * This allows the service to work on Render free tier (which sleeps after 15 min)
+   * UptimeRobot pings the endpoint every 5 minutes to trigger generation
    */
-  start(intervalHours: number = 2): void {
-    console.log(`🚀 [Signal Generator] Service started`);
-    console.log(`⏰ Generating signals every ${intervalHours} hours`);
-
-    // Run immediately on start
-    this.generateSignals();
-
-    // Then run on schedule
-    setInterval(() => {
-      this.generateSignals();
-    }, intervalHours * 60 * 60 * 1000);
-  }
 }
 
 // Export singleton instance

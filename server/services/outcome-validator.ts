@@ -31,6 +31,14 @@ interface ForexQuote {
 
 export class OutcomeValidator {
   private isRunning = false;
+  private lastRunTime = 0;
+
+  /**
+   * Get the timestamp of the last successful run
+   */
+  getLastRunTime(): number {
+    return this.lastRunTime;
+  }
 
   /**
    * Main validation loop - checks all pending signals
@@ -42,6 +50,7 @@ export class OutcomeValidator {
     }
 
     this.isRunning = true;
+    this.lastRunTime = Date.now();
     console.log('🔍 [Outcome Validator] Starting validation cycle...');
 
     try {
@@ -289,20 +298,11 @@ export class OutcomeValidator {
   }
 
   /**
-   * Start the validator service (runs every 5 minutes)
+   * REMOVED: start() method no longer needed
+   * Outcome validation is now triggered via HTTP endpoint /api/cron/validate-outcomes
+   * This allows the service to work on Render free tier (which sleeps after 15 min)
+   * UptimeRobot pings the endpoint every 5 minutes to trigger validation
    */
-  start(): void {
-    console.log('🚀 [Outcome Validator] Service started');
-    console.log('⏰ Running validation every 5 minutes');
-
-    // Run immediately on start
-    this.validatePendingSignals();
-
-    // Then run every 5 minutes
-    setInterval(() => {
-      this.validatePendingSignals();
-    }, 5 * 60 * 1000); // 5 minutes
-  }
 }
 
 // Export singleton instance

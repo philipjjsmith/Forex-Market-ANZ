@@ -205,22 +205,23 @@ app.use((req, res, next) => {
   server.listen(port, "0.0.0.0", () => {
     log(`serving on port ${port}`);
 
-    // Start the outcome validator service (checks signals every 5 min)
-    outcomeValidator.start();
+    // ========== AUTOMATED SERVICES NOW USE HTTP CRON ENDPOINTS ==========
+    // Services are triggered by HTTP requests instead of setInterval
+    // This works reliably on Render free tier (which sleeps after 15min)
+    //
+    // Cron Endpoints:
+    // - /api/cron/generate-signals (every 15 min via UptimeRobot)
+    // - /api/cron/validate-outcomes (every 5 min via UptimeRobot)
+    // - /api/cron/analyze-ai (every 6 hours via cron-job.org)
+    //
+    // See server/routes.ts for endpoint implementations
 
-    // Start automated signal generation
-    if (process.env.NODE_ENV === 'production') {
-      // Use 15-minute intervals for faster testing (can change to 2 hours later)
-      const intervalMinutes = 15; // 15 minutes = faster signal generation for testing
-      signalGenerator.start(intervalMinutes / 60); // Convert minutes to hours
-      console.log(`🎯 Signal generator set to ${intervalMinutes} minute intervals for testing`);
-
-      // Start AI analyzer (runs every 6 hours)
-      aiAnalyzer.start();
-      console.log('🧠 AI Analyzer started - analyzing signal patterns every 6 hours');
-    } else {
-      console.log('⚠️  Signal generator disabled in development mode');
-      console.log('   Set NODE_ENV=production to enable automated signal generation');
-    }
+    console.log('✅ Server started - automated services ready');
+    console.log('📡 Cron endpoints available:');
+    console.log('   GET /api/cron/generate-signals (15 min intervals)');
+    console.log('   GET /api/cron/validate-outcomes (5 min intervals)');
+    console.log('   GET /api/cron/analyze-ai (6 hour intervals)');
+    console.log('');
+    console.log('⚠️  Configure UptimeRobot to ping these endpoints for 24/7 operation');
   });
 })();
