@@ -7,6 +7,7 @@ import Dashboard from "@/pages/Dashboard";
 import Analytics from "@/pages/Analytics";
 import Learn from "@/pages/Learn";
 import Admin from "@/pages/Admin";
+import AIInsights from "@/pages/AIInsights";
 import Login from "@/pages/Login";
 import NotFound from "@/pages/not-found";
 
@@ -18,6 +19,7 @@ function Router() {
       <Route path="/analytics" component={Analytics} />
       <Route path="/learn" component={Learn} />
       <Route path="/admin" component={Admin} />
+      <Route path="/ai-insights" component={AIInsights} />
       <Route component={NotFound} />
     </Switch>
   );
