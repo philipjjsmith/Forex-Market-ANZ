@@ -5,7 +5,7 @@ import { Brain, TrendingUp, AlertCircle, CheckCircle, Activity, Zap, Database, T
 import { API_ENDPOINTS } from '@/config/api';
 import { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
-import { getCurrentUser } from '@/lib/auth';
+import { getCurrentUser, getToken } from '@/lib/auth';
 
 interface AIInsights {
   totalSignals: number;
@@ -70,7 +70,12 @@ export default function AIInsights() {
   const { data: insights, isLoading, refetch } = useQuery<AIInsights>({
     queryKey: ['ai-insights'],
     queryFn: async () => {
+      const token = getToken();
       const res = await fetch(API_ENDPOINTS.AI_INSIGHTS, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` }),
+        },
         credentials: 'include',
       });
       if (!res.ok) throw new Error('Failed to fetch AI insights');
@@ -82,8 +87,13 @@ export default function AIInsights() {
   // Trigger manual analysis
   const triggerAnalysis = async () => {
     try {
+      const token = getToken();
       const res = await fetch(API_ENDPOINTS.AI_ANALYZE, {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` }),
+        },
         credentials: 'include',
       });
       if (res.ok) {

@@ -6,7 +6,7 @@ import { Loader2, Activity, TrendingUp, AlertCircle, RefreshCw, Play, Pause, Clo
 import { useState, useEffect } from 'react';
 import { API_ENDPOINTS } from '@/config/api';
 import { useLocation } from 'wouter';
-import { getCurrentUser } from '@/lib/auth';
+import { getCurrentUser, getToken } from '@/lib/auth';
 
 interface SystemHealth {
   status: 'healthy' | 'warning' | 'error';
@@ -82,7 +82,12 @@ export default function Admin() {
   const { data: health, isLoading: healthLoading } = useQuery<SystemHealth>({
     queryKey: [API_ENDPOINTS.ADMIN_HEALTH],
     queryFn: async () => {
+      const token = getToken();
       const response = await fetch(API_ENDPOINTS.ADMIN_HEALTH, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` }),
+        },
         credentials: 'include',
       });
       if (!response.ok) throw new Error('Failed to fetch health');
@@ -95,7 +100,12 @@ export default function Admin() {
   const { data: logs, isLoading: logsLoading } = useQuery<GenerationLog[]>({
     queryKey: [API_ENDPOINTS.ADMIN_LOGS],
     queryFn: async () => {
+      const token = getToken();
       const response = await fetch(API_ENDPOINTS.ADMIN_LOGS, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` }),
+        },
         credentials: 'include',
       });
       if (!response.ok) throw new Error('Failed to fetch logs');
@@ -107,8 +117,13 @@ export default function Admin() {
   // Manual trigger mutation
   const triggerGeneration = useMutation({
     mutationFn: async () => {
+      const token = getToken();
       const response = await fetch(API_ENDPOINTS.ADMIN_TRIGGER_GENERATION, {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` }),
+        },
         credentials: 'include',
       });
       if (!response.ok) {
