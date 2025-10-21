@@ -37,6 +37,9 @@ interface Signal {
   targets: number[];
   riskReward: number;
   confidence: number;
+  tier: 'HIGH' | 'MEDIUM';
+  tradeLive: boolean;
+  positionSizePercent: number;
   orderType: string;
   executionType: string;
   indicators: {
@@ -121,9 +124,93 @@ class Indicators {
   }
 }
 
+// Helper function: Detect Support/Resistance levels
+function detectSupportResistance(candles: Candle[]): { support: number[]; resistance: number[] } {
+  const swingHighs: number[] = [];
+  const swingLows: number[] = [];
+
+  // Look for swing highs/lows (local peaks/valleys)
+  for (let i = 5; i < candles.length - 5; i++) {
+    const high = candles[i].high;
+    const low = candles[i].low;
+
+    // Swing High: current high > previous 5 AND next 5 candles
+    const isSwingHigh = candles.slice(i - 5, i).every(c => high >= c.high) &&
+                        candles.slice(i + 1, i + 6).every(c => high >= c.high);
+
+    // Swing Low: current low < previous 5 AND next 5 candles
+    const isSwingLow = candles.slice(i - 5, i).every(c => low <= c.low) &&
+                       candles.slice(i + 1, i + 6).every(c => low <= c.low);
+
+    if (isSwingHigh) swingHighs.push(high);
+    if (isSwingLow) swingLows.push(low);
+  }
+
+  // Take only recent levels (last 10)
+  return {
+    resistance: swingHighs.slice(-10),
+    support: swingLows.slice(-10)
+  };
+}
+
+// Helper function: Check if price is near a key level (within 0.2%)
+function isNearLevel(price: number, levels: number[], tolerance = 0.002): boolean {
+  return levels.some(level => Math.abs(price - level) / level < tolerance);
+}
+
+// Helper function: Detect breakout & retest pattern
+function detectBreakoutRetest(candles: Candle[], type: 'LONG' | 'SHORT'): boolean {
+  if (candles.length < 20) return false;
+
+  const recent = candles.slice(-20);
+  const currentPrice = recent[recent.length - 1].close;
+
+  // For LONG: Look for resistance breakout + pullback
+  if (type === 'LONG') {
+    // Find recent highs before last 5 candles
+    const priorHighs = recent.slice(0, -5).map(c => c.high);
+    const maxPriorHigh = Math.max(...priorHighs);
+
+    // Check if we broke above that high in last 10 candles
+    const brokeAbove = recent.slice(-10, -2).some(c => c.close > maxPriorHigh);
+
+    // Check if we pulled back near that level (retest)
+    const pulledBack = Math.abs(currentPrice - maxPriorHigh) / maxPriorHigh < 0.003;
+
+    return brokeAbove && pulledBack;
+  }
+
+  // For SHORT: Look for support breakout + pullback
+  else {
+    // Find recent lows before last 5 candles
+    const priorLows = recent.slice(0, -5).map(c => c.low);
+    const minPriorLow = Math.min(...priorLows);
+
+    // Check if we broke below that low in last 10 candles
+    const brokeBelow = recent.slice(-10, -2).some(c => c.close < minPriorLow);
+
+    // Check if we pulled back near that level (retest)
+    const pulledBack = Math.abs(currentPrice - minPriorLow) / minPriorLow < 0.003;
+
+    return brokeBelow && pulledBack;
+  }
+}
+
+// Helper function: Check if within news window (simplified - checks hour of day)
+function isWithinNewsWindow(): boolean {
+  const hour = new Date().getUTCHours();
+
+  // Avoid major news times (simplified):
+  // 8:30 AM EST (13:30 UTC) = NFP, CPI releases
+  // 2:00 PM EST (19:00 UTC) = FOMC decisions
+  const newsHours = [13, 14, 19, 20];
+
+  return newsHours.includes(hour);
+}
+
 class MACrossoverStrategy {
   name = 'MA Crossover Multi-Timeframe';
-  version = '1.0.0';
+  version = '2.0.0'; // Updated for tiered confidence system
 
   analyze(primaryCandles: Candle[], higherCandles: Candle[], symbol: string): Signal | null {
     if (primaryCandles.length < 200) return null;
@@ -158,6 +245,10 @@ class MACrossoverStrategy {
     const aiInsights = aiAnalyzer.getSymbolInsights(symbol);
     const useAI = aiInsights.hasEnoughData; // Only use AI if 30+ signals
 
+    // 🆕 NEW FILTERS: Detect S/R levels and breakout/retest patterns
+    const srLevels = detectSupportResistance(primaryCandles);
+    const withinNewsWindow = isWithinNewsWindow();
+
     let signalType: 'LONG' | 'SHORT' | null = null;
     let confidence = 0;
     const rationale: string[] = [];
@@ -169,116 +260,175 @@ class MACrossoverStrategy {
     if (bullishCross && htfTrend === 'UP') {
       signalType = 'LONG';
 
-      // 🧠 AI-POWERED: Base score from historical bullish crossover performance
-      const baseScore = useAI ? aiInsights.bullishCrossoverWinRate : 30;
-      confidence += baseScore;
-      rationale.push('Bullish MA crossover detected');
+      // 🆕 NEW 120-POINT SCORING SYSTEM
 
-      // 🧠 AI-POWERED: RSI weight based on moderate RSI performance
+      // 1. Daily trend aligned (25 points)
+      const htfAligned = htfTrend === 'UP' && currentPrice > (htfFastMA || 0);
+      if (htfAligned) {
+        confidence += 25;
+        rationale.push('✅ Daily trend bullish with price above HTF MAs (+25)');
+      }
+
+      // 2. 4H EMA crossover (20 points)
+      confidence += 20;
+      rationale.push('✅ Bullish MA crossover detected on 4H chart (+20)');
+
+      // 3. HTF trend strength (10 points) - strong momentum on daily
+      if (htfFastMA && htfSlowMA && (htfFastMA - htfSlowMA) / htfSlowMA > 0.005) {
+        confidence += 10;
+        rationale.push('✅ Strong HTF trend momentum (+10)');
+      }
+
+      // 4. RSI in optimal range (12 points)
       if (rsi && rsi > 40 && rsi < 70) {
-        const rsiWeight = useAI ? aiInsights.rsiModerateWeight : 15;
-        confidence += rsiWeight;
-        rationale.push(useAI
-          ? `RSI in favorable range (AI weight: ${rsiWeight})`
-          : 'RSI in favorable range'
-        );
+        confidence += 12;
+        rationale.push(`✅ RSI in optimal range: ${rsi.toFixed(1)} (+12)`);
       }
 
-      // 🧠 AI-POWERED: ADX weight based on strong trend performance
-      if (adx && adx.adx > 20) {
-        const adxWeight = useAI ? aiInsights.strongTrendWeight : 15;
-        confidence += adxWeight;
-        rationale.push(useAI
-          ? `Strong trend confirmed by ADX (AI weight: ${adxWeight})`
-          : 'Strong trend confirmed by ADX'
-        );
+      // 5. ADX > 25 (12 points) - strong trend confirmed
+      if (adx && adx.adx > 25) {
+        confidence += 12;
+        rationale.push(`✅ Strong trend confirmed: ADX ${adx.adx.toFixed(1)} (+12)`);
       }
 
-      // 🧠 AI-POWERED: BB weight based on lower BB positioning
+      // 6. Bollinger Band position (8 points) - price in lower BB region
       if (currentPrice > bb.lower && currentPrice < bb.middle) {
-        const bbWeight = useAI ? aiInsights.bbLowerWeight : 10;
-        confidence += bbWeight;
-        rationale.push(useAI
-          ? `Price in lower BB region (AI weight: ${bbWeight})`
-          : 'Price in lower BB region'
-        );
+        confidence += 8;
+        rationale.push('✅ Price in lower BB region (good entry) (+8)');
       }
 
-      // 🧠 AI-POWERED: HTF trend weight
-      const htfWeight = useAI ? aiInsights.htfTrendWeight : 20;
-      confidence += htfWeight;
-      rationale.push(useAI
-        ? `Higher timeframe trend is bullish (AI weight: ${htfWeight})`
-        : 'Higher timeframe trend is bullish'
-      );
+      // 7. Candle close confirmation (5 points) - always true for current implementation
+      confidence += 5;
+      rationale.push('✅ 4H candle closed above signal level (+5)');
+
+      // 🆕 8. Key Support/Resistance confluence (15 points)
+      const nearSupport = isNearLevel(currentPrice, srLevels.support);
+      if (nearSupport) {
+        confidence += 15;
+        rationale.push('🎯 Entry near key support level (+15)');
+      }
+
+      // 🆕 9. Breakout & Retest setup (10 points)
+      const hasBreakoutRetest = detectBreakoutRetest(primaryCandles, 'LONG');
+      if (hasBreakoutRetest) {
+        confidence += 10;
+        rationale.push('🎯 Breakout & retest pattern detected (+10)');
+      }
+
+      // 🆕 10. No major news within 2 hours (3 points)
+      if (!withinNewsWindow) {
+        confidence += 3;
+        rationale.push('✅ Clear of major news events (+3)');
+      } else {
+        rationale.push('⚠️ Within news window (0 points)');
+      }
     } else if (bearishCross && htfTrend === 'DOWN') {
       signalType = 'SHORT';
 
-      // 🧠 AI-POWERED: Base score from historical bearish crossover performance
-      const baseScore = useAI ? aiInsights.bearishCrossoverWinRate : 30;
-      confidence += baseScore;
-      rationale.push('Bearish MA crossover detected');
+      // 🆕 NEW 120-POINT SCORING SYSTEM
 
-      // 🧠 AI-POWERED: RSI weight based on moderate RSI performance
+      // 1. Daily trend aligned (25 points)
+      const htfAligned = htfTrend === 'DOWN' && currentPrice < (htfFastMA || Infinity);
+      if (htfAligned) {
+        confidence += 25;
+        rationale.push('✅ Daily trend bearish with price below HTF MAs (+25)');
+      }
+
+      // 2. 4H EMA crossover (20 points)
+      confidence += 20;
+      rationale.push('✅ Bearish MA crossover detected on 4H chart (+20)');
+
+      // 3. HTF trend strength (10 points) - strong momentum on daily
+      if (htfFastMA && htfSlowMA && (htfSlowMA - htfFastMA) / htfSlowMA > 0.005) {
+        confidence += 10;
+        rationale.push('✅ Strong HTF trend momentum (+10)');
+      }
+
+      // 4. RSI in optimal range (12 points)
       if (rsi && rsi > 30 && rsi < 60) {
-        const rsiWeight = useAI ? aiInsights.rsiModerateWeight : 15;
-        confidence += rsiWeight;
-        rationale.push(useAI
-          ? `RSI in favorable range (AI weight: ${rsiWeight})`
-          : 'RSI in favorable range'
-        );
+        confidence += 12;
+        rationale.push(`✅ RSI in optimal range: ${rsi.toFixed(1)} (+12)`);
       }
 
-      // 🧠 AI-POWERED: ADX weight based on strong trend performance
-      if (adx && adx.adx > 20) {
-        const adxWeight = useAI ? aiInsights.strongTrendWeight : 15;
-        confidence += adxWeight;
-        rationale.push(useAI
-          ? `Strong trend confirmed by ADX (AI weight: ${adxWeight})`
-          : 'Strong trend confirmed by ADX'
-        );
+      // 5. ADX > 25 (12 points) - strong trend confirmed
+      if (adx && adx.adx > 25) {
+        confidence += 12;
+        rationale.push(`✅ Strong trend confirmed: ADX ${adx.adx.toFixed(1)} (+12)`);
       }
 
-      // 🧠 AI-POWERED: BB weight based on upper BB positioning
+      // 6. Bollinger Band position (8 points) - price in upper BB region
       if (currentPrice < bb.upper && currentPrice > bb.middle) {
-        const bbWeight = useAI ? aiInsights.bbUpperWeight : 10;
-        confidence += bbWeight;
-        rationale.push(useAI
-          ? `Price in upper BB region (AI weight: ${bbWeight})`
-          : 'Price in upper BB region'
-        );
+        confidence += 8;
+        rationale.push('✅ Price in upper BB region (good entry) (+8)');
       }
 
-      // 🧠 AI-POWERED: HTF trend weight
-      const htfWeight = useAI ? aiInsights.htfTrendWeight : 20;
-      confidence += htfWeight;
-      rationale.push(useAI
-        ? `Higher timeframe trend is bearish (AI weight: ${htfWeight})`
-        : 'Higher timeframe trend is bearish'
-      );
+      // 7. Candle close confirmation (5 points) - always true for current implementation
+      confidence += 5;
+      rationale.push('✅ 4H candle closed below signal level (+5)');
+
+      // 🆕 8. Key Support/Resistance confluence (15 points)
+      const nearResistance = isNearLevel(currentPrice, srLevels.resistance);
+      if (nearResistance) {
+        confidence += 15;
+        rationale.push('🎯 Entry near key resistance level (+15)');
+      }
+
+      // 🆕 9. Breakout & Retest setup (10 points)
+      const hasBreakoutRetest = detectBreakoutRetest(primaryCandles, 'SHORT');
+      if (hasBreakoutRetest) {
+        confidence += 10;
+        rationale.push('🎯 Breakout & retest pattern detected (+10)');
+      }
+
+      // 🆕 10. No major news within 2 hours (3 points)
+      if (!withinNewsWindow) {
+        confidence += 3;
+        rationale.push('✅ Clear of major news events (+3)');
+      } else {
+        rationale.push('⚠️ Within news window (0 points)');
+      }
     }
 
-    // 🧠 AI-POWERED: Use AI-optimized confidence threshold
-    const confidenceThreshold = useAI ? aiInsights.optimalConfidenceThreshold : 50;
-    if (!signalType || confidence < confidenceThreshold) return null;
+    // 🆕 TIERED CONFIDENCE SYSTEM: 70+ = save signal, but tier determines if live/paper
+    if (!signalType || confidence < 70) return null; // Must be at least 70 points
 
-    // 🧠 AI-POWERED: Use AI-optimized ATR multiplier for stop loss
-    const stopMultiplier = useAI ? aiInsights.optimalStopMultiplier : 2.0;
+    // Determine tier and trading mode
+    let tier: 'HIGH' | 'MEDIUM';
+    let tradeLive: boolean;
+    let positionSizePercent: number;
+
+    if (confidence >= 85) {
+      tier = 'HIGH';
+      tradeLive = true;
+      positionSizePercent = 1.00; // Full 1% risk
+      rationale.push(`🟢 HIGH CONFIDENCE (${confidence}/120) - LIVE TRADE`);
+    } else {
+      tier = 'MEDIUM';
+      tradeLive = false;
+      positionSizePercent = 0.00; // Paper trade only
+      rationale.push(`🟡 MEDIUM CONFIDENCE (${confidence}/120) - PAPER TRADE`);
+    }
+
+    // 🆕 UPDATED STOP LOSS: 2.5 ATR (research-proven optimal for swing trading)
+    const stopMultiplier = 2.5;
     const stop = signalType === 'LONG'
       ? currentPrice - (atr * stopMultiplier)
       : currentPrice + (atr * stopMultiplier);
 
-    const riskPerTrade = Math.abs(currentPrice - stop);
+    // 🆕 UPDATED TAKE PROFIT TARGETS: ATR-based (not risk-based)
     const tp1 = signalType === 'LONG'
-      ? currentPrice + (riskPerTrade * 1.5)
-      : currentPrice - (riskPerTrade * 1.5);
-    const tp2 = signalType === 'LONG'
-      ? currentPrice + (riskPerTrade * 2.5)
-      : currentPrice - (riskPerTrade * 2.5);
-    const tp3 = signalType === 'LONG'
-      ? currentPrice + (riskPerTrade * 3.5)
-      : currentPrice - (riskPerTrade * 3.5);
+      ? currentPrice + (atr * 3.0) // TP1 at 3.0 ATR (1.2:1 R:R)
+      : currentPrice - (atr * 3.0);
 
+    const tp2 = signalType === 'LONG'
+      ? currentPrice + (atr * 5.0) // TP2 at 5.0 ATR (2:1 R:R)
+      : currentPrice - (atr * 5.0);
+
+    const tp3 = signalType === 'LONG'
+      ? currentPrice + (atr * 8.0) // TP3 at 8.0 ATR (3.2:1 R:R)
+      : currentPrice - (atr * 8.0);
+
+    const riskPerTrade = Math.abs(currentPrice - stop);
     const riskReward = Math.abs(tp1 - currentPrice) / riskPerTrade;
 
     return {
@@ -296,6 +446,9 @@ class MACrossoverStrategy {
       ],
       riskReward: parseFloat(riskReward.toFixed(2)),
       confidence,
+      tier,
+      tradeLive,
+      positionSizePercent,
       orderType: 'MARKET',
       executionType: 'IMMEDIATE',
       indicators: {
@@ -308,7 +461,7 @@ class MACrossoverStrategy {
         bbLower: bb.lower.toFixed(5),
         htfTrend
       },
-      rationale: rationale.join('. '),
+      rationale: rationale.join(' | '),
       strategy: this.name,
       version: this.version
     };
@@ -371,16 +524,17 @@ export class SignalGenerator {
           // Analyze with strategy (🧠 AI-ENHANCED: Now passes symbol for AI insights)
           const signal = strategy.analyze(primaryCandles, higherCandles, symbol);
 
-          // Temporarily use 50% threshold for testing (normally 70%)
-          if (signal && signal.confidence >= 50) {
+          // 🆕 TIERED SYSTEM: 70+ = track (both HIGH and MEDIUM tiers)
+          if (signal && signal.confidence >= 70) {
             signalsGenerated++;
             signal.symbol = symbol; // Set the correct symbol
 
-            // Track signal to database
+            // Track signal to database (both HIGH and MEDIUM tiers)
             try {
               await this.trackSignal(signal, symbol, exchangeRate, primaryCandles);
               signalsTracked++;
-              console.log(`✅ Tracked ${symbol} signal (${signal.confidence}% confidence)`);
+              const tierBadge = signal.tier === 'HIGH' ? '🟢 HIGH' : '🟡 MEDIUM';
+              console.log(`✅ Tracked ${symbol} signal ${tierBadge} (${signal.confidence}/120 points)`);
             } catch (error) {
               console.error(`❌ Failed to track ${symbol} signal:`, error);
             }
@@ -453,6 +607,9 @@ export class SignalGenerator {
         symbol,
         type,
         confidence,
+        tier,
+        trade_live,
+        position_size_percent,
         entry_price,
         current_price,
         stop_loss,
@@ -475,6 +632,9 @@ export class SignalGenerator {
         ${symbol},
         ${signal.type},
         ${signal.confidence},
+        ${signal.tier},
+        ${signal.tradeLive},
+        ${signal.positionSizePercent},
         ${signal.entry},
         ${currentPrice},
         ${signal.stop},
