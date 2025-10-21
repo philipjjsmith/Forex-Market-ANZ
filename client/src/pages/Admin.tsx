@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Activity, TrendingUp, AlertCircle, RefreshCw, Play, Pause, Clock, CheckCircle, Calendar, Database, Zap, Brain } from 'lucide-react';
+import { Loader2, Activity, TrendingUp, AlertCircle, RefreshCw, Play, Pause, Clock, CheckCircle, Calendar, Database, Zap, Brain, Target } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { API_ENDPOINTS } from '@/config/api';
 import { useLocation } from 'wouter';
@@ -48,12 +48,45 @@ interface GenerationLog {
   status: 'success' | 'partial' | 'failed';
 }
 
+interface AIInsights {
+  totalSignals: number;
+  completedSignals: number;
+  wins: number;
+  losses: number;
+  winRate: number;
+  pendingRecommendations: number;
+  lastAnalysis: string;
+  symbolInsights: {
+    symbol: string;
+    totalSignals: number;
+    winRate: number;
+    hasEnoughData: boolean;
+  }[];
+}
+
+interface SymbolPerformance {
+  symbol: string;
+  rsiPerformance: {
+    rsi_zone: string;
+    total_signals: string;
+    wins: string;
+    win_rate: string;
+  }[];
+  adxPerformance: {
+    trend_strength: string;
+    total_signals: string;
+    wins: string;
+    win_rate: string;
+  }[];
+}
+
 export default function Admin() {
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
   const [triggeringGeneration, setTriggeringGeneration] = useState(false);
   const [countdown, setCountdown] = useState<string>('');
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const [activeTab, setActiveTab] = useState<'system' | 'ai'>('system');
 
   // Check if user is admin
   useEffect(() => {
@@ -114,6 +147,25 @@ export default function Admin() {
     refetchInterval: 30000, // Refresh every 30 seconds
   });
 
+  // Fetch AI insights
+  const { data: aiInsights, isLoading: aiLoading, refetch: refetchAI } = useQuery<AIInsights>({
+    queryKey: ['ai-insights'],
+    queryFn: async () => {
+      const token = getToken();
+      const res = await fetch(API_ENDPOINTS.AI_INSIGHTS, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` }),
+        },
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error('Failed to fetch AI insights');
+      return res.json();
+    },
+    refetchInterval: 30000, // Refresh every 30 seconds
+    enabled: activeTab === 'ai', // Only fetch when AI tab is active
+  });
+
   // Manual trigger mutation
   const triggerGeneration = useMutation({
     mutationFn: async () => {
@@ -149,6 +201,26 @@ export default function Admin() {
       await triggerGeneration.mutateAsync();
     } finally {
       setTriggeringGeneration(false);
+    }
+  };
+
+  // Trigger manual AI analysis
+  const handleTriggerAI = async () => {
+    try {
+      const token = getToken();
+      const res = await fetch(API_ENDPOINTS.AI_ANALYZE, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` }),
+        },
+        credentials: 'include',
+      });
+      if (res.ok) {
+        setTimeout(() => refetchAI(), 3000); // Refetch after 3 seconds
+      }
+    } catch (error) {
+      console.error('Failed to trigger AI analysis:', error);
     }
   };
 
@@ -205,6 +277,9 @@ export default function Admin() {
     }
   };
 
+  const readySymbols = aiInsights?.symbolInsights.filter(s => s.hasEnoughData) || [];
+  const learningSymbols = aiInsights?.symbolInsights.filter(s => !s.hasEnoughData && s.totalSignals > 0) || [];
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900">
       <div className="container mx-auto p-6 space-y-6">
@@ -212,38 +287,73 @@ export default function Admin() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-white">Admin Dashboard</h1>
-            <p className="text-blue-200 mt-1">Monitor system health and signal generation</p>
+            <p className="text-blue-200 mt-1">
+              {activeTab === 'system' ? 'Monitor system health and signal generation' : 'AI learning insights and performance analytics'}
+            </p>
           </div>
           <div className="flex gap-3">
             <Button
-              onClick={() => setLocation('/ai-insights')}
-              className="bg-purple-600 hover:bg-purple-700"
-            >
-              <Brain className="h-4 w-4 mr-2" />
-              AI Insights
-            </Button>
-            <Button
-              onClick={handleTriggerGeneration}
-              disabled={triggeringGeneration || health?.signalGenerator.isRunning}
+              onClick={activeTab === 'system' ? handleTriggerGeneration : handleTriggerAI}
+              disabled={activeTab === 'system' && (triggeringGeneration || health?.signalGenerator.isRunning)}
               className="bg-blue-600 hover:bg-blue-700"
             >
-              {triggeringGeneration ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Generating...
-                </>
+              {activeTab === 'system' ? (
+                triggeringGeneration ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Play className="h-4 w-4 mr-2" />
+                    Trigger Generation
+                  </>
+                )
               ) : (
                 <>
-                  <Play className="h-4 w-4 mr-2" />
-                  Trigger Generation Now
+                  <Activity className="h-4 w-4 mr-2" />
+                  Run AI Analysis
                 </>
               )}
             </Button>
           </div>
-      </div>
+        </div>
 
-      {/* Quick Stats Summary */}
-      <Card className="bg-gradient-to-r from-blue-900/50 to-purple-900/50 border-blue-500/50 backdrop-blur-md shadow-2xl">
+        {/* Tab Navigation */}
+        <div className="flex gap-2 border-b border-slate-700">
+          <button
+            onClick={() => setActiveTab('system')}
+            className={`px-6 py-3 font-semibold transition-all ${
+              activeTab === 'system'
+                ? 'text-white border-b-2 border-blue-500'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <Zap className="w-4 h-4" />
+              System Health
+            </div>
+          </button>
+          <button
+            onClick={() => setActiveTab('ai')}
+            className={`px-6 py-3 font-semibold transition-all ${
+              activeTab === 'ai'
+                ? 'text-white border-b-2 border-purple-500'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <Brain className="w-4 h-4" />
+              AI Insights
+            </div>
+          </button>
+        </div>
+
+        {/* System Health Tab Content */}
+        {activeTab === 'system' && (
+          <>
+            {/* Quick Stats Summary */}
+            <Card className="bg-gradient-to-r from-blue-900/50 to-purple-900/50 border-blue-500/50 backdrop-blur-md shadow-2xl">
         <CardContent className="p-6">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <div className="text-center">
@@ -554,6 +664,192 @@ export default function Admin() {
           )}
         </CardContent>
       </Card>
+          </>
+        )}
+
+        {/* AI Insights Tab Content */}
+        {activeTab === 'ai' && (
+          <>
+            {aiLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+              </div>
+            ) : (
+              <>
+                {/* Learning Summary */}
+                <Card className="bg-gradient-to-r from-blue-900/50 to-purple-900/50 border-blue-500/50 backdrop-blur-md shadow-2xl">
+                  <CardHeader>
+                    <CardTitle className="text-white flex items-center gap-2">
+                      <Zap className="w-5 h-5 text-yellow-400" />
+                      Learning Summary
+                    </CardTitle>
+                    <CardDescription className="text-blue-200">
+                      Overall AI learning status and performance metrics
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                      <div className="text-center">
+                        <div className="flex items-center justify-center gap-2 mb-2">
+                          <Database className="w-5 h-5 text-blue-300" />
+                          <p className="text-blue-200 text-sm font-medium">Total Signals</p>
+                        </div>
+                        <p className="text-4xl font-black text-white">{aiInsights?.totalSignals || 0}</p>
+                        <p className="text-xs text-blue-300 mt-1">
+                          {aiInsights?.completedSignals || 0} completed
+                        </p>
+                      </div>
+
+                      <div className="text-center">
+                        <div className="flex items-center justify-center gap-2 mb-2">
+                          <TrendingUp className="w-5 h-5 text-green-400" />
+                          <p className="text-blue-200 text-sm font-medium">Win Rate</p>
+                        </div>
+                        <p className={`text-4xl font-black ${
+                          (aiInsights?.winRate || 0) >= 70 ? 'text-green-400' :
+                          (aiInsights?.winRate || 0) >= 50 ? 'text-yellow-400' :
+                          'text-red-400'
+                        }`}>
+                          {aiInsights?.winRate?.toFixed(1) || '0'}%
+                        </p>
+                        <p className="text-xs text-blue-300 mt-1">
+                          {aiInsights?.wins || 0} wins, {aiInsights?.losses || 0} losses
+                        </p>
+                      </div>
+
+                      <div className="text-center">
+                        <div className="flex items-center justify-center gap-2 mb-2">
+                          <CheckCircle className="w-5 h-5 text-purple-400" />
+                          <p className="text-blue-200 text-sm font-medium">AI Active</p>
+                        </div>
+                        <p className="text-4xl font-black text-white">{readySymbols.length}</p>
+                        <p className="text-xs text-blue-300 mt-1">
+                          {learningSymbols.length} learning
+                        </p>
+                      </div>
+
+                      <div className="text-center">
+                        <div className="flex items-center justify-center gap-2 mb-2">
+                          <AlertCircle className="w-5 h-5 text-orange-400" />
+                          <p className="text-blue-200 text-sm font-medium">Recommendations</p>
+                        </div>
+                        <p className="text-4xl font-black text-white">
+                          {aiInsights?.pendingRecommendations || 0}
+                        </p>
+                        <p className="text-xs text-blue-300 mt-1">pending approval</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Symbol Performance Matrix */}
+                <Card className="bg-slate-800/80 border-slate-600/50 shadow-xl">
+                  <CardHeader>
+                    <CardTitle className="text-white flex items-center gap-2">
+                      <Target className="w-5 h-5 text-blue-400" />
+                      Symbol Performance Matrix
+                    </CardTitle>
+                    <CardDescription className="text-blue-200">
+                      AI learning status per currency pair
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {aiInsights?.symbolInsights && aiInsights.symbolInsights.length > 0 ? (
+                      <div className="overflow-x-auto">
+                        <table className="w-full">
+                          <thead>
+                            <tr className="border-b border-slate-600">
+                              <th className="text-left p-3 text-blue-200 font-semibold">Symbol</th>
+                              <th className="text-center p-3 text-blue-200 font-semibold">Signals</th>
+                              <th className="text-center p-3 text-blue-200 font-semibold">Win Rate</th>
+                              <th className="text-left p-3 text-blue-200 font-semibold">AI Status</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {aiInsights.symbolInsights.map((symbol) => (
+                              <tr
+                                key={symbol.symbol}
+                                className="border-b border-slate-700 hover:bg-slate-700/30 transition-colors"
+                              >
+                                <td className="p-3 text-white font-mono font-bold">
+                                  {symbol.symbol}
+                                </td>
+                                <td className="p-3 text-center">
+                                  <span className={`font-bold ${
+                                    symbol.totalSignals >= 30 ? 'text-green-400' :
+                                    symbol.totalSignals >= 10 ? 'text-yellow-400' :
+                                    'text-red-400'
+                                  }`}>
+                                    {symbol.totalSignals}
+                                  </span>
+                                  <span className="text-blue-300 text-sm ml-1">/ 30</span>
+                                </td>
+                                <td className="p-3 text-center">
+                                  {symbol.totalSignals > 0 ? (
+                                    <span className={`font-bold ${
+                                      symbol.winRate >= 70 ? 'text-green-400' :
+                                      symbol.winRate >= 50 ? 'text-yellow-400' :
+                                      'text-red-400'
+                                    }`}>
+                                      {symbol.winRate.toFixed(1)}%
+                                    </span>
+                                  ) : (
+                                    <span className="text-slate-500">—</span>
+                                  )}
+                                </td>
+                                <td className="p-3">
+                                  {symbol.hasEnoughData ? (
+                                    <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-900/50 text-green-300 rounded text-sm font-semibold">
+                                      <CheckCircle className="w-4 h-4" />
+                                      AI Active
+                                    </span>
+                                  ) : symbol.totalSignals > 0 ? (
+                                    <span className="inline-flex items-center gap-1 px-2 py-1 bg-yellow-900/50 text-yellow-300 rounded text-sm font-semibold">
+                                      <Activity className="w-4 h-4" />
+                                      Learning ({Math.round((symbol.totalSignals / 30) * 100)}%)
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 px-2 py-1 bg-slate-700/50 text-slate-400 rounded text-sm">
+                                      <AlertCircle className="w-4 h-4" />
+                                      No Data
+                                    </span>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <div className="text-center py-8 text-slate-400">
+                        No symbol data available yet
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Info Card */}
+                <Card className="bg-blue-900/30 border-blue-500/30">
+                  <CardContent className="p-4">
+                    <div className="flex items-start gap-3">
+                      <AlertCircle className="w-5 h-5 text-blue-400 mt-0.5" />
+                      <div className="text-sm text-blue-200">
+                        <p className="font-semibold mb-1">How AI Learning Works:</p>
+                        <ul className="list-disc list-inside space-y-1 text-blue-300">
+                          <li>AI analyzes every completed signal (TP1_HIT/STOP_HIT)</li>
+                          <li>Identifies which indicator conditions lead to wins vs losses</li>
+                          <li>Adjusts confidence weights based on historical performance</li>
+                          <li>Requires minimum 30 signals per symbol for statistical significance</li>
+                          <li>Updates automatically every 6 hours</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+          </>
+        )}
       </div>
     </div>
   );
