@@ -8,6 +8,7 @@ export interface JWTPayload {
   userId: string;
   email: string;
   username: string;
+  role: string;
 }
 
 /**
@@ -18,6 +19,7 @@ export function generateToken(user: User): string {
     userId: user.id,
     email: user.email,
     username: user.username,
+    role: user.role,
   };
 
   return jwt.sign(payload, JWT_SECRET, {

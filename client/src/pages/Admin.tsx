@@ -6,6 +6,7 @@ import { Loader2, Activity, TrendingUp, AlertCircle, RefreshCw, Play, Pause, Clo
 import { useState, useEffect } from 'react';
 import { API_ENDPOINTS } from '@/config/api';
 import { useLocation } from 'wouter';
+import { getCurrentUser } from '@/lib/auth';
 
 interface SystemHealth {
   status: 'healthy' | 'warning' | 'error';
@@ -52,6 +53,30 @@ export default function Admin() {
   const [, setLocation] = useLocation();
   const [triggeringGeneration, setTriggeringGeneration] = useState(false);
   const [countdown, setCountdown] = useState<string>('');
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+
+  // Check if user is admin
+  useEffect(() => {
+    async function checkAdminAccess() {
+      const user = await getCurrentUser();
+
+      if (!user) {
+        // Not logged in - redirect to login
+        setLocation('/');
+        return;
+      }
+
+      if (user.role !== 'admin') {
+        // Not an admin - redirect to dashboard
+        setLocation('/');
+        return;
+      }
+
+      setIsCheckingAuth(false);
+    }
+
+    checkAdminAccess();
+  }, [setLocation]);
 
   // Fetch system health
   const { data: health, isLoading: healthLoading } = useQuery<SystemHealth>({
@@ -139,7 +164,7 @@ export default function Admin() {
     return () => clearInterval(interval);
   }, [health?.signalGenerator.nextRun]);
 
-  if (healthLoading) {
+  if (isCheckingAuth || healthLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <Loader2 className="h-8 w-8 animate-spin text-blue-500" />

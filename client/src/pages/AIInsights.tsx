@@ -3,6 +3,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Brain, TrendingUp, AlertCircle, CheckCircle, Activity, Zap, Database, Target } from 'lucide-react';
 import { API_ENDPOINTS } from '@/config/api';
+import { useState, useEffect } from 'react';
+import { useLocation } from 'wouter';
+import { getCurrentUser } from '@/lib/auth';
 
 interface AIInsights {
   totalSignals: number;
@@ -37,6 +40,32 @@ interface SymbolPerformance {
 }
 
 export default function AIInsights() {
+  const [, setLocation] = useLocation();
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+
+  // Check if user is admin
+  useEffect(() => {
+    async function checkAdminAccess() {
+      const user = await getCurrentUser();
+
+      if (!user) {
+        // Not logged in - redirect to login
+        setLocation('/');
+        return;
+      }
+
+      if (user.role !== 'admin') {
+        // Not an admin - redirect to dashboard
+        setLocation('/');
+        return;
+      }
+
+      setIsCheckingAuth(false);
+    }
+
+    checkAdminAccess();
+  }, [setLocation]);
+
   // Fetch overall AI insights
   const { data: insights, isLoading, refetch } = useQuery<AIInsights>({
     queryKey: ['ai-insights'],
@@ -65,7 +94,7 @@ export default function AIInsights() {
     }
   };
 
-  if (isLoading) {
+  if (isCheckingAuth || isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 flex items-center justify-center">
         <div className="text-white text-xl">Loading AI insights...</div>

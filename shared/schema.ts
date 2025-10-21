@@ -8,6 +8,7 @@ export const users = pgTable("users", {
   username: text("username").notNull().unique(),
   email: text("email").notNull().unique(),
   password: text("password"), // nullable for Google OAuth users
+  role: text("role").notNull().default('user'), // 'admin' or 'user' - defaults to 'user'
   googleId: text("google_id").unique(), // for Google OAuth
   resetPasswordToken: text("reset_password_token"),
   resetPasswordExpires: timestamp("reset_password_expires"),

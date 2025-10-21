@@ -4,6 +4,7 @@ import { sql } from 'drizzle-orm';
 import { signalGenerator } from '../services/signal-generator';
 import { twelveDataAPI } from '../services/twelve-data';
 import { exchangeRateAPI } from '../services/exchangerate-api';
+import { requireAuth, requireAdmin } from '../auth-middleware';
 
 export function registerAdminRoutes(app: Express) {
   console.log('✅ Admin routes registered');
@@ -12,7 +13,7 @@ export function registerAdminRoutes(app: Express) {
    * GET /api/admin/health
    * Returns system health status
    */
-  app.get("/api/admin/health", async (req, res) => {
+  app.get("/api/admin/health", requireAuth, requireAdmin, async (req, res) => {
     try {
       // Get pending signals count
       const pendingResult = await db.execute(sql`
@@ -79,7 +80,7 @@ export function registerAdminRoutes(app: Express) {
    * GET /api/admin/logs
    * Returns recent signal generation logs
    */
-  app.get("/api/admin/logs", async (req, res) => {
+  app.get("/api/admin/logs", requireAuth, requireAdmin, async (req, res) => {
     try {
       // In a real implementation, you'd store these in a separate logs table
       // For now, we'll derive from signal_history
@@ -117,7 +118,7 @@ export function registerAdminRoutes(app: Express) {
    * POST /api/admin/trigger-generation
    * Manually trigger signal generation
    */
-  app.post("/api/admin/trigger-generation", async (req, res) => {
+  app.post("/api/admin/trigger-generation", requireAuth, requireAdmin, async (req, res) => {
     try {
       console.log('🎯 Manual signal generation triggered by admin');
 

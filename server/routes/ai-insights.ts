@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { db } from "../db";
 import { sql } from 'drizzle-orm';
 import { aiAnalyzer } from '../services/ai-analyzer';
+import { requireAuth, requireAdmin } from '../auth-middleware';
 
 /**
  * AI Insights API Routes
@@ -14,7 +15,7 @@ export function registerAIRoutes(app: Express) {
    * GET /api/ai/insights
    * Returns overall AI learning status
    */
-  app.get("/api/ai/insights", async (req, res) => {
+  app.get("/api/ai/insights", requireAuth, requireAdmin, async (req, res) => {
     try {
       // Get overall statistics
       const statsResult = await db.execute(sql`
@@ -70,7 +71,7 @@ export function registerAIRoutes(app: Express) {
    * GET /api/ai/insights/:symbol
    * Returns detailed insights for a specific symbol
    */
-  app.get("/api/ai/insights/:symbol", async (req, res) => {
+  app.get("/api/ai/insights/:symbol", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { symbol } = req.params;
 
@@ -107,7 +108,7 @@ export function registerAIRoutes(app: Express) {
    * GET /api/ai/recommendations
    * Returns pending AI-generated recommendations
    */
-  app.get("/api/ai/recommendations", async (req, res) => {
+  app.get("/api/ai/recommendations", requireAuth, requireAdmin, async (req, res) => {
     try {
       const recs = await db.execute(sql`
         SELECT
@@ -140,7 +141,7 @@ export function registerAIRoutes(app: Express) {
    * POST /api/ai/recommendations/:id/approve
    * Approve and apply an AI recommendation
    */
-  app.post("/api/ai/recommendations/:id/approve", async (req, res) => {
+  app.post("/api/ai/recommendations/:id/approve", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { id } = req.params;
 
@@ -170,7 +171,7 @@ export function registerAIRoutes(app: Express) {
    * POST /api/ai/recommendations/:id/reject
    * Reject an AI recommendation
    */
-  app.post("/api/ai/recommendations/:id/reject", async (req, res) => {
+  app.post("/api/ai/recommendations/:id/reject", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { id } = req.params;
 
@@ -198,7 +199,7 @@ export function registerAIRoutes(app: Express) {
    * POST /api/ai/analyze
    * Manually trigger AI analysis
    */
-  app.post("/api/ai/analyze", async (req, res) => {
+  app.post("/api/ai/analyze", requireAuth, requireAdmin, async (req, res) => {
     try {
       console.log('🎯 Manual AI analysis triggered');
 
@@ -221,7 +222,7 @@ export function registerAIRoutes(app: Express) {
    * GET /api/ai/performance/:symbol
    * Returns performance breakdown by indicator conditions
    */
-  app.get("/api/ai/performance/:symbol", async (req, res) => {
+  app.get("/api/ai/performance/:symbol", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { symbol } = req.params;
 

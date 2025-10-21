@@ -75,3 +75,38 @@ export async function optionalAuth(req: Request, res: Response, next: NextFuncti
 
   next();
 }
+
+/**
+ * Middleware to require admin role
+ * Must be used AFTER requireAuth middleware
+ */
+export async function requireAdmin(req: Request, res: Response, next: NextFunction) {
+  // First check if user is authenticated
+  if (!req.userId) {
+    return res.status(401).json({
+      success: false,
+      error: 'Authentication required',
+    });
+  }
+
+  // Get user from database to check role
+  const user = await storage.getUser(req.userId);
+
+  if (!user) {
+    return res.status(401).json({
+      success: false,
+      error: 'User not found',
+    });
+  }
+
+  // Check if user has admin role
+  if (user.role !== 'admin') {
+    return res.status(403).json({
+      success: false,
+      error: 'Access denied. Admin privileges required.',
+    });
+  }
+
+  // User is admin, allow access
+  next();
+}

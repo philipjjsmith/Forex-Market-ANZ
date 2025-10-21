@@ -333,15 +333,17 @@ export default function Dashboard() {
                 <span className="text-sm font-medium">Learn</span>
               </button>
 
-              {/* Admin Button */}
-              <button
-                onClick={() => setLocation('/admin')}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg transition-colors"
-                title="Admin Dashboard"
-              >
-                <Settings className="w-4 h-4" />
-                <span className="text-sm font-medium">Admin</span>
-              </button>
+              {/* Admin Button - Only visible for admin users */}
+              {user && user.role === 'admin' && (
+                <button
+                  onClick={() => setLocation('/admin')}
+                  className="flex items-center gap-2 px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg transition-colors"
+                  title="Admin Dashboard"
+                >
+                  <Settings className="w-4 h-4" />
+                  <span className="text-sm font-medium">Admin</span>
+                </button>
+              )}
 
               {/* User Info & Logout */}
               {user && (
