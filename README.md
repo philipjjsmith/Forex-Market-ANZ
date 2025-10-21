@@ -191,3 +191,4 @@ This project is for educational and personal use.
 ---
 
 **Built with Claude Code** - AI-powered development assistant
+
