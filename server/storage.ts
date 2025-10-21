@@ -264,6 +264,7 @@ export class SupabaseStorage implements IStorage {
       username: data.username,
       email: data.email,
       password: data.password,
+      role: data.role,
       googleId: data.google_id,
       resetPasswordToken: data.reset_password_token,
       resetPasswordExpires: data.reset_password_expires ? new Date(data.reset_password_expires) : null,
