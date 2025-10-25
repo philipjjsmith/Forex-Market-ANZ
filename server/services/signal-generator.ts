@@ -209,8 +209,8 @@ function isWithinNewsWindow(): boolean {
 }
 
 class MACrossoverStrategy {
-  name = 'MA Crossover Multi-Timeframe';
-  version = '2.0.0'; // Updated for tiered confidence system
+  name = 'Hybrid Trend Strategy';
+  version = '2.1.0'; // Updated for hybrid entry system (crossover + BB pullback)
 
   analyze(primaryCandles: Candle[], higherCandles: Candle[], symbol: string): Signal | null {
     if (primaryCandles.length < 200) return null;
@@ -249,16 +249,26 @@ class MACrossoverStrategy {
     const srLevels = detectSupportResistance(primaryCandles);
     const withinNewsWindow = isWithinNewsWindow();
 
+    // 🆕 HYBRID ENTRY: BB Middle Band Pullback Detection
+    // Detects pullback to BB middle line in established trends
+    const inBullishTrend = fastMA > slowMA && htfTrend === 'UP';
+    const inBearishTrend = fastMA < slowMA && htfTrend === 'DOWN';
+    const bullishPullback = inBullishTrend && currentPrice >= bb.lower && currentPrice <= bb.middle;
+    const bearishPullback = inBearishTrend && currentPrice <= bb.upper && currentPrice >= bb.middle;
+
     let signalType: 'LONG' | 'SHORT' | null = null;
     let confidence = 0;
+    let entryType: 'CROSSOVER' | 'PULLBACK' = 'CROSSOVER';
     const rationale: string[] = [];
 
     if (useAI) {
       rationale.push(`AI-Enhanced (${aiInsights.totalSignals} signals analyzed, ${aiInsights.winRate.toFixed(1)}% win rate)`);
     }
 
-    if (bullishCross && htfTrend === 'UP') {
+    // LONG ENTRY: Either crossover OR pullback in uptrend
+    if ((bullishCross || bullishPullback) && htfTrend === 'UP') {
       signalType = 'LONG';
+      entryType = bullishCross ? 'CROSSOVER' : 'PULLBACK';
 
       // 🆕 NEW 120-POINT SCORING SYSTEM
 
@@ -269,9 +279,13 @@ class MACrossoverStrategy {
         rationale.push('✅ Daily trend bullish with price above HTF MAs (+25)');
       }
 
-      // 2. 4H EMA crossover (20 points)
+      // 2. Entry signal (20 points)
       confidence += 20;
-      rationale.push('✅ Bullish MA crossover detected on 4H chart (+20)');
+      if (entryType === 'CROSSOVER') {
+        rationale.push('✅ Bullish MA crossover detected on 4H chart (+20)');
+      } else {
+        rationale.push('✅ BB middle band pullback in uptrend (+20)');
+      }
 
       // 3. HTF trend strength (10 points) - strong momentum on daily
       if (htfFastMA && htfSlowMA && (htfFastMA - htfSlowMA) / htfSlowMA > 0.005) {
@@ -322,8 +336,9 @@ class MACrossoverStrategy {
       } else {
         rationale.push('⚠️ Within news window (0 points)');
       }
-    } else if (bearishCross && htfTrend === 'DOWN') {
+    } else if ((bearishCross || bearishPullback) && htfTrend === 'DOWN') {
       signalType = 'SHORT';
+      entryType = bearishCross ? 'CROSSOVER' : 'PULLBACK';
 
       // 🆕 NEW 120-POINT SCORING SYSTEM
 
@@ -334,9 +349,13 @@ class MACrossoverStrategy {
         rationale.push('✅ Daily trend bearish with price below HTF MAs (+25)');
       }
 
-      // 2. 4H EMA crossover (20 points)
+      // 2. Entry signal (20 points)
       confidence += 20;
-      rationale.push('✅ Bearish MA crossover detected on 4H chart (+20)');
+      if (entryType === 'CROSSOVER') {
+        rationale.push('✅ Bearish MA crossover detected on 4H chart (+20)');
+      } else {
+        rationale.push('✅ BB middle band pullback in downtrend (+20)');
+      }
 
       // 3. HTF trend strength (10 points) - strong momentum on daily
       if (htfFastMA && htfSlowMA && (htfSlowMA - htfFastMA) / htfSlowMA > 0.005) {
