@@ -153,8 +153,8 @@ function detectSupportResistance(candles: Candle[]): { support: number[]; resist
   };
 }
 
-// Helper function: Check if price is near a key level (within 0.2%)
-function isNearLevel(price: number, levels: number[], tolerance = 0.002): boolean {
+// Helper function: Check if price is near a key level (within 0.25%)
+function isNearLevel(price: number, levels: number[], tolerance = 0.0025): boolean {
   return levels.some(level => Math.abs(price - level) / level < tolerance);
 }
 
@@ -270,7 +270,7 @@ class MACrossoverStrategy {
       signalType = 'LONG';
       entryType = bullishCross ? 'CROSSOVER' : 'PULLBACK';
 
-      // 🆕 NEW 120-POINT SCORING SYSTEM
+      // 🆕 CONFIDENCE SCORING SYSTEM (Max: 126 points)
 
       // 1. Daily trend aligned (25 points)
       const htfAligned = htfTrend === 'UP' && currentPrice > (htfFastMA || 0);
@@ -288,21 +288,21 @@ class MACrossoverStrategy {
       }
 
       // 3. HTF trend strength (10 points) - strong momentum on daily
-      if (htfFastMA && htfSlowMA && (htfFastMA - htfSlowMA) / htfSlowMA > 0.005) {
+      if (htfFastMA && htfSlowMA && (htfFastMA - htfSlowMA) / htfSlowMA > 0.0025) {
         confidence += 10;
         rationale.push('✅ Strong HTF trend momentum (+10)');
       }
 
-      // 4. RSI in optimal range (12 points)
+      // 4. RSI in optimal range (15 points)
       if (rsi && rsi > 40 && rsi < 70) {
-        confidence += 12;
-        rationale.push(`✅ RSI in optimal range: ${rsi.toFixed(1)} (+12)`);
+        confidence += 15;
+        rationale.push(`✅ RSI in optimal range: ${rsi.toFixed(1)} (+15)`);
       }
 
-      // 5. ADX > 25 (12 points) - strong trend confirmed
+      // 5. ADX > 25 (15 points) - strong trend confirmed
       if (adx && adx.adx > 25) {
-        confidence += 12;
-        rationale.push(`✅ Strong trend confirmed: ADX ${adx.adx.toFixed(1)} (+12)`);
+        confidence += 15;
+        rationale.push(`✅ Strong trend confirmed: ADX ${adx.adx.toFixed(1)} (+15)`);
       }
 
       // 6. Bollinger Band position (8 points) - price in lower BB region
@@ -340,7 +340,7 @@ class MACrossoverStrategy {
       signalType = 'SHORT';
       entryType = bearishCross ? 'CROSSOVER' : 'PULLBACK';
 
-      // 🆕 NEW 120-POINT SCORING SYSTEM
+      // 🆕 CONFIDENCE SCORING SYSTEM (Max: 126 points)
 
       // 1. Daily trend aligned (25 points)
       const htfAligned = htfTrend === 'DOWN' && currentPrice < (htfFastMA || Infinity);
@@ -358,21 +358,21 @@ class MACrossoverStrategy {
       }
 
       // 3. HTF trend strength (10 points) - strong momentum on daily
-      if (htfFastMA && htfSlowMA && (htfSlowMA - htfFastMA) / htfSlowMA > 0.005) {
+      if (htfFastMA && htfSlowMA && (htfSlowMA - htfFastMA) / htfSlowMA > 0.0025) {
         confidence += 10;
         rationale.push('✅ Strong HTF trend momentum (+10)');
       }
 
-      // 4. RSI in optimal range (12 points)
+      // 4. RSI in optimal range (15 points)
       if (rsi && rsi > 30 && rsi < 60) {
-        confidence += 12;
-        rationale.push(`✅ RSI in optimal range: ${rsi.toFixed(1)} (+12)`);
+        confidence += 15;
+        rationale.push(`✅ RSI in optimal range: ${rsi.toFixed(1)} (+15)`);
       }
 
-      // 5. ADX > 25 (12 points) - strong trend confirmed
+      // 5. ADX > 25 (15 points) - strong trend confirmed
       if (adx && adx.adx > 25) {
-        confidence += 12;
-        rationale.push(`✅ Strong trend confirmed: ADX ${adx.adx.toFixed(1)} (+12)`);
+        confidence += 15;
+        rationale.push(`✅ Strong trend confirmed: ADX ${adx.adx.toFixed(1)} (+15)`);
       }
 
       // 6. Bollinger Band position (8 points) - price in upper BB region
@@ -420,12 +420,12 @@ class MACrossoverStrategy {
       tier = 'HIGH';
       tradeLive = true;
       positionSizePercent = 1.00; // Full 1% risk
-      rationale.push(`🟢 HIGH CONFIDENCE (${confidence}/120) - LIVE TRADE`);
+      rationale.push(`🟢 HIGH CONFIDENCE (${confidence}/126) - LIVE TRADE`);
     } else {
       tier = 'MEDIUM';
       tradeLive = false;
       positionSizePercent = 0.00; // Paper trade only
-      rationale.push(`🟡 MEDIUM CONFIDENCE (${confidence}/120) - PAPER TRADE`);
+      rationale.push(`🟡 MEDIUM CONFIDENCE (${confidence}/126) - PAPER TRADE`);
     }
 
     // 🆕 UPDATED STOP LOSS: 2.5 ATR (research-proven optimal for swing trading)
@@ -553,7 +553,7 @@ export class SignalGenerator {
               await this.trackSignal(signal, symbol, exchangeRate, primaryCandles);
               signalsTracked++;
               const tierBadge = signal.tier === 'HIGH' ? '🟢 HIGH' : '🟡 MEDIUM';
-              console.log(`✅ Tracked ${symbol} signal ${tierBadge} (${signal.confidence}/120 points)`);
+              console.log(`✅ Tracked ${symbol} signal ${tierBadge} (${signal.confidence}/126 points)`);
             } catch (error) {
               console.error(`❌ Failed to track ${symbol} signal:`, error);
             }
