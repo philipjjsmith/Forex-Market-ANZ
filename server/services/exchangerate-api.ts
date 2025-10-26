@@ -75,7 +75,7 @@ export class ExchangeRateAPI {
         exchangeRate: rate,
         bidPrice: bidPrice,
         askPrice: askPrice,
-        lastRefreshed: new Date(data.date).toISOString(),
+        lastRefreshed: `${data.date}T00:00:00.000Z`, // Frankfurter returns YYYY-MM-DD format
         timezone: 'UTC',
       };
 
