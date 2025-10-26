@@ -20,8 +20,8 @@ interface TierBadgeProps {
  * TierBadge Component
  *
  * Displays signal quality using a "Signal Bars" visual system (like cell phone signal strength).
- * - HIGH tier (85-120 pts): 5 bars, Blue to Cyan gradient, Live trading enabled
- * - MEDIUM tier (70-84 pts): 3 bars, Slate Gray, Paper trading only
+ * - LIVE TRADING (85-100%): 5 bars, Blue to Cyan gradient, Live trading enabled
+ * - PRACTICE SIGNAL (70-84%): 3 bars, Slate Gray, Demo account only
  *
  * Accessibility: Icon-based system (not color-dependent), colorblind-friendly
  */
@@ -38,7 +38,7 @@ export function TierBadge({
   // Configuration based on tier
   const config = tier === 'HIGH' ? {
     bars: 5,
-    label: 'HIGH QUALITY',
+    label: 'LIVE TRADING',
     bgColor: 'bg-gradient-to-r from-blue-500 to-cyan-500',
     textColor: 'text-blue-600',
     borderColor: 'border-blue-500',
@@ -50,12 +50,12 @@ export function TierBadge({
       'bg-cyan-600',
     ],
     icon: '🔵',
-    description: 'Premium signal with 85-120 points',
-    tradingStatus: 'Live Trading Enabled',
+    description: 'Premium signal (85-100% confidence)',
+    tradingStatus: 'Live Account Enabled',
     riskLevel: '1% Account Risk',
   } : {
     bars: 3,
-    label: 'MEDIUM QUALITY',
+    label: 'PRACTICE SIGNAL',
     bgColor: 'bg-gradient-to-r from-slate-400 to-slate-500',
     textColor: 'text-slate-600',
     borderColor: 'border-slate-500',
@@ -65,8 +65,8 @@ export function TierBadge({
       'bg-slate-600',
     ],
     icon: '⚪',
-    description: 'Standard signal with 70-84 points',
-    tradingStatus: 'Paper Trading Only',
+    description: 'Practice signal (70-84% confidence)',
+    tradingStatus: 'Demo Account Only',
     riskLevel: '0% Account Risk (Practice)',
   };
 
@@ -117,7 +117,7 @@ export function TierBadge({
       <div className="space-y-1 text-xs">
         <div className="flex justify-between">
           <span className="text-slate-300">Confidence Score:</span>
-          <span className="font-mono font-semibold">{confidence} points</span>
+          <span className="font-mono font-semibold">{Math.min(confidence, 100)}%</span>
         </div>
 
         <div className="flex justify-between">
@@ -143,13 +143,13 @@ export function TierBadge({
       <div className="pt-2 border-t border-slate-600 text-xs text-slate-300">
         {tier === 'HIGH' ? (
           <p>
-            <strong>HIGH signals</strong> meet strict criteria (85+ points) and are approved for
+            <strong>LIVE TRADING signals</strong> meet strict criteria (85-100% confidence) and are approved for
             live trading with 1% account risk per trade.
           </p>
         ) : (
           <p>
-            <strong>MEDIUM signals</strong> show promise (70-84 points) but should only be
-            paper traded until they prove consistency.
+            <strong>PRACTICE signals</strong> show promise (70-84% confidence) but should only be
+            traded in a demo account until they prove consistency.
           </p>
         )}
       </div>
