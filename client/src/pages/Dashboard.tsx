@@ -281,13 +281,13 @@ export default function Dashboard() {
 
   const activeSignals = signals.filter(s => {
     if (s.status !== 'active') return false;
-    
-    if (confidenceFilter === 'high' && s.confidence < 70) return false;
-    if (confidenceFilter === 'medium' && (s.confidence < 60 || s.confidence >= 70)) return false;
-    if (confidenceFilter === 'low' && s.confidence >= 60) return false;
-    
+
+    // Tier-based filtering: Live Trading (85-100%) vs Practice (70-84%)
+    if (confidenceFilter === 'live' && s.confidence < 85) return false;
+    if (confidenceFilter === 'practice' && (s.confidence < 70 || s.confidence >= 85)) return false;
+
     if (signalTypeFilter !== 'all' && s.type !== signalTypeFilter) return false;
-    
+
     return true;
   });
 
@@ -470,17 +470,16 @@ export default function Dashboard() {
         <div className="mb-6 bg-slate-800 rounded-lg p-4 border border-slate-700">
           <div className="flex flex-col lg:flex-row items-start lg:items-center gap-4 lg:gap-6">
             <div className="flex items-center gap-3">
-              <span className="text-sm text-slate-400 font-semibold">Confidence Level:</span>
+              <span className="text-sm text-slate-400 font-semibold">Signal Quality:</span>
               <select
                 value={confidenceFilter}
                 onChange={(e) => setConfidenceFilter(e.target.value)}
                 className="px-4 py-2 rounded-lg bg-slate-700 text-white border border-slate-600 hover:border-blue-500 focus:border-blue-500 focus:outline-none cursor-pointer transition-all"
                 data-testid="select-confidence-filter"
               >
-                <option value="all">All Levels</option>
-                <option value="high">High (70%+)</option>
-                <option value="medium">Medium (60-69%)</option>
-                <option value="low">Low (50-59%)</option>
+                <option value="all">📊 All Signals</option>
+                <option value="live">🔵 Live Trading (85-100%)</option>
+                <option value="practice">⚪ Practice Signal (70-84%)</option>
               </select>
             </div>
 
