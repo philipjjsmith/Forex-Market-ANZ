@@ -2,6 +2,7 @@ import { TrendingUp, TrendingDown, BarChart3, Target, Shield, AlertTriangle, Che
 import { useState } from 'react';
 import { Signal } from '@/lib/strategy';
 import TradingChartWidget, { Position } from './TradingChartWidget';
+import { TierBadge } from './TierBadge';
 
 interface ComprehensiveSignalCardProps {
   signal: Signal;
@@ -255,6 +256,11 @@ export function ComprehensiveSignalCard({ signal, candles, onToggleSave, isSaved
 
   const explanation = getSignalExplanation(signal);
 
+  // Calculate tier from confidence if not provided
+  const tier = signal.tier || (signal.confidence >= 85 ? 'HIGH' : 'MEDIUM');
+  const tradeLive = signal.tradeLive !== undefined ? signal.tradeLive : (signal.confidence >= 85);
+  const positionSizePercent = signal.positionSizePercent !== undefined ? signal.positionSizePercent : (signal.confidence >= 85 ? 1.00 : 0.00);
+
   return (
     <div className="bg-slate-800 rounded-lg p-5 border border-slate-700 hover:border-blue-500 transition-all">
       <div className="flex items-start justify-between mb-4">
@@ -270,15 +276,16 @@ export function ComprehensiveSignalCard({ signal, candles, onToggleSave, isSaved
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <div className="text-right">
-            <div className={`text-2xl font-bold ${
-              signal.confidence >= 70 ? 'text-green-400' : 
-              signal.confidence >= 60 ? 'text-yellow-400' : 'text-orange-400'
-            }`}>
-              {signal.confidence}%
-            </div>
-            <p className="text-xs text-slate-400">Confidence</p>
-          </div>
+          {/* Tier Badge */}
+          <TierBadge
+            tier={tier}
+            confidence={signal.confidence}
+            tradeLive={tradeLive}
+            positionSizePercent={positionSizePercent}
+            size="md"
+            showLabel={true}
+            showTooltip={true}
+          />
           {onToggleSave && (
             <button
               onClick={() => onToggleSave(signal.id)}

@@ -21,6 +21,9 @@ export interface Signal {
   targets: number[];
   riskReward: number;
   confidence: number;
+  tier?: 'HIGH' | 'MEDIUM';
+  tradeLive?: boolean;
+  positionSizePercent?: number;
   orderType: string;
   executionType: string;
   indicators: {
