@@ -113,7 +113,7 @@ export class Backtester {
 
         // Re-analyze each signal with new parameters
         for (const signal of completedSignals) {
-          const candles = JSON.parse(signal.candles);
+          const candles = signal.candles;
 
           // Simulate strategy with different parameters
           const hypotheticalSignal = this.simulateStrategy(
