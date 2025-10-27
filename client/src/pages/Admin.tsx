@@ -80,6 +80,23 @@ interface SymbolPerformance {
   }[];
 }
 
+interface Recommendation {
+  id: string;
+  symbol: string;
+  recommendation_title: string;
+  recommendation_details: string;
+  reasoning: string;
+  suggested_changes: {
+    fastMA_period?: { from: number; to: number };
+    slowMA_period?: { from: number; to: number };
+    atr_multiplier?: { from: number; to: number };
+  };
+  expected_win_rate_improvement: string;
+  based_on_signals: number;
+  status: string;
+  created_at: string;
+}
+
 export default function Admin() {
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
@@ -166,6 +183,25 @@ export default function Admin() {
     enabled: activeTab === 'ai', // Only fetch when AI tab is active
   });
 
+  // Fetch AI recommendations
+  const { data: recommendations, isLoading: recsLoading, refetch: refetchRecs } = useQuery<Recommendation[]>({
+    queryKey: ['ai-recommendations'],
+    queryFn: async () => {
+      const token = getToken();
+      const res = await fetch(API_ENDPOINTS.AI_RECOMMENDATIONS, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` }),
+        },
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error('Failed to fetch recommendations');
+      return res.json();
+    },
+    refetchInterval: 30000, // Refresh every 30 seconds
+    enabled: activeTab === 'ai', // Only fetch when AI tab is active
+  });
+
   // Manual trigger mutation
   const triggerGeneration = useMutation({
     mutationFn: async () => {
@@ -221,6 +257,48 @@ export default function Admin() {
       }
     } catch (error) {
       console.error('Failed to trigger AI analysis:', error);
+    }
+  };
+
+  // Handle recommendation approval
+  const handleApprove = async (id: string) => {
+    try {
+      const token = getToken();
+      const res = await fetch(API_ENDPOINTS.AI_RECOMMENDATION_APPROVE(id), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` }),
+        },
+        credentials: 'include',
+      });
+      if (res.ok) {
+        refetchRecs();
+        refetchAI();
+      }
+    } catch (error) {
+      console.error('Failed to approve recommendation:', error);
+    }
+  };
+
+  // Handle recommendation rejection
+  const handleReject = async (id: string) => {
+    try {
+      const token = getToken();
+      const res = await fetch(API_ENDPOINTS.AI_RECOMMENDATION_REJECT(id), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` }),
+        },
+        credentials: 'include',
+      });
+      if (res.ok) {
+        refetchRecs();
+        refetchAI();
+      }
+    } catch (error) {
+      console.error('Failed to reject recommendation:', error);
     }
   };
 
@@ -823,6 +901,120 @@ export default function Admin() {
                     ) : (
                       <div className="text-center py-8 text-slate-400">
                         No symbol data available yet
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* AI Recommendations */}
+                <Card className="bg-slate-800/80 border-slate-600/50 shadow-xl">
+                  <CardHeader>
+                    <CardTitle className="text-white flex items-center gap-2">
+                      <Brain className="w-5 h-5 text-purple-400" />
+                      AI Recommendations
+                    </CardTitle>
+                    <CardDescription className="text-blue-200">
+                      Parameter optimization suggestions based on backtesting
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {recsLoading ? (
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
+                      </div>
+                    ) : recommendations && recommendations.length > 0 ? (
+                      <div className="space-y-4">
+                        {recommendations.map((rec) => (
+                          <div
+                            key={rec.id}
+                            className="bg-slate-900/50 border border-slate-700 rounded-lg p-4"
+                          >
+                            {/* Header */}
+                            <div className="flex items-start justify-between mb-3">
+                              <div>
+                                <h3 className="text-white font-bold text-lg flex items-center gap-2">
+                                  <span className="text-blue-400">{rec.symbol}</span>
+                                  <Badge className="bg-purple-900/50 text-purple-300 border-purple-500/50">
+                                    +{parseFloat(rec.expected_win_rate_improvement).toFixed(1)}% Win Rate
+                                  </Badge>
+                                </h3>
+                                <p className="text-blue-300 text-sm mt-1">{rec.recommendation_title}</p>
+                              </div>
+                            </div>
+
+                            {/* Parameter Changes */}
+                            <div className="bg-slate-800/50 rounded p-3 mb-3">
+                              <p className="text-blue-200 text-sm font-semibold mb-2">Suggested Changes:</p>
+                              <div className="space-y-1 text-sm">
+                                {rec.suggested_changes.fastMA_period && (
+                                  <p className="text-slate-300">
+                                    <span className="text-slate-400">Fast EMA:</span>{' '}
+                                    <span className="text-red-400">{rec.suggested_changes.fastMA_period.from}</span>
+                                    {' → '}
+                                    <span className="text-green-400">{rec.suggested_changes.fastMA_period.to}</span>
+                                  </p>
+                                )}
+                                {rec.suggested_changes.slowMA_period && (
+                                  <p className="text-slate-300">
+                                    <span className="text-slate-400">Slow EMA:</span>{' '}
+                                    <span className="text-red-400">{rec.suggested_changes.slowMA_period.from}</span>
+                                    {' → '}
+                                    <span className="text-green-400">{rec.suggested_changes.slowMA_period.to}</span>
+                                  </p>
+                                )}
+                                {rec.suggested_changes.atr_multiplier && (
+                                  <p className="text-slate-300">
+                                    <span className="text-slate-400">ATR Multiplier:</span>{' '}
+                                    <span className="text-red-400">{rec.suggested_changes.atr_multiplier.from}x</span>
+                                    {' → '}
+                                    <span className="text-green-400">{rec.suggested_changes.atr_multiplier.to}x</span>
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Reasoning */}
+                            <div className="mb-3">
+                              <p className="text-blue-200 text-sm font-semibold mb-1">Reasoning:</p>
+                              <p className="text-slate-300 text-sm leading-relaxed">{rec.reasoning}</p>
+                            </div>
+
+                            {/* Metadata */}
+                            <div className="flex items-center gap-4 mb-3 text-xs text-slate-400">
+                              <span>Based on {rec.based_on_signals} signals</span>
+                              <span>•</span>
+                              <span>{new Date(rec.created_at).toLocaleDateString()}</span>
+                            </div>
+
+                            {/* Action Buttons */}
+                            <div className="flex gap-2">
+                              <Button
+                                onClick={() => handleApprove(rec.id)}
+                                className="bg-green-600 hover:bg-green-700 text-white"
+                                size="sm"
+                              >
+                                <CheckCircle className="w-4 h-4 mr-1" />
+                                Approve
+                              </Button>
+                              <Button
+                                onClick={() => handleReject(rec.id)}
+                                className="bg-red-600 hover:bg-red-700 text-white"
+                                size="sm"
+                              >
+                                <AlertCircle className="w-4 h-4 mr-1" />
+                                Reject
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-8">
+                        <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-3 opacity-50" />
+                        <p className="text-slate-400">No pending recommendations</p>
+                        <p className="text-slate-500 text-sm mt-1">
+                          The AI will generate recommendations when it finds parameter improvements {'>'} 5%
+                        </p>
                       </div>
                     )}
                   </CardContent>
