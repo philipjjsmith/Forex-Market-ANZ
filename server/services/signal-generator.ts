@@ -3,6 +3,7 @@ import { sql } from 'drizzle-orm';
 import { exchangeRateAPI } from './exchangerate-api';
 import { twelveDataAPI } from './twelve-data';
 import { aiAnalyzer } from './ai-analyzer';
+import { parameterService } from './parameter-service';
 
 /**
  * Automated Signal Generator Service
@@ -212,14 +213,24 @@ class MACrossoverStrategy {
   name = 'Hybrid Trend Strategy';
   version = '2.1.0'; // Updated for hybrid entry system (crossover + BB pullback)
 
-  analyze(primaryCandles: Candle[], higherCandles: Candle[], symbol: string): Signal | null {
+  async analyze(primaryCandles: Candle[], higherCandles: Candle[], symbol: string): Promise<Signal | null> {
     if (primaryCandles.length < 200) return null;
 
     const closes = primaryCandles.map(c => c.close);
     const higherCloses = higherCandles.map(c => c.close);
 
-    const fastMA = Indicators.ema(closes, 20);
-    const slowMA = Indicators.ema(closes, 50);
+    // 🎯 MILESTONE 3C: Get approved parameters for this symbol
+    const approvedParams = await parameterService.getApprovedParameters(symbol);
+    const fastPeriod = approvedParams?.fastMA || 20;
+    const slowPeriod = approvedParams?.slowMA || 50;
+    const strategyVersion = approvedParams?.version || this.version;
+
+    if (approvedParams) {
+      console.log(`🎯 [Milestone 3C] Using approved parameters for ${symbol}: ${fastPeriod}/${slowPeriod} EMA, ${approvedParams.atrMultiplier}x ATR (v${strategyVersion})`);
+    }
+
+    const fastMA = Indicators.ema(closes, fastPeriod);
+    const slowMA = Indicators.ema(closes, slowPeriod);
     const atr = Indicators.atr(primaryCandles, 14);
     const rsi = Indicators.rsi(closes, 14);
     const bb = Indicators.bollingerBands(closes, 20, 2);
@@ -227,12 +238,12 @@ class MACrossoverStrategy {
 
     if (!fastMA || !slowMA || !atr || !bb) return null;
 
-    const htfFastMA = Indicators.ema(higherCloses, 20);
-    const htfSlowMA = Indicators.ema(higherCloses, 50);
+    const htfFastMA = Indicators.ema(higherCloses, fastPeriod);
+    const htfSlowMA = Indicators.ema(higherCloses, slowPeriod);
     const htfTrend = htfFastMA && htfSlowMA && htfFastMA > htfSlowMA ? 'UP' : 'DOWN';
 
-    const prevFastMA = Indicators.ema(closes.slice(0, -1), 20);
-    const prevSlowMA = Indicators.ema(closes.slice(0, -1), 50);
+    const prevFastMA = Indicators.ema(closes.slice(0, -1), fastPeriod);
+    const prevSlowMA = Indicators.ema(closes.slice(0, -1), slowPeriod);
 
     if (!prevFastMA || !prevSlowMA) return null;
 
@@ -428,8 +439,8 @@ class MACrossoverStrategy {
       rationale.push(`🟡 MEDIUM CONFIDENCE (${confidence}/126) - PAPER TRADE`);
     }
 
-    // 🆕 UPDATED STOP LOSS: 2.5 ATR (research-proven optimal for swing trading)
-    const stopMultiplier = 2.5;
+    // 🎯 MILESTONE 3C: Use approved ATR multiplier or default
+    const stopMultiplier = approvedParams?.atrMultiplier || 2.5;
     const stop = signalType === 'LONG'
       ? currentPrice - (atr * stopMultiplier)
       : currentPrice + (atr * stopMultiplier);
@@ -482,7 +493,7 @@ class MACrossoverStrategy {
       },
       rationale: rationale.join(' | '),
       strategy: this.name,
-      version: this.version
+      version: strategyVersion
     };
   }
 }
@@ -540,8 +551,8 @@ export class SignalGenerator {
           // Generate higher timeframe candles (20min from 5min)
           const higherCandles = primaryCandles.filter((_, idx) => idx % 4 === 0);
 
-          // Analyze with strategy (🧠 AI-ENHANCED: Now passes symbol for AI insights)
-          const signal = strategy.analyze(primaryCandles, higherCandles, symbol);
+          // Analyze with strategy (🧠 AI-ENHANCED + 🎯 MILESTONE 3C: Now passes symbol for AI insights and approved parameters)
+          const signal = await strategy.analyze(primaryCandles, higherCandles, symbol);
 
           // 🆕 TIERED SYSTEM: 70+ = track (both HIGH and MEDIUM tiers)
           if (signal && signal.confidence >= 70) {

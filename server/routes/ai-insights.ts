@@ -3,6 +3,7 @@ import { db } from "../db";
 import { sql } from 'drizzle-orm';
 import { aiAnalyzer } from '../services/ai-analyzer';
 import { backtester } from '../services/backtester';
+import { parameterService } from '../services/parameter-service';
 import { requireAuth, requireAdmin } from '../auth-middleware';
 
 /**
@@ -141,26 +142,54 @@ export function registerAIRoutes(app: Express) {
   /**
    * POST /api/ai/recommendations/:id/approve
    * Approve and apply an AI recommendation
+   * Milestone 3C: Recommendation Approval System
    */
   app.post("/api/ai/recommendations/:id/approve", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { id } = req.params;
 
-      // TODO: Implement applyRecommendation in Milestone 3
-      // For now, just mark as approved
+      // Get recommendation details
+      const recResult = await db.execute(sql`
+        SELECT * FROM strategy_adaptations
+        WHERE id = ${id}
+      `);
+
+      if (!recResult || (recResult as any[]).length === 0) {
+        return res.status(404).json({ error: 'Recommendation not found' });
+      }
+
+      const recommendation = (recResult as any[])[0];
+
+      // Increment strategy version (1.0.0 → 1.1.0)
+      const newVersion = incrementVersion(recommendation.old_strategy_version);
+
+      // Mark as approved and applied
       await db.execute(sql`
         UPDATE strategy_adaptations
         SET
           status = 'approved',
-          user_decision_at = NOW()
+          user_decision_at = NOW(),
+          applied_at = NOW(),
+          new_strategy_version = ${newVersion}
         WHERE id = ${id}
       `);
 
-      console.log(`✅ Recommendation ${id} approved`);
+      // Clear parameter cache for this symbol
+      parameterService.clearCache(recommendation.symbol);
+
+      console.log(`✅ [Milestone 3C] Recommendation ${id} approved`);
+      console.log(`   Symbol: ${recommendation.symbol}`);
+      console.log(`   Title: ${recommendation.recommendation_title}`);
+      console.log(`   Version: ${recommendation.old_strategy_version} → ${newVersion}`);
+      console.log(`   Expected improvement: +${recommendation.expected_win_rate_improvement}%`);
+      console.log(`   Changes: ${JSON.stringify(recommendation.suggested_changes)}`);
 
       res.json({
         success: true,
-        message: 'Recommendation approved. Implementation pending (Milestone 3).',
+        message: `Recommendation approved! Parameters will apply to next ${recommendation.symbol} signals.`,
+        newVersion,
+        symbol: recommendation.symbol,
+        improvement: recommendation.expected_win_rate_improvement,
       });
     } catch (error: any) {
       console.error('❌ Error approving recommendation:', error);
@@ -332,4 +361,69 @@ export function registerAIRoutes(app: Express) {
       res.status(500).json({ error: error.message });
     }
   });
+
+  /**
+   * POST /api/ai/recommendations/:id/rollback
+   * Rollback an approved recommendation to previous parameters
+   * Milestone 3C: Recommendation Approval System
+   */
+  app.post("/api/ai/recommendations/:id/rollback", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      // Get recommendation details for logging
+      const recResult = await db.execute(sql`
+        SELECT symbol, recommendation_title, new_strategy_version, old_strategy_version
+        FROM strategy_adaptations
+        WHERE id = ${id} AND status = 'approved'
+      `);
+
+      if (!recResult || (recResult as any[]).length === 0) {
+        return res.status(404).json({ error: 'Approved recommendation not found' });
+      }
+
+      const recommendation = (recResult as any[])[0];
+
+      // Mark as rolled back
+      await db.execute(sql`
+        UPDATE strategy_adaptations
+        SET
+          status = 'rolled_back',
+          applied_at = NULL
+        WHERE id = ${id}
+      `);
+
+      // Clear parameter cache for this symbol
+      parameterService.clearCache(recommendation.symbol);
+
+      console.log(`🔄 [Milestone 3C] Recommendation ${id} rolled back`);
+      console.log(`   Symbol: ${recommendation.symbol}`);
+      console.log(`   Title: ${recommendation.recommendation_title}`);
+      console.log(`   Reverted: ${recommendation.new_strategy_version} → ${recommendation.old_strategy_version}`);
+
+      res.json({
+        success: true,
+        message: `Parameters rolled back to defaults for ${recommendation.symbol}`,
+        symbol: recommendation.symbol,
+        revertedVersion: recommendation.old_strategy_version,
+      });
+    } catch (error: any) {
+      console.error('❌ Error rolling back recommendation:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+}
+
+/**
+ * Helper function: Increment strategy version
+ * 1.0.0 → 1.1.0
+ * 1.5.0 → 1.6.0
+ */
+function incrementVersion(version: string): string {
+  const parts = version.split('.');
+  const major = parseInt(parts[0]) || 1;
+  const minor = parseInt(parts[1]) || 0;
+  const patch = parseInt(parts[2]) || 0;
+
+  return `${major}.${minor + 1}.${patch}`;
 }
