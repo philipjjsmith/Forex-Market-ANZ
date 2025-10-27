@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { db } from "../db";
 import { sql } from 'drizzle-orm';
 import { aiAnalyzer } from '../services/ai-analyzer';
+import { backtester } from '../services/backtester';
 import { requireAuth, requireAdmin } from '../auth-middleware';
 
 /**
@@ -280,6 +281,54 @@ export function registerAIRoutes(app: Express) {
       });
     } catch (error: any) {
       console.error('❌ Error fetching performance breakdown:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  /**
+   * POST /api/ai/backtest
+   * Trigger parameter optimization backtesting
+   * Milestone 3B: Backtesting Engine
+   */
+  app.post("/api/ai/backtest", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      console.log('🔬 Manual backtesting triggered');
+
+      // Trigger backtesting in the background
+      backtester.backtestAllSymbols().catch(error => {
+        console.error('Error in manual backtesting:', error);
+      });
+
+      res.json({
+        success: true,
+        message: 'Backtesting started. Check recommendations in AI Insights when complete.',
+      });
+    } catch (error: any) {
+      console.error('❌ Error triggering backtesting:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  /**
+   * POST /api/ai/backtest/:symbol
+   * Trigger backtesting for a specific symbol
+   */
+  app.post("/api/ai/backtest/:symbol", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { symbol } = req.params;
+      console.log(`🔬 Backtesting triggered for ${symbol}`);
+
+      // Trigger backtesting in the background
+      backtester.backtestSymbol(symbol).catch(error => {
+        console.error(`Error backtesting ${symbol}:`, error);
+      });
+
+      res.json({
+        success: true,
+        message: `Backtesting started for ${symbol}. Check recommendations when complete.`,
+      });
+    } catch (error: any) {
+      console.error('❌ Error triggering symbol backtesting:', error);
       res.status(500).json({ error: error.message });
     }
   });

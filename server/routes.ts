@@ -12,6 +12,7 @@ import { registerAIRoutes } from "./routes/ai-insights";
 import { signalGenerator } from "./services/signal-generator";
 import { outcomeValidator } from "./services/outcome-validator";
 import { aiAnalyzer } from "./services/ai-analyzer";
+import { backtester } from "./services/backtester";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // ========== CRON/SCHEDULED JOB ENDPOINTS ==========
