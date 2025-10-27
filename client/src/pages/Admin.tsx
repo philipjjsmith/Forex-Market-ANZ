@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Activity, TrendingUp, AlertCircle, RefreshCw, Play, Pause, Clock, CheckCircle, Calendar, Database, Zap, Brain, Target } from 'lucide-react';
 import { useState, useEffect } from 'react';
-import { API_ENDPOINTS } from '@/config/api';
+import { API_ENDPOINTS, API_BASE_URL } from '@/config/api';
 import { useLocation } from 'wouter';
 import { getCurrentUser, getToken } from '@/lib/auth';
 
@@ -101,6 +101,7 @@ export default function Admin() {
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
   const [triggeringGeneration, setTriggeringGeneration] = useState(false);
+  const [triggeringBacktest, setTriggeringBacktest] = useState(false);
   const [countdown, setCountdown] = useState<string>('');
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [activeTab, setActiveTab] = useState<'system' | 'ai'>('system');
@@ -299,6 +300,33 @@ export default function Admin() {
       }
     } catch (error) {
       console.error('Failed to reject recommendation:', error);
+    }
+  };
+
+  // Trigger backtesting
+  const handleTriggerBacktest = async () => {
+    setTriggeringBacktest(true);
+    try {
+      const token = getToken();
+      const res = await fetch(API_BASE_URL + '/api/ai/backtest', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` }),
+        },
+        credentials: 'include',
+      });
+      if (res.ok) {
+        // Wait 3 seconds then refresh recommendations
+        setTimeout(() => {
+          refetchRecs();
+          refetchAI();
+        }, 3000);
+      }
+    } catch (error) {
+      console.error('Failed to trigger backtesting:', error);
+    } finally {
+      setTimeout(() => setTriggeringBacktest(false), 3000);
     }
   };
 
@@ -757,13 +785,34 @@ export default function Admin() {
                 {/* Learning Summary */}
                 <Card className="bg-gradient-to-r from-blue-900/50 to-purple-900/50 border-blue-500/50 backdrop-blur-md shadow-2xl">
                   <CardHeader>
-                    <CardTitle className="text-white flex items-center gap-2">
-                      <Zap className="w-5 h-5 text-yellow-400" />
-                      Learning Summary
-                    </CardTitle>
-                    <CardDescription className="text-blue-200">
-                      Overall AI learning status and performance metrics
-                    </CardDescription>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <CardTitle className="text-white flex items-center gap-2">
+                          <Zap className="w-5 h-5 text-yellow-400" />
+                          Learning Summary
+                        </CardTitle>
+                        <CardDescription className="text-blue-200">
+                          Overall AI learning status and performance metrics
+                        </CardDescription>
+                      </div>
+                      <Button
+                        onClick={handleTriggerBacktest}
+                        disabled={triggeringBacktest || (aiInsights?.symbolInsights.filter(s => s.hasEnoughData).length || 0) === 0}
+                        className="bg-purple-600 hover:bg-purple-700 text-white"
+                      >
+                        {triggeringBacktest ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Running...
+                          </>
+                        ) : (
+                          <>
+                            <Brain className="w-4 h-4 mr-2" />
+                            Run Backtesting
+                          </>
+                        )}
+                      </Button>
+                    </div>
                   </CardHeader>
                   <CardContent>
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
