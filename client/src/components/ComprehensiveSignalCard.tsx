@@ -1,8 +1,9 @@
-import { TrendingUp, TrendingDown, BarChart3, Target, Shield, AlertTriangle, CheckCircle, XCircle, Star } from 'lucide-react';
+import { TrendingUp, TrendingDown, BarChart3, Target, Shield, AlertTriangle, CheckCircle, XCircle, Star, Copy } from 'lucide-react';
 import { useState } from 'react';
 import { Signal } from '@/lib/strategy';
 import TradingChartWidget, { Position } from './TradingChartWidget';
 import { TierBadge } from './TierBadge';
+import { useToast } from '@/hooks/use-toast';
 
 interface ComprehensiveSignalCardProps {
   signal: Signal;
@@ -14,6 +15,7 @@ interface ComprehensiveSignalCardProps {
 export function ComprehensiveSignalCard({ signal, candles, onToggleSave, isSaved }: ComprehensiveSignalCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [timeframe, setTimeframe] = useState<'1H' | '4H' | '1D'>('1H');
+  const { toast } = useToast();
 
   // Aggregate candles based on timeframe (base candles are 5-minute intervals)
   const filteredCandles = candles ? (() => {
@@ -256,6 +258,41 @@ export function ComprehensiveSignalCard({ signal, candles, onToggleSave, isSaved
 
   const explanation = getSignalExplanation(signal);
 
+  // Copy signal details for MT5
+  const copyForMT5 = async () => {
+    const directionEmoji = signal.type === 'LONG' ? '📈' : '📉';
+    const signalText = `${directionEmoji} ${signal.symbol} ${signal.orderType.replace(/_/g, ' ')}
+
+Entry Price: ${signal.entry}
+Stop Loss: ${signal.stop}
+Take Profit 1: ${signal.targets[0]} (close 33% of position)
+Take Profit 2: ${signal.targets[1]} (close 33% of position)
+Take Profit 3: ${signal.targets[2]} (close remaining 34%)
+
+Risk/Reward Ratio: 1:${signal.riskReward}
+⚠️ Risk: 1-2% of your account balance${signal.stopLimitPrice ? `\nStop Limit: ${signal.stopLimitPrice}` : ''}
+
+💡 Quick Guide:
+• Wait for price to reach Entry Price (${signal.entry})
+• Place ${signal.orderType.replace(/_/g, ' ')} order in MT5
+• Set Stop Loss at ${signal.stop} to protect your capital
+• Take partial profits at each TP level as price moves in your favor`;
+
+    try {
+      await navigator.clipboard.writeText(signalText);
+      toast({
+        title: "✅ Signal copied to clipboard!",
+        description: "Ready to paste into MT5 or your trading journal",
+      });
+    } catch (err) {
+      toast({
+        title: "❌ Failed to copy",
+        description: "Please try again or copy manually",
+        variant: "destructive",
+      });
+    }
+  };
+
   // Calculate tier from confidence if not provided
   const tier = signal.tier || (signal.confidence >= 85 ? 'HIGH' : 'MEDIUM');
   const tradeLive = signal.tradeLive !== undefined ? signal.tradeLive : (signal.confidence >= 85);
@@ -438,6 +475,16 @@ export function ComprehensiveSignalCard({ signal, candles, onToggleSave, isSaved
           </div>
         </div>
       )}
+
+      {/* Copy for MT5 Button */}
+      <button
+        onClick={copyForMT5}
+        className="w-full py-3 px-4 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 rounded-lg text-white font-bold transition-all flex items-center justify-center gap-2 shadow-lg mb-3"
+        data-testid={`button-copy-mt5-${signal.id}`}
+      >
+        <Copy className="w-5 h-5" />
+        📋 Copy for MT5
+      </button>
 
       {/* Explanation Toggle Button */}
       <button
