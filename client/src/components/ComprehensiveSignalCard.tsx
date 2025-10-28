@@ -1,4 +1,4 @@
-import { TrendingUp, TrendingDown, BarChart3, Target, Shield, AlertTriangle, CheckCircle, XCircle, Star, Copy } from 'lucide-react';
+import { TrendingUp, TrendingDown, BarChart3, Target, Shield, AlertTriangle, CheckCircle, XCircle, Star, Copy, ChevronDown, ChevronUp } from 'lucide-react';
 import { useState } from 'react';
 import { Signal } from '@/lib/strategy';
 import TradingChartWidget, { Position } from './TradingChartWidget';
@@ -15,6 +15,7 @@ interface ComprehensiveSignalCardProps {
 export function ComprehensiveSignalCard({ signal, candles, onToggleSave, isSaved }: ComprehensiveSignalCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [timeframe, setTimeframe] = useState<'1H' | '4H' | '1D'>('1H');
+  const [showCopyPreview, setShowCopyPreview] = useState(false);
   const { toast } = useToast();
 
   // Aggregate candles based on timeframe (base candles are 5-minute intervals)
@@ -258,25 +259,18 @@ export function ComprehensiveSignalCard({ signal, candles, onToggleSave, isSaved
 
   const explanation = getSignalExplanation(signal);
 
-  // Copy signal details for MT5
+  // Copy signal details for MT5 (Format B - Compact)
   const copyForMT5 = async () => {
     const directionEmoji = signal.type === 'LONG' ? '📈' : '📉';
     const signalText = `${directionEmoji} ${signal.symbol} ${signal.orderType.replace(/_/g, ' ')}
 
-Entry Price: ${signal.entry}
-Stop Loss: ${signal.stop}
-Take Profit 1: ${signal.targets[0]} (close 33% of position)
-Take Profit 2: ${signal.targets[1]} (close 33% of position)
-Take Profit 3: ${signal.targets[2]} (close remaining 34%)
-
-Risk/Reward Ratio: 1:${signal.riskReward}
-⚠️ Risk: 1-2% of your account balance${signal.stopLimitPrice ? `\nStop Limit: ${signal.stopLimitPrice}` : ''}
-
-💡 Quick Guide:
-• Wait for price to reach Entry Price (${signal.entry})
-• Place ${signal.orderType.replace(/_/g, ' ')} order in MT5
-• Set Stop Loss at ${signal.stop} to protect your capital
-• Take partial profits at each TP level as price moves in your favor`;
+Entry: ${signal.entry}
+SL: ${signal.stop}
+TP1: ${signal.targets[0]} (33%)
+TP2: ${signal.targets[1]} (33%)
+TP3: ${signal.targets[2]} (34%)
+R:R: 1:${signal.riskReward}
+Risk: 1-2%${signal.stopLimitPrice ? `\nStop Limit: ${signal.stopLimitPrice}` : ''}`;
 
     try {
       await navigator.clipboard.writeText(signalText);
@@ -291,6 +285,20 @@ Risk/Reward Ratio: 1:${signal.riskReward}
         variant: "destructive",
       });
     }
+  };
+
+  // Generate preview text (same as copy text)
+  const getCopyPreviewText = () => {
+    const directionEmoji = signal.type === 'LONG' ? '📈' : '📉';
+    return `${directionEmoji} ${signal.symbol} ${signal.orderType.replace(/_/g, ' ')}
+
+Entry: ${signal.entry}
+SL: ${signal.stop}
+TP1: ${signal.targets[0]} (33%)
+TP2: ${signal.targets[1]} (33%)
+TP3: ${signal.targets[2]} (34%)
+R:R: 1:${signal.riskReward}
+Risk: 1-2%${signal.stopLimitPrice ? `\nStop Limit: ${signal.stopLimitPrice}` : ''}`;
   };
 
   // Calculate tier from confidence if not provided
@@ -475,6 +483,31 @@ Risk/Reward Ratio: 1:${signal.riskReward}
           </div>
         </div>
       )}
+
+      {/* Copy Format Preview Section */}
+      <div className="mb-3">
+        <button
+          onClick={() => setShowCopyPreview(!showCopyPreview)}
+          className="w-full py-2 px-4 bg-slate-700 hover:bg-slate-600 rounded-lg text-slate-300 font-semibold transition-all flex items-center justify-between"
+          data-testid={`button-toggle-preview-${signal.id}`}
+        >
+          <span className="text-sm">Copy Format Preview</span>
+          {showCopyPreview ? (
+            <ChevronUp className="w-4 h-4" />
+          ) : (
+            <ChevronDown className="w-4 h-4" />
+          )}
+        </button>
+
+        {showCopyPreview && (
+          <div className="mt-2 p-4 bg-slate-900 border border-slate-600 rounded-lg">
+            <p className="text-xs text-slate-400 mb-2">This will be copied:</p>
+            <pre className="text-sm text-slate-200 font-mono whitespace-pre-wrap">
+              {getCopyPreviewText()}
+            </pre>
+          </div>
+        )}
+      </div>
 
       {/* Copy for MT5 Button */}
       <button
