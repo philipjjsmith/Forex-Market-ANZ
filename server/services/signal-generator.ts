@@ -430,7 +430,7 @@ class MACrossoverStrategy {
     if (confidence >= 85) {
       tier = 'HIGH';
       tradeLive = true;
-      positionSizePercent = 1.00; // Full 1% risk
+      positionSizePercent = 1.50; // OPTION A: 1.5% risk (safe for FXIFY)
       rationale.push(`🟢 HIGH CONFIDENCE (${confidence}/126) - LIVE TRADE`);
     } else {
       tier = 'MEDIUM';

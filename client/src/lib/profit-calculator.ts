@@ -35,34 +35,33 @@ export function calculateOptimalRisk(
   const performance = performanceData.find(p => p.confidence_bracket === bracket);
 
   // If we have enough data (10+ signals), adjust risk based on win rate
+  // OPTION A: FXIFY-safe adaptive risk (never exceeds 1.5%)
   if (performance && performance.total_signals >= 10) {
     const winRate = performance.win_rate;
 
     if (winRate >= 70) {
-      // High win rate - use aggressive risk
-      if (confidence >= 90) return 3.0; // 3% for 90%+ with 70%+ win rate
-      if (confidence >= 80) return 2.5; // 2.5% for 80-89% with 70%+ win rate
-      return 2.0; // 2% for 70-79% with 70%+ win rate
+      // High win rate - use maximum safe risk
+      if (confidence >= 85) return 1.5; // 1.5% for HIGH tier even with great win rate
+      return 0.0; // MEDIUM tier = paper trade
     } else if (winRate >= 60) {
       // Good win rate - use moderate risk
-      if (confidence >= 90) return 2.5;
-      if (confidence >= 80) return 2.0;
-      return 1.5;
+      if (confidence >= 85) return 1.5; // Stay at 1.5% for consistency
+      return 0.0; // MEDIUM tier = paper trade
     } else if (winRate >= 50) {
       // Average win rate - use conservative risk
-      if (confidence >= 90) return 2.0;
-      if (confidence >= 80) return 1.5;
-      return 1.0;
+      if (confidence >= 85) return 1.5; // Maintain 1.5% for HIGH tier
+      return 0.0; // MEDIUM tier = paper trade
     } else {
-      // Poor win rate - use minimal risk
-      return 0.5;
+      // Poor win rate - reduce risk significantly
+      if (confidence >= 85) return 1.0; // Reduce to 1.0% if underperforming
+      return 0.0; // MEDIUM tier = paper trade
     }
   }
 
   // Default risk percentages (no historical data yet)
-  if (confidence >= 90) return 2.5; // 2.5% for 90%+
-  if (confidence >= 80) return 2.0; // 2% for 80-89%
-  return 1.0; // 1% for 70-79%
+  // OPTION A: FXIFY-safe variable risk (matches signal-generator.ts)
+  if (confidence >= 85) return 1.5; // 1.5% for HIGH tier (85+)
+  return 0.0; // 0% for MEDIUM tier (70-84) - paper trade only
 }
 
 /**
