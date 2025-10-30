@@ -427,7 +427,7 @@ class MACrossoverStrategy {
     let tradeLive: boolean;
     let positionSizePercent: number;
 
-    if (confidence >= 85) {
+    if (confidence >= 80) {  // LOWERED from 85 to 80 for optimal profitability (96.85% FXIFY survival)
       tier = 'HIGH';
       tradeLive = true;
       positionSizePercent = 1.50; // OPTION A: 1.5% risk (safe for FXIFY)

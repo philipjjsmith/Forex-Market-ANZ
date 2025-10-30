@@ -87,8 +87,9 @@ export default function Dashboard() {
       orderType = type === 'LONG' ? 'BUY_STOP_LIMIT' : 'SELL_STOP_LIMIT';
     }
 
-    const stopLimitPrice = (orderType === 'BUY_STOP_LIMIT' || orderType === 'SELL_STOP_LIMIT') 
-      ? parseFloat((adjustedEntry + (type === 'LONG' ? 0.00015 : -0.00015)).toFixed(5))
+    // MT5 Requirements: BUY_STOP_LIMIT limit is BELOW stop, SELL_STOP_LIMIT limit is ABOVE stop
+    const stopLimitPrice = (orderType === 'BUY_STOP_LIMIT' || orderType === 'SELL_STOP_LIMIT')
+      ? parseFloat((adjustedEntry + (type === 'LONG' ? -0.00015 : 0.00015)).toFixed(5))
       : undefined;
     
     return {

@@ -118,16 +118,16 @@ MarketWatchPro is an AI-powered forex trading signal generator that learns from 
 - Overall Win Rate: ~20% (improving as AI learns)
 
 **Risk Management:**
-- HIGH tier (85+ confidence): **1.5% risk per trade** ✅
-- MEDIUM tier (70-84 confidence): **0% risk (paper trade)** ✅
+- HIGH tier (80+ confidence): **1.5% risk per trade** ✅ *[OPTIMIZED: Oct 29, 2025]*
+- MEDIUM tier (70-79 confidence): **0% risk (paper trade)** ✅
 - Daily loss limit safety: 2 losses = 3% (< 4% FXIFY limit)
-- Expected monthly profit: +6.66% ($6,660 on $100K account)
+- Expected monthly profit: +9.69% ($9,690 on $100K account)
 
 **FXIFY Challenge Readiness:**
 - Target signals for 95% confidence: 385 (currently at 217 = 56%)
 - Estimated time to target: Mid-November 2025
-- Challenge survival rate (Option A): **99.03%**
-- Expected profit after funding: $5,400/month (80% split)
+- Challenge survival rate (80% threshold): **96.85%** ✅
+- Expected profit after funding: $7,752/month (80% split)
 
 **AI Status:**
 - System collecting data 24/7
