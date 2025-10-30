@@ -28,7 +28,7 @@ export function registerAIRoutes(app: Express) {
           COUNT(*) FILTER (WHERE outcome = 'STOP_HIT') as losses,
           ROUND(
             100.0 * COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT')) /
-            NULLIF(COUNT(*) FILTER (WHERE outcome != 'PENDING'), 0),
+            NULLIF(COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'STOP_HIT')), 0),
             2
           ) as win_rate
         FROM signal_history

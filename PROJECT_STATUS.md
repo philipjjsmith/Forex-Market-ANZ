@@ -227,6 +227,7 @@ After AI (EUR/USD with 50 signals, 72% win rate):
 ### **Documentation:**
 - `CLAUDE.md` - Development guidelines for Claude Code
 - `PROJECT_STATUS.md` - This file (comprehensive project overview)
+- `FXIFY_AUTO_TRADING_IMPLEMENTATION_PLAN.md` - MT5 automation plan (build after 385 signals)
 - `VARIABLE_RISK_IMPLEMENTATION.md` - Option A implementation details
 - `OPTION_B_DEEP_ANALYSIS.md` - Research proving Option A > Option B
 - `VARIABLE_RISK_ANALYSIS.md` - Safety analysis for variable risk
@@ -296,14 +297,302 @@ After AI (EUR/USD with 50 signals, 72% win rate):
 ### **Mid-term (Mid-November 2025):**
 1. Purchase FXIFY 2-Phase $100K challenge ($475)
 2. Optional: Add 90% profit split upgrade (+$95)
-3. Begin Phase 1 evaluation (10% target, ~2 months)
-4. Pass Phase 2 evaluation (5% target, ~1 month)
+3. **Build MT5 Auto-Trading EA** (during FXIFY approval, 2-3 weeks)
+4. Test EA on demo account thoroughly
+5. Begin Phase 1 evaluation (10% target, ~2 months)
+6. Pass Phase 2 evaluation (5% target, ~1 month)
 
-### **Long-term (January 2026+):**
-1. Receive funded $100K account
-2. Start earning 80-90% profit share ($5,400/month)
-3. Request monthly payouts
-4. Scale account to $200K → $400K → $4M
+### **Long-term (December 2025 - January 2026+):**
+1. **Deploy automated EA to FXIFY account** (early December)
+2. Trade fully automated (no manual entry required)
+3. Receive funded $100K account
+4. Start earning 80-90% profit share ($7,752/month)
+5. Request monthly payouts
+6. Scale account to $200K → $400K → $4M
+
+---
+
+## 🤖 MT5 AUTO-TRADING INTEGRATION (PLANNED)
+
+### **Decision Made:** October 29, 2025
+**Status:** ⏳ PLANNED - Build after reaching 385 signals
+**Target Implementation:** Mid-November 2025 (during FXIFY approval process)
+
+---
+
+### **What is This?**
+
+**Goal:** Fully automate trade execution so your system automatically executes trades in FXIFY MT5 without manual entry.
+
+**How It Works:**
+```
+Backend generates signal → Sends webhook → MT5 EA receives → Calculates lot size → Executes trade ✅
+```
+
+**Result:** You never have to manually enter trades. System trades 24/7 automatically.
+
+---
+
+### **FXIFY Compliance (100% Verified):**
+
+**Research Date:** October 29, 2025
+
+✅ **Expert Advisors (EAs) ARE ALLOWED** in FXIFY 2-Phase evaluation
+✅ **Must use MT5 platform** (not DXtrade)
+✅ **Must be "client-developed"** (which ours will be!)
+✅ **Automated trading fully permitted**
+
+**Direct Quote from FXIFY Rules:**
+> "FXIFY supports algorithmic trading with Expert Advisors (EAs) on MT4 and MT5 for One-Phase, Two-Phase, and Three-Phase challenges."
+
+**Restrictions:**
+- ❌ EAs NOT allowed in Lightning or Instant Funding accounts
+- ❌ Must not use coordinated trading (same EA across multiple accounts)
+- ❌ No HFT, latency arbitrage, or prohibited strategies
+
+**Your System:** 100% compliant ✅
+
+---
+
+### **Technical Architecture:**
+
+**Backend Changes (Node.js):**
+- New endpoint: `GET /api/mt5/latest-signal`
+- Returns latest HIGH tier signal as JSON
+- 5-minute expiry to prevent duplicates
+- Logs all webhook requests
+
+**MT5 Expert Advisor (MQL5):**
+- Polls webhook every 30 seconds
+- Downloads signal JSON data
+- Validates confidence >= 80
+- Calculates lot size for 1.5% risk
+- Places order with entry, SL, TP1, TP2, TP3
+- Logs all executions
+
+**Signal Flow:**
+1. Signal generator creates HIGH tier signal
+2. Saves to database (existing)
+3. Also saves to webhook cache (new)
+4. MT5 EA polls webhook endpoint
+5. EA downloads signal data
+6. EA executes trade automatically
+7. Position opened in FXIFY account ✅
+
+---
+
+### **Implementation Details:**
+
+**Timeline:** 2-3 weeks total
+- Backend webhook: 3 days
+- MT5 EA development: 7-10 days
+- Testing on demo: 5-7 days
+
+**Complexity:** Medium
+- Requires MQL5 programming
+- HTTP requests in MT5
+- JSON parsing
+- Risk calculation
+- Order management
+
+**Cost:** $0 (no third-party services)
+- Custom webhook EA (no dependencies)
+- No MetaApi or paid services
+- Fully self-contained
+
+**Technology:** Proven
+- Same pattern TradingView → MT5 uses
+- Webhook → EA architecture
+- Well-documented approach
+
+---
+
+### **Why Wait Until 385 Signals?**
+
+**Decision Rationale:**
+
+1. **Data Collection is Priority #1:**
+   - Need 385 signals for 95% statistical confidence
+   - Can't pass FXIFY without proven win rate
+   - Foundation first, automation second ✅
+
+2. **Use FXIFY Approval Time:**
+   - FXIFY approval takes 1-2 weeks
+   - Build EA during that waiting period
+   - No wasted time ✅
+
+3. **Lower Development Risk:**
+   - System proven before automating
+   - Less pressure during EA development
+   - Can code with confidence ✅
+
+4. **Better Testing:**
+   - 2-3 weeks to test on demo
+   - Catch bugs before live challenge
+   - Quality over speed ✅
+
+---
+
+### **Benefits of Automation:**
+
+**Convenience:**
+- No manual trade entry (zero time spent)
+- Can't miss signals (even while sleeping)
+- Perfect execution every time
+
+**Consistency:**
+- Exact entry prices (no slippage from delays)
+- Precise lot sizes (calculated automatically)
+- No human error
+
+**Peace of Mind:**
+- System runs 24/7
+- Never miss an opportunity
+- Trades execute immediately
+
+---
+
+### **Development Roadmap:**
+
+**Phase 1: Backend Webhook (3 days)**
+- Create `/api/mt5/latest-signal` endpoint
+- Store latest HIGH tier signal
+- Implement 5-minute expiry
+- Add logging
+
+**Phase 2: MT5 EA Development (7-10 days)**
+- Learn MQL5 basics (if needed)
+- Implement HTTP polling
+- Parse JSON signal data
+- Calculate lot sizes
+- Implement order placement
+- Add error handling
+
+**Phase 3: Testing (5-7 days)**
+- Test on MT5 demo account
+- Verify signal reception
+- Validate lot size calculations
+- Test order execution
+- Monitor for 3-5 real signals
+
+**Phase 4: Deployment (1 day)**
+- Deploy to FXIFY MT5 account
+- Final testing with small trade
+- Enable full automation
+- Monitor closely
+
+---
+
+### **Risk Mitigation:**
+
+**What Could Go Wrong:**
+
+1. **Network Issues:**
+   - EA can't reach webhook
+   - Solution: Retry logic, alerts
+
+2. **Parsing Errors:**
+   - JSON format mismatch
+   - Solution: Validation, error handling
+
+3. **Order Execution Fails:**
+   - Broker rejects order
+   - Solution: Retry logic, logging
+
+4. **Duplicate Trades:**
+   - EA executes same signal twice
+   - Solution: 5-minute expiry, unique IDs
+
+**Mitigation Strategies:**
+- Comprehensive error handling
+- Detailed logging
+- Demo testing (2-3 weeks)
+- Small trade validation
+- Monitoring during first week
+
+---
+
+### **Alternative: Manual Execution**
+
+**If EA Development Fails:**
+
+Manual execution is simple and proven:
+- Time: 30 seconds per signal
+- Frequency: ~9 signals/month
+- Total: 4.5 minutes/month
+
+**Manual process:**
+1. Check dashboard for signal
+2. Open FXIFY MT5
+3. Enter order (entry, SL, TP)
+4. Set lot size
+5. Submit ✅
+
+**Verdict:** Automation is nice-to-have, not must-have
+
+---
+
+### **Success Criteria:**
+
+**EA is Successful When:**
+- ✅ Receives signals within 60 seconds of generation
+- ✅ Calculates lot size correctly (1.5% risk)
+- ✅ Places orders with exact entry/SL/TP
+- ✅ Executes 10+ trades without errors
+- ✅ Zero duplicate trades
+- ✅ Logs all activity properly
+
+**Testing Checklist:**
+- [ ] Backend webhook serves signal data
+- [ ] EA polls and downloads successfully
+- [ ] JSON parsing works correctly
+- [ ] Lot size calculation accurate
+- [ ] Orders placed with correct parameters
+- [ ] Error handling works (network fails, etc.)
+- [ ] No duplicates after 10 signals
+- [ ] Logging comprehensive
+
+---
+
+### **Documentation:**
+
+**Complete Implementation Plan:**
+- File: `FXIFY_AUTO_TRADING_IMPLEMENTATION_PLAN.md`
+- 100% researched and documented
+- Includes all technical details
+- Ready to reference during development
+
+**Contains:**
+- FXIFY compliance verification
+- 3 implementation options compared
+- Complete technical architecture
+- Step-by-step development guide
+- Code examples and structure
+- Risk analysis
+- Timeline and milestones
+
+---
+
+### **Timeline Summary:**
+
+**Now → Mid-November (2-3 weeks):**
+- ❌ Don't build EA yet
+- ✅ Focus on data collection (217 → 385 signals)
+
+**Mid-November (upon reaching 385 signals):**
+- ✅ Purchase FXIFY challenge
+- ✅ Start EA development (2-3 weeks)
+- ✅ Test on demo
+
+**Early December:**
+- ✅ Deploy EA to FXIFY account
+- ✅ Begin automated trading
+- ✅ Start Phase 1 evaluation
+
+**Expected Result:**
+- Fully automated FXIFY trading by early December ✅
+- No manual entry required ✅
+- System trades 24/7 automatically ✅
 
 ---
 

@@ -116,9 +116,12 @@ export class AIAnalyzer {
     const wins = signals.filter(s =>
       s.outcome === 'TP1_HIT' || s.outcome === 'TP2_HIT' || s.outcome === 'TP3_HIT'
     ).length;
-    const winRate = (wins / signals.length) * 100;
+    const totalTrades = signals.filter(s =>
+      s.outcome === 'TP1_HIT' || s.outcome === 'TP2_HIT' || s.outcome === 'TP3_HIT' || s.outcome === 'STOP_HIT'
+    ).length;
+    const winRate = totalTrades > 0 ? (wins / totalTrades) * 100 : 0;
 
-    console.log(`  ✅ ${symbol}: ${winRate.toFixed(1)}% win rate (${wins}/${signals.length})`);
+    console.log(`  ✅ ${symbol}: ${winRate.toFixed(1)}% win rate (${wins}/${totalTrades})`);
 
     // 3. Calculate pattern effectiveness
     const bullishSignals = signals.filter(s => s.type === 'LONG');
@@ -131,11 +134,18 @@ export class AIAnalyzer {
       s.outcome === 'TP1_HIT' || s.outcome === 'TP2_HIT' || s.outcome === 'TP3_HIT'
     ).length;
 
-    const bullishWinRate = bullishSignals.length > 0
-      ? (bullishWins / bullishSignals.length) * 100
+    const bullishTrades = bullishSignals.filter(s =>
+      s.outcome === 'TP1_HIT' || s.outcome === 'TP2_HIT' || s.outcome === 'TP3_HIT' || s.outcome === 'STOP_HIT'
+    ).length;
+    const bearishTrades = bearishSignals.filter(s =>
+      s.outcome === 'TP1_HIT' || s.outcome === 'TP2_HIT' || s.outcome === 'TP3_HIT' || s.outcome === 'STOP_HIT'
+    ).length;
+
+    const bullishWinRate = bullishTrades > 0
+      ? (bullishWins / bullishTrades) * 100
       : 50; // Default if no data
-    const bearishWinRate = bearishSignals.length > 0
-      ? (bearishWins / bearishSignals.length) * 100
+    const bearishWinRate = bearishTrades > 0
+      ? (bearishWins / bearishTrades) * 100
       : 50;
 
     // 4. Calculate indicator effectiveness

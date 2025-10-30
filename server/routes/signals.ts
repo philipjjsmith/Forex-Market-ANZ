@@ -195,7 +195,7 @@ export function registerSignalRoutes(app: Express) {
           COUNT(*) FILTER (WHERE outcome = 'PENDING') as pending,
           ROUND(
             (COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT'))::DECIMAL /
-            NULLIF(COUNT(*) FILTER (WHERE outcome != 'PENDING'), 0)) * 100,
+            NULLIF(COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'STOP_HIT')), 0)) * 100,
             2
           ) as win_rate,
           AVG(profit_loss_pips) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT')) as avg_win_pips,
