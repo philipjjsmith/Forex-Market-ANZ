@@ -301,10 +301,10 @@ R:R: 1:${signal.riskReward}
 Risk: 1-2%${signal.stopLimitPrice ? `\nStop Limit: ${signal.stopLimitPrice}` : ''}`;
   };
 
-  // Calculate tier from confidence if not provided
-  const tier = signal.tier || (signal.confidence >= 85 ? 'HIGH' : 'MEDIUM');
-  const tradeLive = signal.tradeLive !== undefined ? signal.tradeLive : (signal.confidence >= 85);
-  const positionSizePercent = signal.positionSizePercent !== undefined ? signal.positionSizePercent : (signal.confidence >= 85 ? 1.00 : 0.00);
+  // Calculate tier from confidence if not provided (updated to 80% threshold, Oct 29 2025)
+  const tier = signal.tier || (signal.confidence >= 80 ? 'HIGH' : 'MEDIUM');
+  const tradeLive = signal.tradeLive !== undefined ? signal.tradeLive : (signal.confidence >= 80);
+  const positionSizePercent = signal.positionSizePercent !== undefined ? signal.positionSizePercent : (signal.confidence >= 80 ? 1.50 : 0.00);
 
   return (
     <div className="bg-slate-800 rounded-lg p-5 border border-slate-700 hover:border-blue-500 transition-all">
