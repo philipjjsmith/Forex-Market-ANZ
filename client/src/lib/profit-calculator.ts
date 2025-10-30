@@ -41,27 +41,27 @@ export function calculateOptimalRisk(
 
     if (winRate >= 70) {
       // High win rate - use maximum safe risk
-      if (confidence >= 85) return 1.5; // 1.5% for HIGH tier even with great win rate
+      if (confidence >= 80) return 1.5; // 1.5% for HIGH tier even with great win rate
       return 0.0; // MEDIUM tier = paper trade
     } else if (winRate >= 60) {
       // Good win rate - use moderate risk
-      if (confidence >= 85) return 1.5; // Stay at 1.5% for consistency
+      if (confidence >= 80) return 1.5; // Stay at 1.5% for consistency
       return 0.0; // MEDIUM tier = paper trade
     } else if (winRate >= 50) {
       // Average win rate - use conservative risk
-      if (confidence >= 85) return 1.5; // Maintain 1.5% for HIGH tier
+      if (confidence >= 80) return 1.5; // Maintain 1.5% for HIGH tier
       return 0.0; // MEDIUM tier = paper trade
     } else {
       // Poor win rate - reduce risk significantly
-      if (confidence >= 85) return 1.0; // Reduce to 1.0% if underperforming
+      if (confidence >= 80) return 1.0; // Reduce to 1.0% if underperforming
       return 0.0; // MEDIUM tier = paper trade
     }
   }
 
   // Default risk percentages (no historical data yet)
   // OPTION A: FXIFY-safe variable risk (matches signal-generator.ts)
-  if (confidence >= 85) return 1.5; // 1.5% for HIGH tier (85+)
-  return 0.0; // 0% for MEDIUM tier (70-84) - paper trade only
+  if (confidence >= 80) return 1.5; // 1.5% for HIGH tier (80+)
+  return 0.0; // 0% for MEDIUM tier (70-79) - paper trade only
 }
 
 /**

@@ -20,8 +20,8 @@ interface TierBadgeProps {
  * TierBadge Component
  *
  * Displays signal quality using a "Signal Bars" visual system (like cell phone signal strength).
- * - LIVE TRADING (85-100%): 5 bars, Blue to Cyan gradient, Live trading enabled
- * - PRACTICE SIGNAL (70-84%): 3 bars, Slate Gray, Demo account only
+ * - LIVE TRADING (80-100%): 5 bars, Blue to Cyan gradient, Live trading enabled
+ * - PRACTICE SIGNAL (70-79%): 3 bars, Slate Gray, Demo account only
  *
  * Accessibility: Icon-based system (not color-dependent), colorblind-friendly
  */
@@ -50,7 +50,7 @@ export function TierBadge({
       'bg-cyan-600',
     ],
     icon: '🔵',
-    description: 'Premium signal (85-100% confidence)',
+    description: 'Premium signal (80-100% confidence)',
     tradingStatus: 'Live Account Enabled',
     riskLevel: '1% Account Risk',
   } : {
@@ -65,7 +65,7 @@ export function TierBadge({
       'bg-slate-600',
     ],
     icon: '⚪',
-    description: 'Practice signal (70-84% confidence)',
+    description: 'Practice signal (70-79% confidence)',
     tradingStatus: 'Demo Account Only',
     riskLevel: '0% Account Risk (Practice)',
   };
@@ -143,12 +143,12 @@ export function TierBadge({
       <div className="pt-2 border-t border-slate-600 text-xs text-slate-300">
         {tier === 'HIGH' ? (
           <p>
-            <strong>LIVE TRADING signals</strong> meet strict criteria (85-100% confidence) and are approved for
-            live trading with 1% account risk per trade.
+            <strong>LIVE TRADING signals</strong> meet strict criteria (80-100% confidence) and are approved for
+            live trading with 1.5% account risk per trade.
           </p>
         ) : (
           <p>
-            <strong>PRACTICE signals</strong> show promise (70-84% confidence) but should only be
+            <strong>PRACTICE signals</strong> show promise (70-79% confidence) but should only be
             traded in a demo account until they prove consistency.
           </p>
         )}

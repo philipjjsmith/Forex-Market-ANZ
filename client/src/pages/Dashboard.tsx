@@ -283,9 +283,9 @@ export default function Dashboard() {
   const activeSignals = signals.filter(s => {
     if (s.status !== 'active') return false;
 
-    // Tier-based filtering: Live Trading (85-100%) vs Practice (70-84%)
-    if (confidenceFilter === 'live' && s.confidence < 85) return false;
-    if (confidenceFilter === 'practice' && (s.confidence < 70 || s.confidence >= 85)) return false;
+    // Tier-based filtering: Live Trading (80-100%) vs Practice (70-79%)
+    if (confidenceFilter === 'live' && s.confidence < 80) return false;
+    if (confidenceFilter === 'practice' && (s.confidence < 70 || s.confidence >= 80)) return false;
 
     if (signalTypeFilter !== 'all' && s.type !== signalTypeFilter) return false;
 
@@ -479,8 +479,8 @@ export default function Dashboard() {
                 data-testid="select-confidence-filter"
               >
                 <option value="all">📊 All Signals</option>
-                <option value="live">🔵 Live Trading (85-100%)</option>
-                <option value="practice">⚪ Practice Signal (70-84%)</option>
+                <option value="live">🔵 Live Trading (80-100%)</option>
+                <option value="practice">⚪ Practice Signal (70-79%)</option>
               </select>
             </div>
 
