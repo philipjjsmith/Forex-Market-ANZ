@@ -1,7 +1,9 @@
-import { TrendingUp, TrendingDown, BarChart3, Target, Shield, AlertTriangle, CheckCircle, XCircle, Star } from 'lucide-react';
+import { TrendingUp, TrendingDown, BarChart3, Target, Shield, AlertTriangle, CheckCircle, XCircle, Star, Copy, ChevronDown, ChevronUp } from 'lucide-react';
 import { useState } from 'react';
 import { Signal } from '@/lib/strategy';
 import TradingChartWidget, { Position } from './TradingChartWidget';
+import { TierBadge } from './TierBadge';
+import { useToast } from '@/hooks/use-toast';
 
 interface ComprehensiveSignalCardProps {
   signal: Signal;
@@ -13,6 +15,8 @@ interface ComprehensiveSignalCardProps {
 export function ComprehensiveSignalCard({ signal, candles, onToggleSave, isSaved }: ComprehensiveSignalCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [timeframe, setTimeframe] = useState<'1H' | '4H' | '1D'>('1H');
+  const [showCopyPreview, setShowCopyPreview] = useState(false);
+  const { toast } = useToast();
 
   // Aggregate candles based on timeframe (base candles are 5-minute intervals)
   const filteredCandles = candles ? (() => {
@@ -255,6 +259,53 @@ export function ComprehensiveSignalCard({ signal, candles, onToggleSave, isSaved
 
   const explanation = getSignalExplanation(signal);
 
+  // Copy signal details for MT5 (Format B - Compact)
+  const copyForMT5 = async () => {
+    const directionEmoji = signal.type === 'LONG' ? '📈' : '📉';
+    const signalText = `${directionEmoji} ${signal.symbol} ${signal.orderType.replace(/_/g, ' ')}
+
+Entry: ${signal.entry}
+SL: ${signal.stop}
+TP1: ${signal.targets[0]} (33%)
+TP2: ${signal.targets[1]} (33%)
+TP3: ${signal.targets[2]} (34%)
+R:R: 1:${signal.riskReward}
+Risk: 1-2%${signal.stopLimitPrice ? `\nStop Limit: ${signal.stopLimitPrice}` : ''}`;
+
+    try {
+      await navigator.clipboard.writeText(signalText);
+      toast({
+        title: "✅ Signal copied to clipboard!",
+        description: "Ready to paste into MT5 or your trading journal",
+      });
+    } catch (err) {
+      toast({
+        title: "❌ Failed to copy",
+        description: "Please try again or copy manually",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Generate preview text (same as copy text)
+  const getCopyPreviewText = () => {
+    const directionEmoji = signal.type === 'LONG' ? '📈' : '📉';
+    return `${directionEmoji} ${signal.symbol} ${signal.orderType.replace(/_/g, ' ')}
+
+Entry: ${signal.entry}
+SL: ${signal.stop}
+TP1: ${signal.targets[0]} (33%)
+TP2: ${signal.targets[1]} (33%)
+TP3: ${signal.targets[2]} (34%)
+R:R: 1:${signal.riskReward}
+Risk: 1-2%${signal.stopLimitPrice ? `\nStop Limit: ${signal.stopLimitPrice}` : ''}`;
+  };
+
+  // Calculate tier from confidence if not provided (updated to 80% threshold, Oct 29 2025)
+  const tier = signal.tier || (signal.confidence >= 80 ? 'HIGH' : 'MEDIUM');
+  const tradeLive = signal.tradeLive !== undefined ? signal.tradeLive : (signal.confidence >= 80);
+  const positionSizePercent = signal.positionSizePercent !== undefined ? signal.positionSizePercent : (signal.confidence >= 80 ? 1.50 : 0.00);
+
   return (
     <div className="bg-slate-800 rounded-lg p-5 border border-slate-700 hover:border-blue-500 transition-all">
       <div className="flex items-start justify-between mb-4">
@@ -270,15 +321,16 @@ export function ComprehensiveSignalCard({ signal, candles, onToggleSave, isSaved
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <div className="text-right">
-            <div className={`text-2xl font-bold ${
-              signal.confidence >= 70 ? 'text-green-400' : 
-              signal.confidence >= 60 ? 'text-yellow-400' : 'text-orange-400'
-            }`}>
-              {signal.confidence}%
-            </div>
-            <p className="text-xs text-slate-400">Confidence</p>
-          </div>
+          {/* Tier Badge */}
+          <TierBadge
+            tier={tier}
+            confidence={signal.confidence}
+            tradeLive={tradeLive}
+            positionSizePercent={positionSizePercent}
+            size="md"
+            showLabel={true}
+            showTooltip={true}
+          />
           {onToggleSave && (
             <button
               onClick={() => onToggleSave(signal.id)}
@@ -431,6 +483,41 @@ export function ComprehensiveSignalCard({ signal, candles, onToggleSave, isSaved
           </div>
         </div>
       )}
+
+      {/* Copy Format Preview Section */}
+      <div className="mb-3">
+        <button
+          onClick={() => setShowCopyPreview(!showCopyPreview)}
+          className="w-full py-2 px-4 bg-slate-700 hover:bg-slate-600 rounded-lg text-slate-300 font-semibold transition-all flex items-center justify-between"
+          data-testid={`button-toggle-preview-${signal.id}`}
+        >
+          <span className="text-sm">Copy Format Preview</span>
+          {showCopyPreview ? (
+            <ChevronUp className="w-4 h-4" />
+          ) : (
+            <ChevronDown className="w-4 h-4" />
+          )}
+        </button>
+
+        {showCopyPreview && (
+          <div className="mt-2 p-4 bg-slate-900 border border-slate-600 rounded-lg">
+            <p className="text-xs text-slate-400 mb-2">This will be copied:</p>
+            <pre className="text-sm text-slate-200 font-mono whitespace-pre-wrap">
+              {getCopyPreviewText()}
+            </pre>
+          </div>
+        )}
+      </div>
+
+      {/* Copy for MT5 Button */}
+      <button
+        onClick={copyForMT5}
+        className="w-full py-3 px-4 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 rounded-lg text-white font-bold transition-all flex items-center justify-center gap-2 shadow-lg mb-3"
+        data-testid={`button-copy-mt5-${signal.id}`}
+      >
+        <Copy className="w-5 h-5" />
+        📋 Copy for MT5
+      </button>
 
       {/* Explanation Toggle Button */}
       <button

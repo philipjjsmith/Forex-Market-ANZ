@@ -6,6 +6,9 @@ import passport from "./passport-config";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { supabase } from "./supabase";
+import { outcomeValidator } from "./services/outcome-validator";
+import { signalGenerator } from "./services/signal-generator";
+import { aiAnalyzer } from "./services/ai-analyzer";
 
 // CORS Configuration Active - Build v3
 
@@ -201,5 +204,24 @@ app.use((req, res, next) => {
   const port = parseInt(process.env.PORT || '5000', 10);
   server.listen(port, "0.0.0.0", () => {
     log(`serving on port ${port}`);
+
+    // ========== AUTOMATED SERVICES NOW USE HTTP CRON ENDPOINTS ==========
+    // Services are triggered by HTTP requests instead of setInterval
+    // This works reliably on Render free tier (which sleeps after 15min)
+    //
+    // Cron Endpoints:
+    // - /api/cron/generate-signals (every 15 min via UptimeRobot)
+    // - /api/cron/validate-outcomes (every 5 min via UptimeRobot)
+    // - /api/cron/analyze-ai (every 6 hours via cron-job.org)
+    //
+    // See server/routes.ts for endpoint implementations
+
+    console.log('✅ Server started - automated services ready');
+    console.log('📡 Cron endpoints available:');
+    console.log('   GET /api/cron/generate-signals (15 min intervals)');
+    console.log('   GET /api/cron/validate-outcomes (5 min intervals)');
+    console.log('   GET /api/cron/analyze-ai (6 hour intervals)');
+    console.log('');
+    console.log('⚠️  Configure UptimeRobot to ping these endpoints for 24/7 operation');
   });
 })();

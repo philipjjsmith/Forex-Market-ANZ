@@ -21,6 +21,9 @@ export interface Signal {
   targets: number[];
   riskReward: number;
   confidence: number;
+  tier?: 'HIGH' | 'MEDIUM';
+  tradeLive?: boolean;
+  positionSizePercent?: number;
   orderType: string;
   executionType: string;
   indicators: {
@@ -186,8 +189,9 @@ export class MACrossoverStrategy {
       orderType = signalType === 'LONG' ? 'BUY_STOP_LIMIT' : 'SELL_STOP_LIMIT';
     }
 
-    const stopLimitPrice = (orderType === 'BUY_STOP_LIMIT' || orderType === 'SELL_STOP_LIMIT') 
-      ? parseFloat((adjustedEntry + (signalType === 'LONG' ? 0.00015 : -0.00015)).toFixed(5))
+    // MT5 Requirements: BUY_STOP_LIMIT limit is BELOW stop, SELL_STOP_LIMIT limit is ABOVE stop
+    const stopLimitPrice = (orderType === 'BUY_STOP_LIMIT' || orderType === 'SELL_STOP_LIMIT')
+      ? parseFloat((adjustedEntry + (signalType === 'LONG' ? -0.00015 : 0.00015)).toFixed(5))
       : undefined;
 
     return {

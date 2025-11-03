@@ -23,18 +23,14 @@ export class ExchangeRateAPI {
   private cacheTTL: number; // 15 minutes in milliseconds
 
   constructor() {
-    this.baseUrl = 'https://v6.exchangerate-api.com/v6';
-    this.apiKey = process.env.FOREX_API_KEY || '';
+    this.baseUrl = 'https://api.frankfurter.app';
+    this.apiKey = ''; // Frankfurter.app doesn't require API key
     this.cache = new Map();
-    this.cacheTTL = 15 * 60 * 1000; // 15 minutes - optimized for free API tier
-
-    if (!this.apiKey) {
-      console.warn('⚠️  FOREX_API_KEY not set in environment variables');
-    }
+    this.cacheTTL = 15 * 60 * 1000; // 15 minutes cache
   }
 
   /**
-   * Fetch forex quote from ExchangeRate-API or cache
+   * Fetch forex quote from Frankfurter.app or cache
    */
   private async fetchQuote(fromCurrency: string, toCurrency: string): Promise<ForexQuote> {
     const cacheKey = `${fromCurrency}/${toCurrency}`;
@@ -46,11 +42,11 @@ export class ExchangeRateAPI {
       return cached.data;
     }
 
-    // Fetch from API - ExchangeRate-API format: /v6/{api_key}/pair/{from}/{to}
-    const url = `${this.baseUrl}/${this.apiKey}/pair/${fromCurrency}/${toCurrency}`;
+    // Fetch from Frankfurter.app - Format: /latest?from={from}&to={to}
+    const url = `${this.baseUrl}/latest?from=${fromCurrency}&to=${toCurrency}`;
 
     try {
-      console.log(`🌐 Fetching ${cacheKey} from ExchangeRate-API...`);
+      console.log(`🌐 Fetching ${cacheKey} from Frankfurter.app...`);
       const response = await fetch(url);
 
       if (!response.ok) {
@@ -59,21 +55,15 @@ export class ExchangeRateAPI {
 
       const data = await response.json();
 
-      // Check for API errors
-      if (data.result === 'error') {
-        if (data['error-type'] === 'quota-reached') {
-          throw new Error('⏳ Monthly API limit reached (1,500 requests). Data updates every 15 minutes via cache. Please try again in a few minutes.');
-        }
-        throw new Error(data['error-type'] || 'API error occurred');
+      // Frankfurter.app response format: { amount: 1.0, base: "EUR", date: "2025-10-24", rates: { "USD": 1.1612 } }
+      if (!data.rates || !data.rates[toCurrency]) {
+        throw new Error('Invalid API response - missing rates data');
       }
 
-      if (data.result !== 'success') {
-        throw new Error('Invalid API response');
-      }
+      // Extract the exchange rate
+      const rate = data.rates[toCurrency];
 
-      // ExchangeRate-API provides conversion rate
-      // We'll simulate bid/ask spread (typical forex spread is ~0.0001 or 1 pip)
-      const rate = data.conversion_rate;
+      // Simulate bid/ask spread (typical forex spread is ~0.0001 or 1 pip)
       const spread = rate * 0.0001; // 1 pip spread
       const bidPrice = rate - spread / 2;
       const askPrice = rate + spread / 2;
@@ -85,7 +75,7 @@ export class ExchangeRateAPI {
         exchangeRate: rate,
         bidPrice: bidPrice,
         askPrice: askPrice,
-        lastRefreshed: new Date(data.time_last_update_unix * 1000).toISOString(),
+        lastRefreshed: `${data.date}T00:00:00.000Z`, // Frankfurter returns YYYY-MM-DD format
         timezone: 'UTC',
       };
 

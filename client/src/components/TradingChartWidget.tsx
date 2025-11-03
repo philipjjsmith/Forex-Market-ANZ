@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useImperativeHandle, forwardRef } from "react";
-import { createChart, IChartApi, ISeriesApi, CandlestickData, CandlestickSeries, LineSeries, AreaSeries, LineData, Time, MouseEventParams, IPriceLine } from "lightweight-charts";
+import { createChart, IChartApi, ISeriesApi, CandlestickData, CandlestickSeries, Time, MouseEventParams, IPriceLine } from "lightweight-charts";
 
 interface Candle {
   date?: string;
@@ -35,8 +35,6 @@ const TradingChartWidget = forwardRef<TradingChartHandle, TradingChartWidgetProp
     const chartContainerRef = useRef<HTMLDivElement>(null);
     const chartRef = useRef<IChartApi | null>(null);
     const candlestickSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
-    const profitZoneSeriesRef = useRef<ISeriesApi<"Area"> | null>(null);
-    const lossZoneSeriesRef = useRef<ISeriesApi<"Area"> | null>(null);
     const priceLinesRef = useRef<IPriceLine[]>([]);
 
     // Expose methods to parent component
@@ -92,34 +90,6 @@ const TradingChartWidget = forwardRef<TradingChartHandle, TradingChartWidgetProp
       });
 
       candlestickSeriesRef.current = candlestickSeries;
-
-      // Add profit zone series (green shaded area) - Use separate price scale to control bounds
-      const profitZoneSeries = chart.addSeries(AreaSeries, {
-        topColor: 'rgba(34, 139, 34, 0.5)',      // Forest green - MORE visible
-        bottomColor: 'rgba(34, 139, 34, 0.2)',
-        lineColor: 'rgba(34, 139, 34, 0)',       // Invisible border
-        lineWidth: 0,
-        crosshairMarkerVisible: false,
-        lastValueVisible: false,
-        priceLineVisible: false,
-        priceScaleId: 'profit-zone',  // Separate scale
-      });
-
-      profitZoneSeriesRef.current = profitZoneSeries;
-
-      // Add loss zone series (red shaded area) - Use separate price scale to control bounds
-      const lossZoneSeries = chart.addSeries(AreaSeries, {
-        topColor: 'rgba(220, 20, 60, 0.5)',       // Crimson red - MORE visible
-        bottomColor: 'rgba(220, 20, 60, 0.2)',
-        lineColor: 'rgba(220, 20, 60, 0)',        // Invisible border
-        lineWidth: 0,
-        crosshairMarkerVisible: false,
-        lastValueVisible: false,
-        priceLineVisible: false,
-        priceScaleId: 'loss-zone',    // Separate scale
-      });
-
-      lossZoneSeriesRef.current = lossZoneSeries;
 
       // Handle window resize
       const handleResize = () => {
@@ -267,119 +237,6 @@ const TradingChartWidget = forwardRef<TradingChartHandle, TradingChartWidgetProp
       }
 
       priceLinesRef.current = newPriceLines;
-
-      // Draw profit/loss projection zones - using normalized scale (0-100)
-      if (candles.length > 0 && profitZoneSeriesRef.current && lossZoneSeriesRef.current) {
-        // Get the last candle time as the starting point for projections
-        const lastCandle = candles[candles.length - 1];
-        const lastCandleTime = new Date(lastCandle.timestamp || lastCandle.date).getTime() / 1000;
-
-        // Create compact future projection - 10 bars into future
-        const timeInterval = 300; // 5 minutes in seconds (base interval)
-        const projectionSteps = 10; // 10 bars = 50 minutes projection
-
-        // Use normalized 0-100 scale for zones (they have separate price scales)
-        const profitZoneData: LineData[] = [];
-        const lossZoneData: LineData[] = [];
-
-        // Start at bottom (0) and go to top (100) - the separate price scales will position them correctly
-        for (let i = 0; i <= projectionSteps; i++) {
-          const time = (lastCandleTime + (i * timeInterval)) as Time;
-          profitZoneData.push({ time, value: 100 }); // Fill from 0 to 100
-          lossZoneData.push({ time, value: 100 });   // Fill from 0 to 100
-        }
-
-        profitZoneSeriesRef.current.setData(profitZoneData);
-        lossZoneSeriesRef.current.setData(lossZoneData);
-
-        // Calculate the price range for the chart (SL to TP with padding)
-        const slPrice = position.stopLoss || position.entryPrice * 0.998;
-        const tpPrice = position.takeProfit || position.entryPrice * 1.002;
-        const minChartPrice = Math.min(slPrice, tpPrice);
-        const maxChartPrice = Math.max(slPrice, tpPrice);
-        const chartPriceRange = maxChartPrice - minChartPrice;
-
-        // Add 15% padding so zones are clearly visible
-        const paddingPercent = 0.15;
-        const topMargin = paddingPercent;
-        const bottomMargin = paddingPercent;
-
-        // Configure the candlestick price scale to show only SL-TP range
-        if (chartRef.current) {
-          candlestickSeriesRef.current.priceScale().applyOptions({
-            autoScale: false,
-            scaleMargins: {
-              top: topMargin,
-              bottom: bottomMargin,
-            },
-          });
-
-          // Fit time scale to show all candles plus projection area
-          chartRef.current.timeScale().fitContent();
-        }
-
-        // Calculate zone positions within the visible SL-TP range
-        // The chart now shows minChartPrice (SL or TP) to maxChartPrice (TP or SL)
-        // scaleMargins define where zones appear: 0.0 = bottom, 1.0 = top of chart
-
-        if (position.type === "long") {
-          // LONG: Entry < TP, SL < Entry
-          // Green zone: Entry to TP (upper half)
-          // Red zone: SL to Entry (lower half)
-
-          const entryPosition = (position.entryPrice - minChartPrice) / chartPriceRange;
-          const tpPosition = (tpPrice - minChartPrice) / chartPriceRange;
-          const slPosition = (slPrice - minChartPrice) / chartPriceRange;
-
-          // Green profit zone: from Entry up to TP
-          // scaleMargins work inverted: top=0 is chart top, bottom=1 is chart bottom
-          // To show from entryPosition to tpPosition, we need:
-          // - bottom margin = 1 - tpPosition (space below TP)
-          // - top margin = 1 - (1 - entryPosition) = entryPosition (space above Entry)
-          profitZoneSeriesRef.current.priceScale().applyOptions({
-            scaleMargins: {
-              top: 1 - tpPosition - topMargin,      // Space above TP
-              bottom: entryPosition + bottomMargin,  // Space below Entry
-            },
-            autoScale: false,
-          });
-
-          // Red loss zone: from SL up to Entry
-          lossZoneSeriesRef.current.priceScale().applyOptions({
-            scaleMargins: {
-              top: 1 - entryPosition - topMargin,    // Space above Entry
-              bottom: slPosition + bottomMargin,      // Space below SL
-            },
-            autoScale: false,
-          });
-        } else {
-          // SHORT: Entry > TP, SL > Entry
-          // Green zone: TP to Entry (lower half)
-          // Red zone: Entry to SL (upper half)
-
-          const entryPosition = (position.entryPrice - minChartPrice) / chartPriceRange;
-          const tpPosition = (tpPrice - minChartPrice) / chartPriceRange;
-          const slPosition = (slPrice - minChartPrice) / chartPriceRange;
-
-          // Green profit zone: from TP up to Entry
-          profitZoneSeriesRef.current.priceScale().applyOptions({
-            scaleMargins: {
-              top: 1 - entryPosition - topMargin,     // Space above Entry
-              bottom: tpPosition + bottomMargin,       // Space below TP
-            },
-            autoScale: false,
-          });
-
-          // Red loss zone: from Entry up to SL
-          lossZoneSeriesRef.current.priceScale().applyOptions({
-            scaleMargins: {
-              top: 1 - slPosition - topMargin,        // Space above SL
-              bottom: entryPosition + bottomMargin,    // Space below Entry
-            },
-            autoScale: false,
-          });
-        }
-      }
     }, [position, candles]);
 
     return (

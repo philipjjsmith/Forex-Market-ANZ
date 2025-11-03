@@ -4,6 +4,7 @@ export interface User {
   id: string;
   username: string;
   email: string;
+  role: string;
 }
 
 export interface AuthResponse {
@@ -57,6 +58,7 @@ export async function register(username: string, email: string, password: string
       headers: {
         'Content-Type': 'application/json',
       },
+      credentials: 'include',
       body: JSON.stringify({ username, email, password }),
     });
 
@@ -84,6 +86,7 @@ export async function login(email: string, password: string): Promise<AuthRespon
       headers: {
         'Content-Type': 'application/json',
       },
+      credentials: 'include',
       body: JSON.stringify({ email, password }),
     });
 
@@ -112,6 +115,7 @@ export async function logout(): Promise<AuthResponse> {
     await fetch(`${getApiBaseUrl()}/api/auth/logout`, {
       method: 'POST',
       headers: getAuthHeaders(),
+      credentials: 'include',
     });
 
     return {
@@ -138,6 +142,7 @@ export async function getCurrentUser(): Promise<User | null> {
   try {
     const response = await fetch(`${getApiBaseUrl()}/api/auth/me`, {
       headers: getAuthHeaders(),
+      credentials: 'include',
     });
 
     const data = await response.json();
@@ -162,6 +167,7 @@ export async function forgotPassword(email: string): Promise<AuthResponse> {
       headers: {
         'Content-Type': 'application/json',
       },
+      credentials: 'include',
       body: JSON.stringify({ email }),
     });
 
@@ -183,6 +189,7 @@ export async function resetPassword(token: string, password: string): Promise<Au
       headers: {
         'Content-Type': 'application/json',
       },
+      credentials: 'include',
       body: JSON.stringify({ token, password }),
     });
 

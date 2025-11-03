@@ -36,14 +36,23 @@ The codebase is organized into three main directories:
 
 - **`client/`** - React frontend application
   - `client/src/components/` - React components (UI primitives in `ui/`, feature components at root)
+    - `TradingChartWidget.tsx` - Interactive trading charts with lightweight-charts
+    - `ProjectionTradingGame.tsx` - Educational trading simulator game
+    - `TradingSimulator.tsx` - Practice trading with mock data
   - `client/src/lib/` - Core logic: technical indicators, trading strategies, utilities
   - `client/src/pages/` - Page-level components
+    - `Dashboard.tsx` - Main dashboard with charts and signals
+    - `Learn.tsx` - Educational content and trading tutorials
   - `client/src/hooks/` - Custom React hooks
 
 - **`server/`** - Express backend
-  - `server/index.ts` - Main server entry point
+  - `server/index.ts` - Main server entry point with CORS and session management
   - `server/routes.ts` - API route definitions (all routes prefixed with `/api`)
-  - `server/storage.ts` - Storage interface (currently in-memory, designed for DB migration)
+  - `server/db.ts` - Drizzle ORM database connection (postgres-js)
+  - `server/supabase.ts` - Supabase client for auth operations
+  - `server/storage.ts` - Drizzle ORM storage implementation
+  - `server/auth-middleware.ts` - JWT authentication middleware
+  - `server/jwt.ts` - JWT token utilities
   - `server/vite.ts` - Vite dev server integration for HMR
 
 - **`shared/`** - Shared types and schemas
@@ -110,6 +119,16 @@ Reference `design_guidelines.md` for the complete design system including:
 - Right-align numeric data in tables
 - Use monospace fonts for price displays
 
+**UI Terminology (Beginner-Friendly)**:
+- **NEVER use:** "HIGH QUALITY", "MEDIUM QUALITY", "points", "paper trading"
+- **ALWAYS use:** "LIVE TRADING", "PRACTICE SIGNAL", "% confidence", "demo account"
+- **Rationale:** Terminology researched from forex industry standards (2025-10-26)
+  - Modern forex platforms use "demo account" not "paper trading"
+  - Beginners understand "%" better than abstract "points"
+  - "LIVE TRADING" vs "PRACTICE" is clearer than quality tiers
+- **Display format:** "{confidence}%" not "{confidence} points"
+- **Tier badges:** Must show Signal Bars (cell phone signal-like icons) for accessibility
+
 ### Key Component Patterns
 - **Charts**: Built with Recharts, minimum 600px height
 - **Data Tables**: Sticky headers, sortable columns, alternating row backgrounds
@@ -118,18 +137,37 @@ Reference `design_guidelines.md` for the complete design system including:
 
 ## Database & ORM
 
-### Drizzle ORM
-- Schema definitions in `shared/schema.ts`
-- PostgreSQL via `@neondatabase/serverless`
-- Zod schemas auto-generated with `drizzle-zod`
-- Migration command: `npm run db:push`
+### Supabase PostgreSQL Setup
+The application uses **Supabase** for database and authentication with a dual-client approach:
+
+1. **Drizzle ORM** (`server/db.ts`):
+   - Schema definitions in `shared/schema.ts`
+   - PostgreSQL via `postgres` (postgres-js driver)
+   - Zod schemas auto-generated with `drizzle-zod`
+   - Migration command: `npm run db:push`
+   - Uses `DATABASE_URL` environment variable
+
+2. **Supabase Client** (`server/supabase.ts`):
+   - Direct Supabase SDK for auth and RLS features
+   - Uses `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` environment variables
+   - Enables server-side auth operations
 
 ### Current Schema
-- `users` table: Basic authentication (id, username, password)
-- Schema designed for expansion: watchlists, portfolios, signals planned
+- `users` table: Full authentication (id, username, email, password, googleId, reset tokens)
+- `savedSignals` table: User's saved trading signals with historical candle data
+- Session storage: PostgreSQL-backed sessions via `connect-pg-simple`
+
+### Environment Variables Required
+- `DATABASE_URL` - PostgreSQL connection string (from Supabase)
+- `SUPABASE_URL` - Supabase project URL
+- `SUPABASE_SERVICE_ROLE_KEY` - Supabase service role key for server operations
+- `SESSION_SECRET` - Express session encryption key
 
 ### Storage Pattern
-The `server/storage.ts` file defines a storage interface. Current implementation is in-memory but structured for easy migration to Drizzle ORM database operations. Use the storage interface methods (e.g., `storage.getUserByUsername()`) for all data operations.
+The `server/storage.ts` file implements Drizzle ORM database operations. All data operations go through this interface (e.g., `storage.getUserByUsername()`, `storage.saveSignal()`).
+
+### Credential Management
+See `.claude/CREDENTIALS.md` for complete documentation on where credentials are stored and how to access service dashboards.
 
 ## State Management
 
@@ -150,17 +188,71 @@ Session infrastructure (express-session, passport, connect-pg-simple) is configu
 ### Mock Data
 The application includes comprehensive mock data generation for candles and market data, enabling frontend development without external API dependencies. Look for mock data generation in component files and consider extracting to shared utilities when scaling.
 
-## Working with Signals
+## Signal Generation System
 
-Trading signals are the core feature. When working with signals:
+### Tiered Confidence System
+Signals are classified into two tiers based on confidence scoring:
 
-1. Signals must have all required fields (entry, stop, targets, confidence, rationale)
-2. Confidence scores are built incrementally by the strategy (30% base + additional factors)
+**HIGH Tier (85-126 points):**
+- **Display:** "LIVE TRADING" badge with 5 Signal Bars (blue/cyan gradient)
+- **Trading Mode:** Approved for live trading with 1% account risk per trade
+- **Auto-tracking:** Automatically saved to database when generated
+- **Filter:** Visible when "Live Trading (85-100%)" filter is selected
+
+**MEDIUM Tier (70-84 points):**
+- **Display:** "PRACTICE SIGNAL" badge with 3 Signal Bars (slate gray)
+- **Trading Mode:** Demo account only, 0% account risk (paper trading)
+- **Auto-tracking:** Automatically saved to database when generated
+- **Filter:** Visible when "Practice Signal (70-84%)" filter is selected
+
+**Signals below 70 points are discarded and not saved.**
+
+### Confidence Scoring Algorithm (Max: 126 points)
+
+The signal generator (`server/services/signal-generator.ts`) uses an additive point system:
+
+**Guaranteed Points (if conditions met):**
+1. HTF trend aligned: **25 points** - Daily trend matches signal direction
+2. Entry signal detected: **20 points** - MA crossover or pullback pattern
+3. Candle close confirmation: **5 points** - 4H candle closed confirming signal
+4. Clear of news: **3 points** - No major news events within 2-hour window
+
+**Conditional Points (high-probability criteria):**
+5. RSI in optimal range: **15 points** - RSI between 40-70 (LONG) or 30-60 (SHORT)
+6. ADX > 25: **15 points** - Strong trend confirmation
+7. HTF trend strength: **10 points** - Daily MA separation > 0.25% (realistic for forex)
+8. BB position: **8 points** - Price in lower/upper BB region for optimal entry
+
+**Bonus Points (rare but valuable):**
+9. Support/Resistance confluence: **15 points** - Entry within 0.25% (25 pips) of key level
+10. Breakout & Retest pattern: **10 points** - Specific price action setup detected
+
+**Typical Scoring Examples:**
+- **Strong signal:** 25+20+15+15+10+8+5+3 = **101 points** (HIGH tier)
+- **Good signal:** 25+20+15+15+8+5+3 = **91 points** (HIGH tier)
+- **Decent signal:** 25+20+15+8+5+3 = **76 points** (MEDIUM tier)
+
+**Important Notes:**
+- Scoring was adjusted on 2025-10-26 to make 85+ achievable with realistic market conditions
+- Previous max was 120 points with stricter criteria (signals maxed at 82%)
+- HTF trend strength threshold lowered from 0.5% to 0.25% for forex volatility
+- S/R confluence tolerance increased from 20 pips to 25 pips
+- RSI and ADX points increased from 12 to 15 each
+
+### Signal Requirements
+
+1. Signals must have all required fields (entry, stop, targets, confidence, rationale, tier, tradeLive, positionSizePercent)
+2. Confidence is stored as raw points (70-126), displayed as percentage in UI
 3. Risk/reward is calculated as (target - entry) / (stop - entry)
 4. Order types determine execution: MARKET for immediate, LIMIT for price improvement, STOP for breakouts
 5. Rationale must explain technical reasoning (concatenated from condition checks)
 
-Saved signals are stored in localStorage with key `saved-signals`. The `SavedSignalsPanel` component manages this persistence.
+### Signal Tracking
+- **Auto-tracking:** All signals ≥70% are automatically saved to `signal_history` table
+- **Manual tracking:** Dashboard "Analyze Markets" button also saves to database
+- **User-specific:** Signals are associated with user_id for privacy
+- **Expiration:** Signals expire after 48 hours if not resolved
+- **LocalStorage:** Legacy saved signals stored with key `saved-signals` (being phased out)
 
 ## Code Style
 

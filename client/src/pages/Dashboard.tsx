@@ -1,13 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useLocation } from 'wouter';
-import { Activity, TrendingUp, TrendingDown, Target, BarChart3, AlertTriangle, CheckCircle, XCircle, Star, Clock, Zap, LogOut, User, GraduationCap } from 'lucide-react';
+import { Activity, TrendingUp, TrendingDown, Target, BarChart3, AlertTriangle, CheckCircle, XCircle, Star, Clock, Zap, LogOut, User, GraduationCap, Settings } from 'lucide-react';
 import { Indicators } from '@/lib/indicators';
 import { MACrossoverStrategy, Signal } from '@/lib/strategy';
 import { ComprehensiveSignalCard } from '@/components/ComprehensiveSignalCard';
 import { useQuotaTracker } from '@/hooks/use-quota-tracker';
 import { generateCandlesFromQuote } from '@/lib/candle-generator';
 import { API_ENDPOINTS } from '@/config/api';
-import { getCurrentUser, logout, type User as AuthUser } from '@/lib/auth';
+import { getCurrentUser, logout, getToken, type User as AuthUser } from '@/lib/auth';
+import { useToast } from '@/hooks/use-toast';
 
 export default function Dashboard() {
   const [, setLocation] = useLocation();
@@ -23,6 +24,9 @@ export default function Dashboard() {
   const [savedSignals, setSavedSignals] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<'signals' | 'saved'>('signals');
   const [apiError, setApiError] = useState<string | null>(null);
+
+  // Toast notifications
+  const { toast } = useToast();
 
   // Quota tracking
   const { remainingAnalyses, canAnalyze, useAnalysis, dailyLimit, timeUntilReset } = useQuotaTracker();
@@ -83,8 +87,9 @@ export default function Dashboard() {
       orderType = type === 'LONG' ? 'BUY_STOP_LIMIT' : 'SELL_STOP_LIMIT';
     }
 
-    const stopLimitPrice = (orderType === 'BUY_STOP_LIMIT' || orderType === 'SELL_STOP_LIMIT') 
-      ? parseFloat((adjustedEntry + (type === 'LONG' ? 0.00015 : -0.00015)).toFixed(5))
+    // MT5 Requirements: BUY_STOP_LIMIT limit is BELOW stop, SELL_STOP_LIMIT limit is ABOVE stop
+    const stopLimitPrice = (orderType === 'BUY_STOP_LIMIT' || orderType === 'SELL_STOP_LIMIT')
+      ? parseFloat((adjustedEntry + (type === 'LONG' ? -0.00015 : 0.00015)).toFixed(5))
       : undefined;
     
     return {
@@ -221,6 +226,47 @@ export default function Dashboard() {
       setMarketData(newMarketData);
       console.log(`✅ Generated ${newSignals.length} signals from real data`);
 
+      // Auto-track signals with 70%+ confidence
+      const signalsToTrack = newSignals.filter(s => s.confidence >= 70);
+      if (signalsToTrack.length > 0) {
+        console.log(`📊 Auto-tracking ${signalsToTrack.length} signals with 70%+ confidence`);
+
+        let trackedCount = 0;
+        for (const signal of signalsToTrack) {
+          try {
+            const candles = newMarketData[signal.symbol]?.candles || [];
+            const token = getToken();
+
+            await fetch(API_ENDPOINTS.SIGNALS_TRACK, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                ...(token && { 'Authorization': `Bearer ${token}` }),
+              },
+              credentials: 'include',
+              body: JSON.stringify({
+                signal,
+                candles: candles.slice(-200) // Store last 200 candles for AI learning
+              })
+            });
+
+            console.log(`✅ Tracked signal ${signal.id} (${signal.confidence}% confidence)`);
+            trackedCount++;
+          } catch (trackError) {
+            console.error(`❌ Failed to track signal ${signal.id}:`, trackError);
+          }
+        }
+
+        // Show success toast
+        if (trackedCount > 0) {
+          toast({
+            title: "🤖 AI Learning Active",
+            description: `Auto-tracked ${trackedCount} signal${trackedCount > 1 ? 's' : ''} (70%+ confidence) for AI analysis`,
+            duration: 5000,
+          });
+        }
+      }
+
     } catch (error: any) {
       console.error('❌ Error analyzing market:', error);
       setApiError(error.message || 'Failed to fetch market data. Please try again.');
@@ -236,13 +282,13 @@ export default function Dashboard() {
 
   const activeSignals = signals.filter(s => {
     if (s.status !== 'active') return false;
-    
-    if (confidenceFilter === 'high' && s.confidence < 70) return false;
-    if (confidenceFilter === 'medium' && (s.confidence < 60 || s.confidence >= 70)) return false;
-    if (confidenceFilter === 'low' && s.confidence >= 60) return false;
-    
+
+    // Tier-based filtering: Live Trading (80-100%) vs Practice (70-79%)
+    if (confidenceFilter === 'live' && s.confidence < 80) return false;
+    if (confidenceFilter === 'practice' && (s.confidence < 70 || s.confidence >= 80)) return false;
+
     if (signalTypeFilter !== 'all' && s.type !== signalTypeFilter) return false;
-    
+
     return true;
   });
 
@@ -268,6 +314,16 @@ export default function Dashboard() {
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2 lg:gap-4">
+              {/* Analytics Button */}
+              <button
+                onClick={() => setLocation('/analytics')}
+                className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors"
+                title="View AI Analytics"
+              >
+                <BarChart3 className="w-4 h-4" />
+                <span className="text-sm font-medium">Analytics</span>
+              </button>
+
               {/* Learn Button */}
               <button
                 onClick={() => setLocation('/learn')}
@@ -277,6 +333,18 @@ export default function Dashboard() {
                 <GraduationCap className="w-4 h-4" />
                 <span className="text-sm font-medium">Learn</span>
               </button>
+
+              {/* Admin Button - Only visible for admin users */}
+              {user && user.role === 'admin' && (
+                <button
+                  onClick={() => setLocation('/admin')}
+                  className="flex items-center gap-2 px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg transition-colors"
+                  title="Admin Dashboard"
+                >
+                  <Settings className="w-4 h-4" />
+                  <span className="text-sm font-medium">Admin</span>
+                </button>
+              )}
 
               {/* User Info & Logout */}
               {user && (
@@ -403,17 +471,16 @@ export default function Dashboard() {
         <div className="mb-6 bg-slate-800 rounded-lg p-4 border border-slate-700">
           <div className="flex flex-col lg:flex-row items-start lg:items-center gap-4 lg:gap-6">
             <div className="flex items-center gap-3">
-              <span className="text-sm text-slate-400 font-semibold">Confidence Level:</span>
+              <span className="text-sm text-slate-400 font-semibold">Signal Quality:</span>
               <select
                 value={confidenceFilter}
                 onChange={(e) => setConfidenceFilter(e.target.value)}
                 className="px-4 py-2 rounded-lg bg-slate-700 text-white border border-slate-600 hover:border-blue-500 focus:border-blue-500 focus:outline-none cursor-pointer transition-all"
                 data-testid="select-confidence-filter"
               >
-                <option value="all">All Levels</option>
-                <option value="high">High (70%+)</option>
-                <option value="medium">Medium (60-69%)</option>
-                <option value="low">Low (50-59%)</option>
+                <option value="all">📊 All Signals</option>
+                <option value="live">🔵 Live Trading (80-100%)</option>
+                <option value="practice">⚪ Practice Signal (70-79%)</option>
               </select>
             </div>
 
