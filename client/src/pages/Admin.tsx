@@ -2,11 +2,19 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Activity, TrendingUp, AlertCircle, RefreshCw, Play, Pause, Clock, CheckCircle, Calendar, Database, Zap, Brain, Target } from 'lucide-react';
+import { Loader2, Activity, TrendingUp, AlertCircle, RefreshCw, Play, Pause, Clock, CheckCircle, Calendar, Database, Zap, Brain, Target, DollarSign, TrendingDown, BarChart3 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { API_ENDPOINTS, API_BASE_URL } from '@/config/api';
 import { useLocation } from 'wouter';
 import { getCurrentUser, getToken } from '@/lib/auth';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 interface SystemHealth {
   status: 'healthy' | 'warning' | 'error';
@@ -97,6 +105,41 @@ interface Recommendation {
   created_at: string;
 }
 
+interface GrowthStats {
+  overall: {
+    totalSignals: number;
+    wins: number;
+    losses: number;
+    totalProfitPips: number;
+    winRate: number;
+    avgWinPips: number;
+    avgLossPips: number;
+    profitFactor: number;
+    sharpeRatio: number;
+    maxDrawdown: number;
+  };
+  cumulativeProfit: Array<{
+    date: string;
+    daily_pips: string;
+    cumulative_pips: string;
+  }>;
+  monthlyComparison: Array<{
+    month: string;
+    total_signals: string;
+    wins: string;
+    profit_pips: string;
+    win_rate: string;
+  }>;
+  symbolPerformance: Array<{
+    symbol: string;
+    total_signals: string;
+    wins: string;
+    profit_pips: string;
+    win_rate: string;
+  }>;
+  timeframe: string;
+}
+
 export default function Admin() {
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
@@ -104,7 +147,8 @@ export default function Admin() {
   const [triggeringBacktest, setTriggeringBacktest] = useState(false);
   const [countdown, setCountdown] = useState<string>('');
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
-  const [activeTab, setActiveTab] = useState<'system' | 'ai'>('system');
+  const [activeTab, setActiveTab] = useState<'system' | 'ai' | 'growth'>('system');
+  const [growthDays, setGrowthDays] = useState(0); // 0 = all time
 
   // Check if user is admin
   useEffect(() => {
@@ -201,6 +245,25 @@ export default function Admin() {
     },
     refetchInterval: 30000, // Refresh every 30 seconds
     enabled: activeTab === 'ai', // Only fetch when AI tab is active
+  });
+
+  // Fetch growth stats
+  const { data: growthStats, isLoading: growthLoading } = useQuery<GrowthStats>({
+    queryKey: ['growth-stats', growthDays],
+    queryFn: async () => {
+      const token = getToken();
+      const res = await fetch(`${API_ENDPOINTS.ADMIN_GROWTH_STATS}?days=${growthDays}`, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` }),
+        },
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error('Failed to fetch growth stats');
+      return res.json();
+    },
+    refetchInterval: 60000, // Refresh every minute
+    enabled: activeTab === 'growth', // Only fetch when Growth tab is active
   });
 
   // Manual trigger mutation
@@ -394,34 +457,40 @@ export default function Admin() {
           <div>
             <h1 className="text-3xl font-bold text-white">Admin Dashboard</h1>
             <p className="text-blue-200 mt-1">
-              {activeTab === 'system' ? 'Monitor system health and signal generation' : 'AI learning insights and performance analytics'}
+              {activeTab === 'system'
+                ? 'Monitor system health and signal generation'
+                : activeTab === 'ai'
+                ? 'AI learning insights and performance analytics'
+                : 'Track profitability and growth over time'}
             </p>
           </div>
           <div className="flex gap-3">
-            <Button
-              onClick={activeTab === 'system' ? handleTriggerGeneration : handleTriggerAI}
-              disabled={activeTab === 'system' && (triggeringGeneration || health?.signalGenerator.isRunning)}
-              className="bg-blue-600 hover:bg-blue-700"
-            >
-              {activeTab === 'system' ? (
-                triggeringGeneration ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Generating...
-                  </>
+            {activeTab !== 'growth' && (
+              <Button
+                onClick={activeTab === 'system' ? handleTriggerGeneration : handleTriggerAI}
+                disabled={activeTab === 'system' && (triggeringGeneration || health?.signalGenerator.isRunning)}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                {activeTab === 'system' ? (
+                  triggeringGeneration ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <Play className="h-4 w-4 mr-2" />
+                      Trigger Generation
+                    </>
+                  )
                 ) : (
                   <>
-                    <Play className="h-4 w-4 mr-2" />
-                    Trigger Generation
+                    <Activity className="h-4 w-4 mr-2" />
+                    Run AI Analysis
                   </>
-                )
-              ) : (
-                <>
-                  <Activity className="h-4 w-4 mr-2" />
-                  Run AI Analysis
-                </>
-              )}
-            </Button>
+                )}
+              </Button>
+            )}
           </div>
         </div>
 
@@ -451,6 +520,19 @@ export default function Admin() {
             <div className="flex items-center gap-2">
               <Brain className="w-4 h-4" />
               AI Insights
+            </div>
+          </button>
+          <button
+            onClick={() => setActiveTab('growth')}
+            className={`px-6 py-3 font-semibold transition-all ${
+              activeTab === 'growth'
+                ? 'text-white border-b-2 border-green-500'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <TrendingUp className="w-4 h-4" />
+              Growth Tracking
             </div>
           </button>
         </div>
@@ -1088,6 +1170,274 @@ export default function Admin() {
                   </CardContent>
                 </Card>
               </>
+            )}
+          </>
+        )}
+
+        {/* Growth Tracking Tab Content */}
+        {activeTab === 'growth' && (
+          <>
+            {growthLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 h-8 animate-spin text-blue-500" />
+              </div>
+            ) : growthStats ? (
+              <>
+                {/* Time Period Filter */}
+                <div className="flex justify-end">
+                  <Select value={growthDays.toString()} onValueChange={(value) => setGrowthDays(parseInt(value))}>
+                    <SelectTrigger className="w-[200px] bg-slate-800/80 text-white border-white/30">
+                      <SelectValue placeholder="Time period" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-slate-800 text-white border-white/30">
+                      <SelectItem value="0">All Time</SelectItem>
+                      <SelectItem value="90">Last 90 days</SelectItem>
+                      <SelectItem value="30">Last 30 days</SelectItem>
+                      <SelectItem value="7">Last 7 days</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Key Metrics Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                  {/* Total Profit */}
+                  <Card className="bg-gradient-to-br from-green-900/40 to-emerald-900/40 border-green-500/50 backdrop-blur-sm shadow-xl">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium text-green-200 flex items-center gap-2">
+                        <DollarSign className="w-4 h-4" />
+                        Total Profit
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-white">
+                        {growthStats.overall.totalProfitPips > 0 ? '+' : ''}
+                        {growthStats.overall.totalProfitPips.toFixed(1)} pips
+                      </div>
+                      <p className="text-xs text-green-300 mt-1">
+                        {growthStats.timeframe}
+                      </p>
+                    </CardContent>
+                  </Card>
+
+                  {/* Win Rate */}
+                  <Card className="bg-gradient-to-br from-blue-900/40 to-indigo-900/40 border-blue-500/50 backdrop-blur-sm shadow-xl">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium text-blue-200 flex items-center gap-2">
+                        <Target className="w-4 h-4" />
+                        Win Rate
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-white">
+                        {growthStats.overall.winRate.toFixed(2)}%
+                      </div>
+                      <p className="text-xs text-blue-300 mt-1">
+                        {growthStats.overall.wins}W / {growthStats.overall.losses}L
+                      </p>
+                    </CardContent>
+                  </Card>
+
+                  {/* Profit Factor */}
+                  <Card className="bg-gradient-to-br from-purple-900/40 to-pink-900/40 border-purple-500/50 backdrop-blur-sm shadow-xl">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium text-purple-200 flex items-center gap-2">
+                        <TrendingUp className="w-4 h-4" />
+                        Profit Factor
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-white">
+                        {growthStats.overall.profitFactor.toFixed(2)}
+                      </div>
+                      <p className="text-xs text-purple-300 mt-1">
+                        {growthStats.overall.profitFactor >= 1.75 ? 'Excellent' : growthStats.overall.profitFactor >= 1.5 ? 'Good' : 'Needs Work'}
+                      </p>
+                    </CardContent>
+                  </Card>
+
+                  {/* Sharpe Ratio */}
+                  <Card className="bg-gradient-to-br from-yellow-900/40 to-orange-900/40 border-yellow-500/50 backdrop-blur-sm shadow-xl">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium text-yellow-200 flex items-center gap-2">
+                        <BarChart3 className="w-4 h-4" />
+                        Sharpe Ratio
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-white">
+                        {growthStats.overall.sharpeRatio.toFixed(2)}
+                      </div>
+                      <p className="text-xs text-yellow-300 mt-1">
+                        Risk-adjusted return
+                      </p>
+                    </CardContent>
+                  </Card>
+
+                  {/* Max Drawdown */}
+                  <Card className="bg-gradient-to-br from-red-900/40 to-rose-900/40 border-red-500/50 backdrop-blur-sm shadow-xl">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium text-red-200 flex items-center gap-2">
+                        <TrendingDown className="w-4 h-4" />
+                        Max Drawdown
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-white">
+                        -{growthStats.overall.maxDrawdown.toFixed(1)} pips
+                      </div>
+                      <p className="text-xs text-red-300 mt-1">
+                        Largest loss
+                      </p>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Cumulative Profit Chart */}
+                <Card className="bg-slate-800/80 border-slate-600/50 shadow-xl">
+                  <CardHeader>
+                    <CardTitle className="text-white flex items-center gap-2">
+                      <TrendingUp className="w-5 h-5 text-green-400" />
+                      Cumulative Profit Over Time
+                    </CardTitle>
+                    <CardDescription className="text-blue-200">
+                      Track your profit growth day by day
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {growthStats.cumulativeProfit.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={300}>
+                        <LineChart data={growthStats.cumulativeProfit.map(d => ({
+                          date: new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+                          pips: parseFloat(d.cumulative_pips)
+                        }))}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                          <XAxis dataKey="date" stroke="#9CA3AF" />
+                          <YAxis stroke="#9CA3AF" />
+                          <Tooltip
+                            contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
+                            labelStyle={{ color: '#F3F4F6' }}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="pips"
+                            stroke="#10B981"
+                            strokeWidth={2}
+                            dot={{ fill: '#10B981', r: 4 }}
+                            activeDot={{ r: 6 }}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="text-center py-12 text-slate-400">
+                        No data available for selected time period
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Monthly Comparison Chart */}
+                <Card className="bg-slate-800/80 border-slate-600/50 shadow-xl">
+                  <CardHeader>
+                    <CardTitle className="text-white flex items-center gap-2">
+                      <BarChart3 className="w-5 h-5 text-blue-400" />
+                      Monthly Performance
+                    </CardTitle>
+                    <CardDescription className="text-blue-200">
+                      Compare profit and win rate by month
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {growthStats.monthlyComparison.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={300}>
+                        <BarChart data={growthStats.monthlyComparison.slice().reverse().map(d => ({
+                          month: new Date(d.month).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+                          pips: parseFloat(d.profit_pips),
+                          winRate: parseFloat(d.win_rate)
+                        }))}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                          <XAxis dataKey="month" stroke="#9CA3AF" />
+                          <YAxis yAxisId="left" stroke="#9CA3AF" />
+                          <YAxis yAxisId="right" orientation="right" stroke="#9CA3AF" />
+                          <Tooltip
+                            contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
+                            labelStyle={{ color: '#F3F4F6' }}
+                          />
+                          <Legend />
+                          <Bar yAxisId="left" dataKey="pips" fill="#3B82F6" name="Profit (pips)" />
+                          <Bar yAxisId="right" dataKey="winRate" fill="#10B981" name="Win Rate (%)" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="text-center py-12 text-slate-400">
+                        No data available for selected time period
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Symbol Performance Table */}
+                <Card className="bg-slate-800/80 border-slate-600/50 shadow-xl">
+                  <CardHeader>
+                    <CardTitle className="text-white flex items-center gap-2">
+                      <Target className="w-5 h-5 text-purple-400" />
+                      Symbol Performance
+                    </CardTitle>
+                    <CardDescription className="text-blue-200">
+                      Compare profitability across currency pairs
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="border-b border-slate-700">
+                            <th className="text-left py-3 px-4 text-sm font-semibold text-slate-300">Symbol</th>
+                            <th className="text-right py-3 px-4 text-sm font-semibold text-slate-300">Signals</th>
+                            <th className="text-right py-3 px-4 text-sm font-semibold text-slate-300">Win Rate</th>
+                            <th className="text-right py-3 px-4 text-sm font-semibold text-slate-300">Profit (pips)</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {growthStats.symbolPerformance.map((symbol, idx) => {
+                            const profitPips = parseFloat(symbol.profit_pips);
+                            const winRate = parseFloat(symbol.win_rate);
+                            return (
+                              <tr key={idx} className="border-b border-slate-700/50 hover:bg-slate-700/30 transition-colors">
+                                <td className="py-3 px-4 font-semibold text-white">{symbol.symbol}</td>
+                                <td className="py-3 px-4 text-right text-slate-300">{symbol.total_signals}</td>
+                                <td className="py-3 px-4 text-right">
+                                  <span className={`font-semibold ${
+                                    winRate >= 50 ? 'text-green-400' :
+                                    winRate >= 35 ? 'text-yellow-400' :
+                                    'text-red-400'
+                                  }`}>
+                                    {winRate.toFixed(1)}%
+                                  </span>
+                                </td>
+                                <td className="py-3 px-4 text-right">
+                                  <span className={`font-bold ${profitPips >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                    {profitPips >= 0 ? '+' : ''}{profitPips.toFixed(1)}
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            ) : (
+              <Card className="bg-slate-800/80 border-slate-600/50 shadow-xl">
+                <CardContent className="py-12">
+                  <div className="text-center text-slate-400">
+                    <Activity className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                    <p>No growth data available yet</p>
+                    <p className="text-sm mt-2">Signals need to be completed before growth tracking begins</p>
+                  </div>
+                </CardContent>
+              </Card>
             )}
           </>
         )}
