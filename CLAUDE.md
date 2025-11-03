@@ -2,6 +2,45 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## ⚠️ CRITICAL: Always Check Remote Repository First
+
+**BEFORE analyzing ANY code or answering questions about the codebase:**
+
+1. **Fetch latest from GitHub:**
+   ```bash
+   git fetch origin
+   git log origin/main --oneline -10
+   ```
+
+2. **Check what's actually deployed:**
+   - This project deploys directly from GitHub → Render (backend) + Cloudflare (frontend)
+   - Local files may be OUTDATED
+   - The source of truth is `origin/main` on GitHub
+
+3. **Verify file contents from remote:**
+   ```bash
+   # Read files from GitHub, not local
+   git show origin/main:path/to/file.ts
+
+   # List files on remote
+   git ls-tree origin/main path/to/directory/
+   ```
+
+4. **Check for local divergence:**
+   ```bash
+   git diff main origin/main --name-only
+   ```
+
+**Why this matters:**
+- User deploys directly through Cloudflare/Render/GitHub
+- Local workspace may be behind remote by many commits
+- Always verify against `origin/main` before providing information
+
+**Production Deployment URLs:**
+- Frontend: https://forex-market-anz.pages.dev/
+- Backend: https://forex-market-anz.onrender.com
+- Database: Supabase PostgreSQL
+
 ## Project Overview
 
 MarketWatchPro is a professional market analysis and trading platform for forex and financial markets. It provides real-time data visualization, technical analysis tools, trading signal generation, and portfolio management. The application is built as a full-stack TypeScript monorepo with React frontend and Express backend.
@@ -70,6 +109,47 @@ Always use these aliases for imports to maintain consistency.
 - **Frontend**: Vite builds React app to `dist/public/`
 - **Backend**: esbuild bundles server code to `dist/`
 - **Development**: Vite dev server with HMR integrated into Express server
+
+## External APIs & Data Sources
+
+### Frankfurter.app (Primary Forex Data)
+**Location:** `server/services/exchangerate-api.ts`
+- **Purpose:** Real-time forex exchange rates
+- **Base URL:** `https://api.frankfurter.app`
+- **Authentication:** None required (free, unlimited)
+- **Data Source:** European Central Bank official rates
+- **Caching:** 15-minute TTL to reduce API calls
+- **Pairs:** EUR/USD, GBP/USD, USD/JPY, AUD/USD, USD/CHF
+
+**Why Frankfurter:**
+- Switched from ExchangeRate-API (October 25, 2025) due to quota limits
+- Truly unlimited usage (no API key, no quotas)
+- Free forever with ECB backing
+- Perfect for 480+ calls/day usage pattern
+
+### Twelve Data API (Historical Candles)
+**Location:** `server/services/twelve-data.ts`
+- **Purpose:** Historical candle data for technical analysis
+- **Base URL:** `https://api.twelvedata.com`
+- **Authentication:** Requires `TWELVE_DATA_KEY` env variable
+- **Free Tier:** 800 API calls per day
+- **Usage:** 1440 x 5-minute candles per analysis
+- **Rate Limiting:** 8 seconds between calls (8 calls/minute)
+
+### Signal Generation Pipeline
+**Location:** `server/services/signal-generator.ts`
+1. Fetch real-time quotes from Frankfurter.app
+2. Fetch historical candles from Twelve Data
+3. Run technical analysis (MA, RSI, ATR, ADX, BB)
+4. Generate signals with confidence scoring
+5. AI analyzer adds confidence adjustments
+6. Store in Supabase database
+7. Outcome validator tracks performance
+
+**Automation:**
+- Cron endpoint: `/api/cron/generate-signals`
+- Runs every 15 minutes (triggered by UptimeRobot)
+- Currently generating ~930 signals
 
 ## Technical Analysis System
 
