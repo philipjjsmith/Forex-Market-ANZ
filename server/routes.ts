@@ -136,6 +136,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  /**
+   * Backtesting Cron (every 24 hours)
+   * Triggered by: UptimeRobot every 24 hours
+   * Analyzes historical signals and generates optimization recommendations
+   */
+  app.get("/api/cron/run-backtesting", async (req, res) => {
+    try {
+      const lastRun = backtester.getLastRunTime();
+      const now = Date.now();
+      const twentyFourHours = 24 * 60 * 60 * 1000;
+
+      // Only run if 24+ hours since last run
+      if (lastRun > 0 && now - lastRun < twentyFourHours) {
+        const hoursAgo = ((now - lastRun) / (60 * 60 * 1000)).toFixed(1);
+        const nextRunIn = ((twentyFourHours - (now - lastRun)) / (60 * 60 * 1000)).toFixed(1);
+
+        return res.json({
+          skipped: true,
+          message: `Last run was ${hoursAgo} hour(s) ago`,
+          nextRunIn: `${nextRunIn} hour(s)`,
+          lastRun: new Date(lastRun).toISOString()
+        });
+      }
+
+      // Trigger backtesting (non-blocking)
+      backtester.backtestAllSymbols().catch(error => {
+        console.error('Error in backtesting:', error);
+      });
+
+      res.json({
+        success: true,
+        message: 'Backtesting triggered - analyzing historical signals for optimization opportunities',
+        timestamp: new Date().toISOString()
+      });
+    } catch (error: any) {
+      console.error('❌ Cron error (run-backtesting):', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Register signal tracking routes
   registerSignalRoutes(app);
 

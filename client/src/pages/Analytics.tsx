@@ -92,6 +92,13 @@ export default function Analytics() {
   const [error, setError] = useState<string | null>(null);
   const [accountSize, setAccountSize] = useState<number>(10000); // Default $10,000
 
+  // Pagination and filtering for history
+  const [historyOffset, setHistoryOffset] = useState(0);
+  const [historyTotal, setHistoryTotal] = useState(0);
+  const [historyHasMore, setHistoryHasMore] = useState(false);
+  const [historyDaysFilter, setHistoryDaysFilter] = useState(0); // 0 = all time
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
   // Check authentication on mount
   useEffect(() => {
     const checkAuth = async () => {
@@ -151,11 +158,18 @@ export default function Analytics() {
     }
   };
 
-  // Fetch signal history
-  const fetchHistory = async () => {
+  // Fetch signal history (with pagination and filtering)
+  const fetchHistory = async (append = false) => {
     try {
+      if (append) {
+        setIsLoadingMore(true);
+      }
+
       const token = getToken();
-      const response = await fetch(API_ENDPOINTS.SIGNALS_HISTORY + '?limit=50', {
+      const offset = append ? historyOffset : 0;
+      const url = `${API_ENDPOINTS.SIGNALS_HISTORY}?limit=50&offset=${offset}&days=${historyDaysFilter}`;
+
+      const response = await fetch(url, {
         headers: {
           ...(token && { 'Authorization': `Bearer ${token}` }),
         },
@@ -167,10 +181,37 @@ export default function Analytics() {
       }
 
       const data = await response.json();
-      setHistorySignals(data.history || []);
+
+      if (append) {
+        setHistorySignals(prev => [...prev, ...(data.history || [])]);
+      } else {
+        setHistorySignals(data.history || []);
+      }
+
+      setHistoryTotal(data.total || 0);
+      setHistoryHasMore(data.hasMore || false);
+      setHistoryOffset(offset + (data.history?.length || 0));
+
     } catch (err: any) {
       setError(err.message);
+    } finally {
+      if (append) {
+        setIsLoadingMore(false);
+      }
     }
+  };
+
+  // Load more history signals
+  const loadMoreHistory = () => {
+    fetchHistory(true);
+  };
+
+  // Handle days filter change
+  const handleDaysFilterChange = (value: string) => {
+    const days = parseInt(value);
+    setHistoryDaysFilter(days);
+    setHistoryOffset(0);
+    // Will trigger refetch via useEffect
   };
 
   // Initial data load
@@ -197,6 +238,13 @@ export default function Analytics() {
 
     return () => clearInterval(interval);
   }, [user]);
+
+  // Refetch history when days filter changes
+  useEffect(() => {
+    if (!user) return;
+    setHistoryOffset(0);
+    fetchHistory();
+  }, [historyDaysFilter]);
 
   // Handle logout
   const handleLogout = async () => {
@@ -535,10 +583,27 @@ export default function Analytics() {
         {/* Signal History */}
         <Card className="bg-white/15 border-white/30 backdrop-blur-md shadow-lg">
           <CardHeader>
-            <CardTitle className="text-white font-bold">Signal History</CardTitle>
-            <CardDescription className="text-blue-200 font-medium">
-              Last 50 completed signals
-            </CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-white font-bold">Signal History</CardTitle>
+                <CardDescription className="text-blue-200 font-medium">
+                  Showing {historySignals.length} of {historyTotal} completed signals
+                </CardDescription>
+              </div>
+
+              {/* Days Filter */}
+              <Select value={historyDaysFilter.toString()} onValueChange={handleDaysFilterChange}>
+                <SelectTrigger className="w-[180px] bg-slate-800/80 text-white border-white/30">
+                  <SelectValue placeholder="Time period" />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-800 text-white border-white/30">
+                  <SelectItem value="0">All Time</SelectItem>
+                  <SelectItem value="7">Last 7 days</SelectItem>
+                  <SelectItem value="30">Last 30 days</SelectItem>
+                  <SelectItem value="90">Last 90 days</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </CardHeader>
           <CardContent>
             <SignalHistoryTable
@@ -546,6 +611,19 @@ export default function Analytics() {
               accountSize={accountSize}
               performanceData={performance?.bySymbol || []}
             />
+
+            {/* Load More Button */}
+            {historyHasMore && (
+              <div className="mt-6 flex justify-center">
+                <Button
+                  onClick={loadMoreHistory}
+                  disabled={isLoadingMore}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 text-lg font-semibold shadow-lg"
+                >
+                  {isLoadingMore ? 'Loading...' : `Load More (${historyTotal - historySignals.length} remaining)`}
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
       </main>

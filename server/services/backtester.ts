@@ -48,10 +48,20 @@ interface Candle {
 }
 
 export class Backtester {
+  private lastRunTime = 0;
+
+  /**
+   * Get the timestamp of the last successful run
+   */
+  getLastRunTime(): number {
+    return this.lastRunTime;
+  }
+
   /**
    * Run backtesting on all symbols with sufficient data
    */
   async backtestAllSymbols(): Promise<void> {
+    this.lastRunTime = Date.now();
     console.log('🔬 [Backtester] Starting parameter optimization...');
 
     try {

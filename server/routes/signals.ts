@@ -335,17 +335,40 @@ export function registerSignalRoutes(app: Express) {
 
   /**
    * GET /api/signals/history
-   * Get completed signals history
+   * Get completed signals history with pagination and filters
+   * Query params:
+   * - limit: number of signals to return (default 50)
+   * - offset: number of signals to skip for pagination (default 0)
+   * - days: filter by days (7, 30, 90, or 0 for all time - default 0)
    */
   app.get("/api/signals/history", requireAuth, async (req, res) => {
     try {
       const userId = req.userId!;
       const limit = parseInt(req.query.limit as string) || 50;
+      const offset = parseInt(req.query.offset as string) || 0;
+      const days = parseInt(req.query.days as string) || 0; // 0 = all time
 
       if (!userId) {
         return res.status(401).json({ message: "Must be logged in" });
       }
 
+      // Build date filter condition
+      const dateFilter = days > 0
+        ? sql`AND outcome_time >= NOW() - INTERVAL '${sql.raw(days.toString())} days'`
+        : sql``;
+
+      // Get total count for pagination
+      const countResult = await db.execute(sql`
+        SELECT COUNT(*) as total
+        FROM signal_history
+        WHERE user_id = ${userId}
+          AND outcome != 'PENDING'
+          ${dateFilter}
+      `);
+
+      const total = parseInt((countResult as any)[0]?.total || '0');
+
+      // Get paginated results
       const result = await db.execute(sql`
         SELECT
           signal_id,
@@ -367,8 +390,10 @@ export function registerSignalRoutes(app: Express) {
         FROM signal_history
         WHERE user_id = ${userId}
           AND outcome != 'PENDING'
+          ${dateFilter}
         ORDER BY outcome_time DESC
         LIMIT ${limit}
+        OFFSET ${offset}
       `);
 
       // Parse numeric fields
@@ -379,7 +404,11 @@ export function registerSignalRoutes(app: Express) {
       );
 
       res.json({
-        history
+        history,
+        total,
+        limit,
+        offset,
+        hasMore: offset + history.length < total
       });
 
     } catch (error: any) {
