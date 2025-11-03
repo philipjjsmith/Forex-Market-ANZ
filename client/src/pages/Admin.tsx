@@ -2,7 +2,13 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Activity, TrendingUp, AlertCircle, RefreshCw, Play, Pause, Clock, CheckCircle, Calendar, Database, Zap, Brain, Target, DollarSign, TrendingDown, BarChart3 } from 'lucide-react';
+import {
+  Tooltip as UITooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { Loader2, Activity, TrendingUp, AlertCircle, RefreshCw, Play, Pause, Clock, CheckCircle, Calendar, Database, Zap, Brain, Target, DollarSign, TrendingDown, BarChart3, HelpCircle } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { API_ENDPOINTS, API_BASE_URL } from '@/config/api';
 import { useLocation } from 'wouter';
@@ -14,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine, ReferenceArea } from 'recharts';
 
 interface SystemHealth {
   status: 'healthy' | 'warning' | 'error';
@@ -149,6 +155,15 @@ export default function Admin() {
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [activeTab, setActiveTab] = useState<'system' | 'ai' | 'growth'>('system');
   const [growthDays, setGrowthDays] = useState(0); // 0 = all time
+  const [lotSize, setLotSize] = useState<'micro' | 'mini' | 'standard'>('mini');
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+  // Mobile detection for responsive charts
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Check if user is admin
   useEffect(() => {
@@ -1183,8 +1198,21 @@ export default function Admin() {
               </div>
             ) : growthStats ? (
               <>
-                {/* Time Period Filter */}
-                <div className="flex justify-end">
+                {/* Time Period and Lot Size Filters */}
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm text-slate-400">Lot Size:</span>
+                    <Select value={lotSize} onValueChange={(value) => setLotSize(value as 'micro' | 'mini' | 'standard')}>
+                      <SelectTrigger className="w-[180px] bg-slate-800/80 text-white border-white/30">
+                        <SelectValue placeholder="Lot size" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-slate-800 text-white border-white/30">
+                        <SelectItem value="micro">Micro ($0.10/pip)</SelectItem>
+                        <SelectItem value="mini">Mini ($1.00/pip)</SelectItem>
+                        <SelectItem value="standard">Standard ($10/pip)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <Select value={growthDays.toString()} onValueChange={(value) => setGrowthDays(parseInt(value))}>
                     <SelectTrigger className="w-[200px] bg-slate-800/80 text-white border-white/30">
                       <SelectValue placeholder="Time period" />
@@ -1201,23 +1229,38 @@ export default function Admin() {
                 {/* Key Metrics Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                   {/* Total Profit */}
-                  <Card className="bg-gradient-to-br from-green-900/40 to-emerald-900/40 border-green-500/50 backdrop-blur-sm shadow-xl">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm font-medium text-green-200 flex items-center gap-2">
-                        <DollarSign className="w-4 h-4" />
-                        Total Profit
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-bold text-white">
-                        {growthStats.overall.totalProfitPips > 0 ? '+' : ''}
-                        {growthStats.overall.totalProfitPips.toFixed(1)} pips
-                      </div>
-                      <p className="text-xs text-green-300 mt-1">
-                        {growthStats.timeframe}
-                      </p>
-                    </CardContent>
-                  </Card>
+                  {(() => {
+                    const pipValue = { micro: 0.10, mini: 1.00, standard: 10.00 };
+                    const profitUSD = growthStats.overall.totalProfitPips * pipValue[lotSize];
+                    const isProfit = growthStats.overall.totalProfitPips >= 0;
+                    const cardGradient = isProfit
+                      ? "bg-gradient-to-br from-green-900/40 to-emerald-900/40 border-green-500/50"
+                      : "bg-gradient-to-br from-red-900/40 to-rose-900/40 border-red-500/50";
+                    const textColor = isProfit ? "text-green-200" : "text-red-200";
+                    const valueColor = isProfit ? "text-green-400" : "text-red-400";
+
+                    return (
+                      <Card className={`${cardGradient} backdrop-blur-sm shadow-xl`}>
+                        <CardHeader className="pb-2">
+                          <CardTitle className={`text-sm font-medium ${textColor} flex items-center gap-2`}>
+                            <DollarSign className="w-4 h-4" />
+                            Total Profit
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className={`text-2xl font-bold ${valueColor}`}>
+                            {isProfit ? '+' : ''}${profitUSD.toFixed(2)} USD
+                          </div>
+                          <p className="text-xs text-slate-400 mt-1">
+                            {isProfit ? '+' : ''}{growthStats.overall.totalProfitPips.toFixed(1)} pips
+                          </p>
+                          <p className="text-xs text-slate-500 mt-1">
+                            {growthStats.timeframe}
+                          </p>
+                        </CardContent>
+                      </Card>
+                    );
+                  })()}
 
                   {/* Win Rate */}
                   <Card className="bg-gradient-to-br from-blue-900/40 to-indigo-900/40 border-blue-500/50 backdrop-blur-sm shadow-xl">
@@ -1243,14 +1286,39 @@ export default function Admin() {
                       <CardTitle className="text-sm font-medium text-purple-200 flex items-center gap-2">
                         <TrendingUp className="w-4 h-4" />
                         Profit Factor
+                        <TooltipProvider>
+                          <UITooltip>
+                            <TooltipTrigger>
+                              <HelpCircle className="w-3 h-3 text-purple-300" />
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-xs bg-slate-900 border-slate-700">
+                              <p className="font-semibold mb-1">What is Profit Factor?</p>
+                              <p className="text-sm mb-2">Total wins ÷ Total losses</p>
+                              <p className="text-xs text-slate-300">
+                                • Below 1.0: Losing more than winning<br/>
+                                • 1.0-1.75: Breaking even or small profit<br/>
+                                • 1.75-2.5: Good performance<br/>
+                                • 2.5+: Excellent performance
+                              </p>
+                            </TooltipContent>
+                          </UITooltip>
+                        </TooltipProvider>
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
                       <div className="text-2xl font-bold text-white">
                         {growthStats.overall.profitFactor.toFixed(2)}
                       </div>
-                      <p className="text-xs text-purple-300 mt-1">
-                        {growthStats.overall.profitFactor >= 1.75 ? 'Excellent' : growthStats.overall.profitFactor >= 1.5 ? 'Good' : 'Needs Work'}
+                      <p className={`text-xs mt-1 ${
+                        growthStats.overall.profitFactor >= 2.5 ? 'text-green-300' :
+                        growthStats.overall.profitFactor >= 1.75 ? 'text-blue-300' :
+                        growthStats.overall.profitFactor >= 1.0 ? 'text-yellow-300' :
+                        'text-red-300'
+                      }`}>
+                        {growthStats.overall.profitFactor >= 2.5 ? '⭐ Excellent' :
+                         growthStats.overall.profitFactor >= 1.75 ? '✓ Good' :
+                         growthStats.overall.profitFactor >= 1.0 ? '○ Breaking Even' :
+                         '✗ Needs Work'}
                       </p>
                     </CardContent>
                   </Card>
@@ -1261,35 +1329,82 @@ export default function Admin() {
                       <CardTitle className="text-sm font-medium text-yellow-200 flex items-center gap-2">
                         <BarChart3 className="w-4 h-4" />
                         Sharpe Ratio
+                        <TooltipProvider>
+                          <UITooltip>
+                            <TooltipTrigger>
+                              <HelpCircle className="w-3 h-3 text-yellow-300" />
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-xs bg-slate-900 border-slate-700">
+                              <p className="font-semibold mb-1">What is Sharpe Ratio?</p>
+                              <p className="text-sm mb-2">Risk-adjusted return metric</p>
+                              <p className="text-xs text-slate-300">
+                                • Below 1: High risk for returns<br/>
+                                • 1-2: Good risk-adjusted performance<br/>
+                                • 2-3: Very good performance<br/>
+                                • 3+: Exceptional performance
+                              </p>
+                            </TooltipContent>
+                          </UITooltip>
+                        </TooltipProvider>
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
                       <div className="text-2xl font-bold text-white">
                         {growthStats.overall.sharpeRatio.toFixed(2)}
                       </div>
-                      <p className="text-xs text-yellow-300 mt-1">
-                        Risk-adjusted return
+                      <p className={`text-xs mt-1 ${
+                        growthStats.overall.sharpeRatio >= 3 ? 'text-green-300' :
+                        growthStats.overall.sharpeRatio >= 2 ? 'text-blue-300' :
+                        growthStats.overall.sharpeRatio >= 1 ? 'text-yellow-300' :
+                        'text-red-300'
+                      }`}>
+                        {growthStats.overall.sharpeRatio >= 3 ? '⭐ Exceptional' :
+                         growthStats.overall.sharpeRatio >= 2 ? '✓ Very Good' :
+                         growthStats.overall.sharpeRatio >= 1 ? '○ Good' :
+                         '✗ High Risk'}
                       </p>
                     </CardContent>
                   </Card>
 
                   {/* Max Drawdown */}
-                  <Card className="bg-gradient-to-br from-red-900/40 to-rose-900/40 border-red-500/50 backdrop-blur-sm shadow-xl">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm font-medium text-red-200 flex items-center gap-2">
-                        <TrendingDown className="w-4 h-4" />
-                        Max Drawdown
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-bold text-white">
-                        -{growthStats.overall.maxDrawdown.toFixed(1)} pips
-                      </div>
-                      <p className="text-xs text-red-300 mt-1">
-                        Largest loss
-                      </p>
-                    </CardContent>
-                  </Card>
+                  {(() => {
+                    const pipValue = { micro: 0.10, mini: 1.00, standard: 10.00 };
+                    const maxDrawdownUSD = growthStats.overall.maxDrawdown * pipValue[lotSize];
+
+                    return (
+                      <Card className="bg-gradient-to-br from-red-900/40 to-rose-900/40 border-red-500/50 backdrop-blur-sm shadow-xl">
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-sm font-medium text-red-200 flex items-center gap-2">
+                            <TrendingDown className="w-4 h-4" />
+                            Max Drawdown
+                            <TooltipProvider>
+                              <UITooltip>
+                                <TooltipTrigger>
+                                  <HelpCircle className="w-3 h-3 text-red-300" />
+                                </TooltipTrigger>
+                                <TooltipContent className="max-w-xs bg-slate-900 border-slate-700">
+                                  <p className="font-semibold mb-1">What is Max Drawdown?</p>
+                                  <p className="text-sm mb-2">Largest peak-to-trough decline</p>
+                                  <p className="text-xs text-slate-300">
+                                    Shows the worst loss experienced from any profit peak.<br/>
+                                    Lower is better (indicates better risk management).
+                                  </p>
+                                </TooltipContent>
+                              </UITooltip>
+                            </TooltipProvider>
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-2xl font-bold text-red-400">
+                            -{growthStats.overall.maxDrawdown.toFixed(1)} pips
+                          </div>
+                          <p className="text-xs text-red-300 mt-1">
+                            -${maxDrawdownUSD.toFixed(2)} USD
+                          </p>
+                        </CardContent>
+                      </Card>
+                    );
+                  })()}
                 </div>
 
                 {/* Cumulative Profit Chart */}
@@ -1306,26 +1421,101 @@ export default function Admin() {
                   <CardContent>
                     {growthStats.cumulativeProfit.length > 0 ? (
                       <ResponsiveContainer width="100%" height={300}>
-                        <LineChart data={growthStats.cumulativeProfit.map(d => ({
-                          date: new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-                          pips: parseFloat(d.cumulative_pips)
-                        }))}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                          <XAxis dataKey="date" stroke="#9CA3AF" />
-                          <YAxis stroke="#9CA3AF" />
-                          <Tooltip
-                            contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
-                            labelStyle={{ color: '#F3F4F6' }}
-                          />
-                          <Line
-                            type="monotone"
-                            dataKey="pips"
-                            stroke="#10B981"
-                            strokeWidth={2}
-                            dot={{ fill: '#10B981', r: 4 }}
-                            activeDot={{ r: 6 }}
-                          />
-                        </LineChart>
+                        {(() => {
+                          const chartData = growthStats.cumulativeProfit.map((d, idx, arr) => {
+                            const pips = parseFloat(d.cumulative_pips);
+                            const prevPips = idx > 0 ? parseFloat(arr[idx - 1].cumulative_pips) : 0;
+                            return {
+                              date: new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+                              pips: pips,
+                              color: pips >= 0 ? '#10B981' : '#EF4444',
+                              isDeclining: pips < prevPips
+                            };
+                          });
+                          const maxPips = Math.max(...chartData.map(d => d.pips), 0);
+                          const minPips = Math.min(...chartData.map(d => d.pips), 0);
+
+                          return (
+                            <LineChart data={chartData}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                              <XAxis
+                                dataKey="date"
+                                stroke="#9CA3AF"
+                                style={{ fontSize: isMobile ? '10px' : '12px' }}
+                                angle={isMobile ? -45 : 0}
+                                textAnchor={isMobile ? 'end' : 'middle'}
+                                height={isMobile ? 70 : 30}
+                              />
+                              <YAxis
+                                stroke="#9CA3AF"
+                                style={{ fontSize: isMobile ? '10px' : '12px' }}
+                              />
+
+                              {/* Zero reference line */}
+                              <ReferenceLine
+                                y={0}
+                                stroke="#6B7280"
+                                strokeDasharray="3 3"
+                                label={{ value: 'Break Even', fill: '#9CA3AF', fontSize: 12 }}
+                              />
+
+                              {/* Shaded profit zone */}
+                              {maxPips > 0 && (
+                                <ReferenceArea
+                                  y1={0}
+                                  y2={maxPips}
+                                  fill="#10B981"
+                                  fillOpacity={0.1}
+                                />
+                              )}
+
+                              {/* Shaded loss zone */}
+                              {minPips < 0 && (
+                                <ReferenceArea
+                                  y1={0}
+                                  y2={minPips}
+                                  fill="#EF4444"
+                                  fillOpacity={0.1}
+                                />
+                              )}
+
+                              <Tooltip
+                                contentStyle={{
+                                  backgroundColor: '#1F2937',
+                                  border: '1px solid #374151',
+                                  borderRadius: '8px'
+                                }}
+                                labelStyle={{ color: '#F3F4F6' }}
+                                formatter={(value: number) => [
+                                  `${value >= 0 ? '+' : ''}${value.toFixed(1)} pips`,
+                                  'Cumulative Profit'
+                                ]}
+                              />
+
+                              {/* Conditional line with colored dots */}
+                              <Line
+                                type="monotone"
+                                dataKey="pips"
+                                stroke="#10B981"
+                                strokeWidth={2}
+                                dot={(props: any) => {
+                                  const { cx, cy, payload } = props;
+                                  return (
+                                    <circle
+                                      cx={cx}
+                                      cy={cy}
+                                      r={4}
+                                      fill={payload.color}
+                                      stroke="white"
+                                      strokeWidth={2}
+                                    />
+                                  );
+                                }}
+                                activeDot={{ r: 6 }}
+                              />
+                            </LineChart>
+                          );
+                        })()}
                       </ResponsiveContainer>
                     ) : (
                       <div className="text-center py-12 text-slate-400">
@@ -1335,45 +1525,108 @@ export default function Admin() {
                   </CardContent>
                 </Card>
 
-                {/* Monthly Comparison Chart */}
-                <Card className="bg-slate-800/80 border-slate-600/50 shadow-xl">
-                  <CardHeader>
-                    <CardTitle className="text-white flex items-center gap-2">
-                      <BarChart3 className="w-5 h-5 text-blue-400" />
-                      Monthly Performance
-                    </CardTitle>
-                    <CardDescription className="text-blue-200">
-                      Compare profit and win rate by month
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    {growthStats.monthlyComparison.length > 0 ? (
-                      <ResponsiveContainer width="100%" height={300}>
-                        <BarChart data={growthStats.monthlyComparison.slice().reverse().map(d => ({
-                          month: new Date(d.month).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
-                          pips: parseFloat(d.profit_pips),
-                          winRate: parseFloat(d.win_rate)
-                        }))}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                          <XAxis dataKey="month" stroke="#9CA3AF" />
-                          <YAxis yAxisId="left" stroke="#9CA3AF" />
-                          <YAxis yAxisId="right" orientation="right" stroke="#9CA3AF" />
-                          <Tooltip
-                            contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
-                            labelStyle={{ color: '#F3F4F6' }}
-                          />
-                          <Legend />
-                          <Bar yAxisId="left" dataKey="pips" fill="#3B82F6" name="Profit (pips)" />
-                          <Bar yAxisId="right" dataKey="winRate" fill="#10B981" name="Win Rate (%)" />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <div className="text-center py-12 text-slate-400">
-                        No data available for selected time period
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
+                {/* Monthly Charts Grid */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  {/* Monthly Profit/Loss Chart */}
+                  <Card className="bg-slate-800/80 border-slate-600/50 shadow-xl">
+                    <CardHeader>
+                      <CardTitle className="text-white flex items-center gap-2">
+                        <DollarSign className="w-5 h-5 text-green-400" />
+                        Monthly Profit/Loss
+                      </CardTitle>
+                      <CardDescription className="text-blue-200">
+                        Profit in pips per month (green = profit, red = loss)
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      {growthStats.monthlyComparison.length > 0 ? (
+                        <ResponsiveContainer width="100%" height={250}>
+                          <BarChart data={growthStats.monthlyComparison.slice().reverse().map(d => ({
+                            month: new Date(d.month).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+                            pips: parseFloat(d.profit_pips),
+                            color: parseFloat(d.profit_pips) >= 0 ? '#10B981' : '#EF4444'
+                          }))}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                            <XAxis
+                              dataKey="month"
+                              stroke="#9CA3AF"
+                              style={{ fontSize: isMobile ? '10px' : '12px' }}
+                              angle={isMobile ? -45 : 0}
+                              textAnchor={isMobile ? 'end' : 'middle'}
+                              height={isMobile ? 70 : 30}
+                            />
+                            <YAxis stroke="#9CA3AF" style={{ fontSize: isMobile ? '10px' : '12px' }} />
+                            <ReferenceLine y={0} stroke="#6B7280" strokeWidth={2} />
+                            <Tooltip
+                              contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
+                              labelStyle={{ color: '#F3F4F6' }}
+                              formatter={(value: number) => [`${value >= 0 ? '+' : ''}${value.toFixed(1)} pips`, 'Profit']}
+                            />
+                            <Bar dataKey="pips" name="Profit (pips)">
+                              {growthStats.monthlyComparison.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={parseFloat(entry.profit_pips) >= 0 ? '#10B981' : '#EF4444'} />
+                              ))}
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                      ) : (
+                        <div className="text-center py-12 text-slate-400">
+                          No data available for selected time period
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {/* Monthly Win Rate Chart */}
+                  <Card className="bg-slate-800/80 border-slate-600/50 shadow-xl">
+                    <CardHeader>
+                      <CardTitle className="text-white flex items-center gap-2">
+                        <Target className="w-5 h-5 text-blue-400" />
+                        Monthly Win Rate
+                      </CardTitle>
+                      <CardDescription className="text-blue-200">
+                        Percentage of winning trades per month
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      {growthStats.monthlyComparison.length > 0 ? (
+                        <ResponsiveContainer width="100%" height={250}>
+                          <BarChart data={growthStats.monthlyComparison.slice().reverse().map(d => ({
+                            month: new Date(d.month).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+                            winRate: parseFloat(d.win_rate),
+                            color: parseFloat(d.win_rate) >= 50 ? '#3B82F6' : '#F59E0B'
+                          }))}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                            <XAxis
+                              dataKey="month"
+                              stroke="#9CA3AF"
+                              style={{ fontSize: isMobile ? '10px' : '12px' }}
+                              angle={isMobile ? -45 : 0}
+                              textAnchor={isMobile ? 'end' : 'middle'}
+                              height={isMobile ? 70 : 30}
+                            />
+                            <YAxis stroke="#9CA3AF" domain={[0, 100]} style={{ fontSize: isMobile ? '10px' : '12px' }} />
+                            <ReferenceLine y={50} stroke="#6B7280" strokeDasharray="3 3" label={{ value: '50%', fill: '#9CA3AF' }} />
+                            <Tooltip
+                              contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
+                              labelStyle={{ color: '#F3F4F6' }}
+                              formatter={(value: number) => [`${value.toFixed(1)}%`, 'Win Rate']}
+                            />
+                            <Bar dataKey="winRate" name="Win Rate (%)">
+                              {growthStats.monthlyComparison.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={parseFloat(entry.win_rate) >= 50 ? '#3B82F6' : '#F59E0B'} />
+                              ))}
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                      ) : (
+                        <div className="text-center py-12 text-slate-400">
+                          No data available for selected time period
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
 
                 {/* Symbol Performance Table */}
                 <Card className="bg-slate-800/80 border-slate-600/50 shadow-xl">
