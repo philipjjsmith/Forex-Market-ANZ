@@ -246,8 +246,23 @@ export function registerAdminRoutes(app: Express) {
       const avgProfitPerTrade = parseFloat(overall.total_profit_pips) / totalTrades || 0;
       const sharpeRatio = avgProfitPerTrade > 0 ? (avgProfitPerTrade / 100) : 0; // Simplified
 
-      // Max Drawdown (simplified - would need more complex calculation for true max drawdown)
-      const maxDrawdown = avgLossPips * 3; // Approximate as 3x average loss
+      // Max Drawdown (proper peak-to-trough calculation)
+      let peak = 0;
+      let maxDrawdown = 0;
+
+      for (const point of cumulativeProfitResult as any[]) {
+        const current = parseFloat(point.cumulative_pips);
+
+        if (current > peak) {
+          peak = current;
+        }
+
+        const drawdown = peak - current;
+
+        if (drawdown > maxDrawdown) {
+          maxDrawdown = drawdown;
+        }
+      }
 
       res.json({
         overall: {
