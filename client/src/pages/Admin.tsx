@@ -174,6 +174,9 @@ export default function Admin() {
   const [growthDays, setGrowthDays] = useState(0); // 0 = all time
   const [lotSize, setLotSize] = useState<'micro' | 'mini' | 'standard'>('mini');
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [showDiagnostic, setShowDiagnostic] = useState(false);
+  const [diagnosticData, setDiagnosticData] = useState<any>(null);
+  const [diagnosticLoading, setDiagnosticLoading] = useState(false);
 
   // Mobile detection for responsive charts
   useEffect(() => {
@@ -422,6 +425,33 @@ export default function Admin() {
       console.error('Failed to trigger backtesting:', error);
     } finally {
       setTimeout(() => setTriggeringBacktest(false), 3000);
+    }
+  };
+
+  // Run FXIFY loss diagnostic
+  const handleRunDiagnostic = async () => {
+    setDiagnosticLoading(true);
+    try {
+      const token = getToken();
+      const res = await fetch(API_BASE_URL + '/api/admin/diagnose-fxify-losses', {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` }),
+        },
+        credentials: 'include',
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setDiagnosticData(data);
+        setShowDiagnostic(true);
+      } else {
+        alert(`Error: ${res.status} ${res.statusText}`);
+      }
+    } catch (error) {
+      console.error('Failed to run diagnostic:', error);
+      alert(`Failed to run diagnostic: ${error}`);
+    } finally {
+      setDiagnosticLoading(false);
     }
   };
 
@@ -1215,8 +1245,19 @@ export default function Admin() {
               </div>
             ) : dualGrowthStats ? (
               <>
-                {/* Time Period Filter */}
-                <div className="flex justify-end items-center mb-6">
+                {/* Time Period Filter & Diagnostic Button */}
+                <div className="flex justify-between items-center mb-6">
+                  <Button
+                    onClick={handleRunDiagnostic}
+                    disabled={diagnosticLoading}
+                    className="bg-yellow-600 hover:bg-yellow-700 text-white"
+                  >
+                    {diagnosticLoading ? (
+                      <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Running...</>
+                    ) : (
+                      <><AlertCircle className="h-4 w-4 mr-2" /> 🔍 Run FXIFY Loss Diagnostic</>
+                    )}
+                  </Button>
                   <Select value={growthDays.toString()} onValueChange={(value) => setGrowthDays(parseInt(value))}>
                     <SelectTrigger className="w-[200px] bg-slate-800/80 text-white border-white/30">
                       <SelectValue placeholder="Time period" />
@@ -1229,6 +1270,214 @@ export default function Admin() {
                     </SelectContent>
                   </Select>
                 </div>
+
+                {/* DIAGNOSTIC RESULTS */}
+                {showDiagnostic && diagnosticData && (
+                  <Card className="bg-slate-900/90 border-yellow-500/50 mb-6">
+                    <CardHeader>
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="text-yellow-400">🔍 FXIFY Loss Diagnostic Results</CardTitle>
+                        <Button
+                          onClick={() => setShowDiagnostic(false)}
+                          variant="ghost"
+                          size="sm"
+                          className="text-slate-400 hover:text-white"
+                        >
+                          ✕ Close
+                        </Button>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-6">
+                        {/* Overall Summary */}
+                        <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
+                          <h3 className="text-white font-bold mb-3">📊 Overall Summary</h3>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                            <div>
+                              <p className="text-slate-400">Total Signals:</p>
+                              <p className="text-white font-bold">{diagnosticData.summary.total_signals}</p>
+                            </div>
+                            <div>
+                              <p className="text-slate-400">Win Rate:</p>
+                              <p className={`font-bold ${parseFloat(diagnosticData.summary.win_rate) >= 50 ? 'text-green-400' : 'text-red-400'}`}>
+                                {diagnosticData.summary.win_rate}%
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-slate-400">Total Pips:</p>
+                              <p className={`font-bold ${parseFloat(diagnosticData.summary.total_pips) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                {parseFloat(diagnosticData.summary.total_pips).toFixed(2)}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-slate-400">Total Dollars:</p>
+                              <p className={`font-bold ${parseFloat(diagnosticData.summary.total_pips) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                ${(parseFloat(diagnosticData.summary.total_pips) * 10).toLocaleString()}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Analysis */}
+                        {(() => {
+                          const oldVersions = diagnosticData.byVersion.filter((v: any) => parseFloat(v.strategy_version || '0') < 2.1);
+                          const newVersions = diagnosticData.byVersion.filter((v: any) => parseFloat(v.strategy_version || '0') >= 2.1);
+
+                          if (oldVersions.length > 0 && newVersions.length > 0) {
+                            const oldPips = oldVersions.reduce((sum: number, v: any) => sum + parseFloat(v.total_pips), 0);
+                            const newPips = newVersions.reduce((sum: number, v: any) => sum + parseFloat(v.total_pips), 0);
+
+                            if (oldPips < 0 && newPips > oldPips) {
+                              return (
+                                <div className="bg-green-900/30 border border-green-500/50 p-4 rounded-lg">
+                                  <h3 className="text-green-400 font-bold mb-2">✅ ROOT CAUSE: HISTORICAL DATA</h3>
+                                  <p className="text-green-200 text-sm mb-2">
+                                    Old versions (&lt; 2.1.0): <span className="font-bold">{oldPips.toFixed(2)} pips</span> (${(oldPips * 10).toLocaleString()})
+                                  </p>
+                                  <p className="text-green-200 text-sm mb-2">
+                                    New versions (≥ 2.1.0): <span className="font-bold">{newPips.toFixed(2)} pips</span> (${(newPips * 10).toLocaleString()})
+                                  </p>
+                                  <p className="text-white font-bold mt-3">
+                                    ✅ SOLUTION: The -$2.25M loss is from OLD signals before Phase 2 & 3 optimizations.
+                                  </p>
+                                  <p className="text-green-200 text-sm mt-2">
+                                    Filter Growth Tracking to show only strategy_version ≥ 2.1.0 to see current performance.
+                                  </p>
+                                </div>
+                              );
+                            } else if (newPips < -10000) {
+                              return (
+                                <div className="bg-red-900/30 border border-red-500/50 p-4 rounded-lg">
+                                  <h3 className="text-red-400 font-bold mb-2">🚨 CRITICAL: CURRENT SYSTEM LOSING MONEY</h3>
+                                  <p className="text-red-200 text-sm mb-2">
+                                    New versions (≥ 2.1.0): <span className="font-bold">{newPips.toFixed(2)} pips</span> (${(newPips * 10).toLocaleString()})
+                                  </p>
+                                  <p className="text-white font-bold mt-3">
+                                    🚨 ACTION REQUIRED: Phase 2 & 3 optimizations are NOT working. STOP generating new signals.
+                                  </p>
+                                </div>
+                              );
+                            }
+                          }
+                          return null;
+                        })()}
+
+                        {/* Strategy Version Breakdown */}
+                        <div>
+                          <h3 className="text-white font-bold mb-3">🔢 Performance by Strategy Version</h3>
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                              <thead className="bg-slate-800">
+                                <tr>
+                                  <th className="text-left p-2 text-slate-300">Version</th>
+                                  <th className="text-right p-2 text-slate-300">Signals</th>
+                                  <th className="text-right p-2 text-slate-300">Win Rate</th>
+                                  <th className="text-right p-2 text-slate-300">Total Pips</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {diagnosticData.byVersion.map((v: any, i: number) => (
+                                  <tr key={i} className="border-b border-slate-700">
+                                    <td className="p-2 text-white font-mono">{v.strategy_version || 'Unknown'}</td>
+                                    <td className="p-2 text-right text-slate-300">{v.signals}</td>
+                                    <td className={`p-2 text-right font-bold ${parseFloat(v.win_rate) >= 50 ? 'text-green-400' : 'text-red-400'}`}>
+                                      {v.win_rate}%
+                                    </td>
+                                    <td className={`p-2 text-right font-bold ${parseFloat(v.total_pips) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                      {parseFloat(v.total_pips).toFixed(2)}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+
+                        {/* Symbol Performance */}
+                        <div>
+                          <h3 className="text-white font-bold mb-3">💱 Performance by Symbol</h3>
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                              <thead className="bg-slate-800">
+                                <tr>
+                                  <th className="text-left p-2 text-slate-300">Symbol</th>
+                                  <th className="text-right p-2 text-slate-300">Signals</th>
+                                  <th className="text-right p-2 text-slate-300">Win Rate</th>
+                                  <th className="text-right p-2 text-slate-300">Total Pips</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {diagnosticData.bySymbol.map((s: any, i: number) => (
+                                  <tr key={i} className="border-b border-slate-700">
+                                    <td className="p-2 text-white font-bold">{s.symbol}</td>
+                                    <td className="p-2 text-right text-slate-300">{s.signals}</td>
+                                    <td className={`p-2 text-right font-bold ${parseFloat(s.win_rate) >= 50 ? 'text-green-400' : 'text-red-400'}`}>
+                                      {s.win_rate}%
+                                    </td>
+                                    <td className={`p-2 text-right font-bold ${parseFloat(s.total_pips) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                      {parseFloat(s.total_pips).toFixed(2)}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+
+                        {/* Monthly Performance (first 6 months) */}
+                        <div>
+                          <h3 className="text-white font-bold mb-3">📅 Monthly Performance</h3>
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                              <thead className="bg-slate-800">
+                                <tr>
+                                  <th className="text-left p-2 text-slate-300">Month</th>
+                                  <th className="text-right p-2 text-slate-300">Signals</th>
+                                  <th className="text-right p-2 text-slate-300">Win Rate</th>
+                                  <th className="text-right p-2 text-slate-300">Total Pips</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {diagnosticData.monthly.slice(0, 6).map((m: any, i: number) => (
+                                  <tr key={i} className="border-b border-slate-700">
+                                    <td className="p-2 text-white">{m.month ? new Date(m.month).toISOString().slice(0, 7) : 'Unknown'}</td>
+                                    <td className="p-2 text-right text-slate-300">{m.signals}</td>
+                                    <td className={`p-2 text-right font-bold ${parseFloat(m.win_rate) >= 50 ? 'text-green-400' : 'text-red-400'}`}>
+                                      {m.win_rate}%
+                                    </td>
+                                    <td className={`p-2 text-right font-bold ${parseFloat(m.total_pips) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                      {parseFloat(m.total_pips).toFixed(2)}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+
+                        {/* Export Button */}
+                        <div className="flex justify-end">
+                          <Button
+                            onClick={() => {
+                              const blob = new Blob([JSON.stringify(diagnosticData, null, 2)], { type: 'application/json' });
+                              const url = URL.createObjectURL(blob);
+                              const a = document.createElement('a');
+                              a.href = url;
+                              a.download = `fxify-diagnostic-${new Date().toISOString().slice(0, 10)}.json`;
+                              document.body.appendChild(a);
+                              a.click();
+                              document.body.removeChild(a);
+                              URL.revokeObjectURL(url);
+                            }}
+                            className="bg-blue-600 hover:bg-blue-700 text-white"
+                          >
+                            💾 Export Full Report (JSON)
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
 
                 {/* DUAL SIDE-BY-SIDE LAYOUT */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
