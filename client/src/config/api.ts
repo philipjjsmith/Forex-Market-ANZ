@@ -35,6 +35,7 @@ export const API_ENDPOINTS = {
   ADMIN_LOGS: `${API_BASE_URL}/api/admin/logs`,
   ADMIN_TRIGGER_GENERATION: `${API_BASE_URL}/api/admin/trigger-generation`,
   ADMIN_GROWTH_STATS: `${API_BASE_URL}/api/admin/growth-stats`,
+  ADMIN_GROWTH_STATS_DUAL: `${API_BASE_URL}/api/admin/growth-stats-dual`,
 
   // AI Insights endpoints
   AI_INSIGHTS: `${API_BASE_URL}/api/ai/insights`,

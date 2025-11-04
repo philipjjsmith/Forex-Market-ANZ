@@ -1,0 +1,14 @@
+# Cloudflare Pages headers for CORS and security
+# Frontend-only deployment - proxies API requests to Vercel backend
+
+/*
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: geolocation=(), microphone=(), camera=()
+
+# API proxy routes (if using Cloudflare Functions)
+/api/*
+  Access-Control-Allow-Origin: *
+  Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS
+  Access-Control-Allow-Headers: Content-Type, Authorization

@@ -13,6 +13,7 @@ import { useState, useEffect } from 'react';
 import { API_ENDPOINTS, API_BASE_URL } from '@/config/api';
 import { useLocation } from 'wouter';
 import { getCurrentUser, getToken } from '@/lib/auth';
+import { calculateFxifyProfit, formatDollars, meetsFxifyRequirements } from '@/lib/fxify-profit-calculator';
 import {
   Select,
   SelectContent,
@@ -111,19 +112,21 @@ interface Recommendation {
   created_at: string;
 }
 
-interface GrowthStats {
-  overall: {
-    totalSignals: number;
-    wins: number;
-    losses: number;
-    totalProfitPips: number;
-    winRate: number;
-    avgWinPips: number;
-    avgLossPips: number;
-    profitFactor: number;
-    sharpeRatio: number;
-    maxDrawdown: number;
-  };
+interface OverallMetrics {
+  totalSignals: number;
+  wins: number;
+  losses: number;
+  totalProfitPips: number;
+  winRate: number;
+  avgWinPips: number;
+  avgLossPips: number;
+  profitFactor: number;
+  sharpeRatio: number;
+  maxDrawdown: number;
+}
+
+interface SignalDataSet {
+  overall: OverallMetrics;
   cumulativeProfit: Array<{
     date: string;
     daily_pips: string;
@@ -143,6 +146,20 @@ interface GrowthStats {
     profit_pips: string;
     win_rate: string;
   }>;
+}
+
+interface DualGrowthStats {
+  fxifyOnly: SignalDataSet;
+  allSignals: SignalDataSet;
+  comparison: {
+    signalCountDiff: number;
+    winRateDiff: number;
+    profitDiff: number;
+  };
+  timeframe: string;
+}
+
+interface GrowthStats extends SignalDataSet {
   timeframe: string;
 }
 
@@ -262,12 +279,12 @@ export default function Admin() {
     enabled: activeTab === 'ai', // Only fetch when AI tab is active
   });
 
-  // Fetch growth stats
-  const { data: growthStats, isLoading: growthLoading } = useQuery<GrowthStats>({
-    queryKey: ['growth-stats', growthDays],
+  // Fetch dual growth stats (FXIFY + All Signals)
+  const { data: dualGrowthStats, isLoading: growthLoading } = useQuery<DualGrowthStats>({
+    queryKey: ['growth-stats-dual', growthDays],
     queryFn: async () => {
       const token = getToken();
-      const res = await fetch(`${API_ENDPOINTS.ADMIN_GROWTH_STATS}?days=${growthDays}`, {
+      const res = await fetch(`${API_ENDPOINTS.ADMIN_GROWTH_STATS_DUAL}?days=${growthDays}`, {
         headers: {
           'Content-Type': 'application/json',
           ...(token && { 'Authorization': `Bearer ${token}` }),
@@ -1196,23 +1213,10 @@ export default function Admin() {
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="h-8 h-8 animate-spin text-blue-500" />
               </div>
-            ) : growthStats ? (
+            ) : dualGrowthStats ? (
               <>
-                {/* Time Period and Lot Size Filters */}
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm text-slate-400">Lot Size:</span>
-                    <Select value={lotSize} onValueChange={(value) => setLotSize(value as 'micro' | 'mini' | 'standard')}>
-                      <SelectTrigger className="w-[180px] bg-slate-800/80 text-white border-white/30">
-                        <SelectValue placeholder="Lot size" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-slate-800 text-white border-white/30">
-                        <SelectItem value="micro">Micro ($0.10/pip)</SelectItem>
-                        <SelectItem value="mini">Mini ($1.00/pip)</SelectItem>
-                        <SelectItem value="standard">Standard ($10/pip)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                {/* Time Period Filter */}
+                <div className="flex justify-end items-center mb-6">
                   <Select value={growthDays.toString()} onValueChange={(value) => setGrowthDays(parseInt(value))}>
                     <SelectTrigger className="w-[200px] bg-slate-800/80 text-white border-white/30">
                       <SelectValue placeholder="Time period" />
@@ -1231,8 +1235,8 @@ export default function Admin() {
                   {/* Total Profit */}
                   {(() => {
                     const pipValue = { micro: 0.10, mini: 1.00, standard: 10.00 };
-                    const profitUSD = growthStats.overall.totalProfitPips * pipValue[lotSize];
-                    const isProfit = growthStats.overall.totalProfitPips >= 0;
+                    const profitUSD = dualGrowthStats.allSignals.overall.totalProfitPips * pipValue[lotSize];
+                    const isProfit = dualGrowthStats.allSignals.overall.totalProfitPips >= 0;
                     const cardGradient = isProfit
                       ? "bg-gradient-to-br from-green-900/40 to-emerald-900/40 border-green-500/50"
                       : "bg-gradient-to-br from-red-900/40 to-rose-900/40 border-red-500/50";
@@ -1252,10 +1256,10 @@ export default function Admin() {
                             {isProfit ? '+' : ''}${profitUSD.toFixed(2)} USD
                           </div>
                           <p className="text-xs text-slate-400 mt-1">
-                            {isProfit ? '+' : ''}{growthStats.overall.totalProfitPips.toFixed(1)} pips
+                            {isProfit ? '+' : ''}{dualGrowthStats.allSignals.overall.totalProfitPips.toFixed(1)} pips
                           </p>
                           <p className="text-xs text-slate-500 mt-1">
-                            {growthStats.timeframe}
+                            {dualGrowthStats.timeframe}
                           </p>
                         </CardContent>
                       </Card>
@@ -1272,10 +1276,10 @@ export default function Admin() {
                     </CardHeader>
                     <CardContent>
                       <div className="text-2xl font-bold text-white">
-                        {growthStats.overall.winRate.toFixed(2)}%
+                        {dualGrowthStats.allSignals.overall.winRate.toFixed(2)}%
                       </div>
                       <p className="text-xs text-blue-300 mt-1">
-                        {growthStats.overall.wins}W / {growthStats.overall.losses}L
+                        {dualGrowthStats.allSignals.overall.wins}W / {dualGrowthStats.allSignals.overall.losses}L
                       </p>
                     </CardContent>
                   </Card>
@@ -1307,17 +1311,17 @@ export default function Admin() {
                     </CardHeader>
                     <CardContent>
                       <div className="text-2xl font-bold text-white">
-                        {growthStats.overall.profitFactor.toFixed(2)}
+                        {dualGrowthStats.allSignals.overall.profitFactor.toFixed(2)}
                       </div>
                       <p className={`text-xs mt-1 ${
-                        growthStats.overall.profitFactor >= 2.5 ? 'text-green-300' :
-                        growthStats.overall.profitFactor >= 1.75 ? 'text-blue-300' :
-                        growthStats.overall.profitFactor >= 1.0 ? 'text-yellow-300' :
+                        dualGrowthStats.allSignals.overall.profitFactor >= 2.5 ? 'text-green-300' :
+                        dualGrowthStats.allSignals.overall.profitFactor >= 1.75 ? 'text-blue-300' :
+                        dualGrowthStats.allSignals.overall.profitFactor >= 1.0 ? 'text-yellow-300' :
                         'text-red-300'
                       }`}>
-                        {growthStats.overall.profitFactor >= 2.5 ? '⭐ Excellent' :
-                         growthStats.overall.profitFactor >= 1.75 ? '✓ Good' :
-                         growthStats.overall.profitFactor >= 1.0 ? '○ Breaking Even' :
+                        {dualGrowthStats.allSignals.overall.profitFactor >= 2.5 ? '⭐ Excellent' :
+                         dualGrowthStats.allSignals.overall.profitFactor >= 1.75 ? '✓ Good' :
+                         dualGrowthStats.allSignals.overall.profitFactor >= 1.0 ? '○ Breaking Even' :
                          '✗ Needs Work'}
                       </p>
                     </CardContent>
@@ -1350,17 +1354,17 @@ export default function Admin() {
                     </CardHeader>
                     <CardContent>
                       <div className="text-2xl font-bold text-white">
-                        {growthStats.overall.sharpeRatio.toFixed(2)}
+                        {dualGrowthStats.allSignals.overall.sharpeRatio.toFixed(2)}
                       </div>
                       <p className={`text-xs mt-1 ${
-                        growthStats.overall.sharpeRatio >= 3 ? 'text-green-300' :
-                        growthStats.overall.sharpeRatio >= 2 ? 'text-blue-300' :
-                        growthStats.overall.sharpeRatio >= 1 ? 'text-yellow-300' :
+                        dualGrowthStats.allSignals.overall.sharpeRatio >= 3 ? 'text-green-300' :
+                        dualGrowthStats.allSignals.overall.sharpeRatio >= 2 ? 'text-blue-300' :
+                        dualGrowthStats.allSignals.overall.sharpeRatio >= 1 ? 'text-yellow-300' :
                         'text-red-300'
                       }`}>
-                        {growthStats.overall.sharpeRatio >= 3 ? '⭐ Exceptional' :
-                         growthStats.overall.sharpeRatio >= 2 ? '✓ Very Good' :
-                         growthStats.overall.sharpeRatio >= 1 ? '○ Good' :
+                        {dualGrowthStats.allSignals.overall.sharpeRatio >= 3 ? '⭐ Exceptional' :
+                         dualGrowthStats.allSignals.overall.sharpeRatio >= 2 ? '✓ Very Good' :
+                         dualGrowthStats.allSignals.overall.sharpeRatio >= 1 ? '○ Good' :
                          '✗ High Risk'}
                       </p>
                     </CardContent>
@@ -1369,7 +1373,7 @@ export default function Admin() {
                   {/* Max Drawdown */}
                   {(() => {
                     const pipValue = { micro: 0.10, mini: 1.00, standard: 10.00 };
-                    const maxDrawdownUSD = growthStats.overall.maxDrawdown * pipValue[lotSize];
+                    const maxDrawdownUSD = dualGrowthStats.allSignals.overall.maxDrawdown * pipValue[lotSize];
 
                     return (
                       <Card className="bg-gradient-to-br from-red-900/40 to-rose-900/40 border-red-500/50 backdrop-blur-sm shadow-xl">
@@ -1396,7 +1400,7 @@ export default function Admin() {
                         </CardHeader>
                         <CardContent>
                           <div className="text-2xl font-bold text-red-400">
-                            -{growthStats.overall.maxDrawdown.toFixed(1)} pips
+                            -{dualGrowthStats.allSignals.overall.maxDrawdown.toFixed(1)} pips
                           </div>
                           <p className="text-xs text-red-300 mt-1">
                             -${maxDrawdownUSD.toFixed(2)} USD
@@ -1419,10 +1423,10 @@ export default function Admin() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    {growthStats.cumulativeProfit.length > 0 ? (
+                    {dualGrowthStats.allSignals.cumulativeProfit.length > 0 ? (
                       <ResponsiveContainer width="100%" height={300}>
                         {(() => {
-                          const chartData = growthStats.cumulativeProfit.map((d, idx, arr) => {
+                          const chartData = dualGrowthStats.allSignals.cumulativeProfit.map((d, idx, arr) => {
                             const pips = parseFloat(d.cumulative_pips);
                             const prevPips = idx > 0 ? parseFloat(arr[idx - 1].cumulative_pips) : 0;
                             return {
@@ -1539,9 +1543,9 @@ export default function Admin() {
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
-                      {growthStats.monthlyComparison.length > 0 ? (
+                      {dualGrowthStats.allSignals.monthlyComparison.length > 0 ? (
                         <ResponsiveContainer width="100%" height={250}>
-                          <BarChart data={growthStats.monthlyComparison.slice().reverse().map(d => ({
+                          <BarChart data={dualGrowthStats.allSignals.monthlyComparison.slice().reverse().map(d => ({
                             month: new Date(d.month).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
                             pips: parseFloat(d.profit_pips),
                             color: parseFloat(d.profit_pips) >= 0 ? '#10B981' : '#EF4444'
@@ -1563,7 +1567,7 @@ export default function Admin() {
                               formatter={(value: number) => [`${value >= 0 ? '+' : ''}${value.toFixed(1)} pips`, 'Profit']}
                             />
                             <Bar dataKey="pips" name="Profit (pips)">
-                              {growthStats.monthlyComparison.map((entry, index) => (
+                              {dualGrowthStats.allSignals.monthlyComparison.map((entry, index) => (
                                 <Cell key={`cell-${index}`} fill={parseFloat(entry.profit_pips) >= 0 ? '#10B981' : '#EF4444'} />
                               ))}
                             </Bar>
@@ -1589,9 +1593,9 @@ export default function Admin() {
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
-                      {growthStats.monthlyComparison.length > 0 ? (
+                      {dualGrowthStats.allSignals.monthlyComparison.length > 0 ? (
                         <ResponsiveContainer width="100%" height={250}>
-                          <BarChart data={growthStats.monthlyComparison.slice().reverse().map(d => ({
+                          <BarChart data={dualGrowthStats.allSignals.monthlyComparison.slice().reverse().map(d => ({
                             month: new Date(d.month).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
                             winRate: parseFloat(d.win_rate),
                             color: parseFloat(d.win_rate) >= 50 ? '#3B82F6' : '#F59E0B'
@@ -1613,7 +1617,7 @@ export default function Admin() {
                               formatter={(value: number) => [`${value.toFixed(1)}%`, 'Win Rate']}
                             />
                             <Bar dataKey="winRate" name="Win Rate (%)">
-                              {growthStats.monthlyComparison.map((entry, index) => (
+                              {dualGrowthStats.allSignals.monthlyComparison.map((entry, index) => (
                                 <Cell key={`cell-${index}`} fill={parseFloat(entry.win_rate) >= 50 ? '#3B82F6' : '#F59E0B'} />
                               ))}
                             </Bar>
@@ -1651,7 +1655,7 @@ export default function Admin() {
                           </tr>
                         </thead>
                         <tbody>
-                          {growthStats.symbolPerformance.map((symbol, idx) => {
+                          {dualGrowthStats.allSignals.symbolPerformance.map((symbol, idx) => {
                             const profitPips = parseFloat(symbol.profit_pips);
                             const winRate = parseFloat(symbol.win_rate);
                             return (

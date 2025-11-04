@@ -138,6 +138,307 @@ export function registerAdminRoutes(app: Express) {
   });
 
   /**
+   * GET /api/admin/growth-stats-dual
+   * Returns DUAL growth tracking metrics: FXIFY-only (HIGH tier) + All signals
+   * This separates real trading performance from AI learning data
+   * Query params:
+   * - days: filter by days (7, 30, 90, or 0 for all time - default 0)
+   */
+  app.get("/api/admin/growth-stats-dual", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const days = parseInt(req.query.days as string) || 0; // 0 = all time
+
+      // Build date filter
+      const dateFilter = days > 0
+        ? sql`AND outcome_time >= NOW() - INTERVAL '${sql.raw(days.toString())} days'`
+        : sql``;
+
+      // ============================================================
+      // FXIFY PERFORMANCE (HIGH TIER ONLY - 80+ confidence)
+      // ============================================================
+
+      // 1. FXIFY Overall metrics
+      const fxifyOverallResult = await db.execute(sql`
+        SELECT
+          COUNT(*) as total_signals,
+          COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT')) as wins,
+          COUNT(*) FILTER (WHERE outcome = 'STOP_HIT') as losses,
+          COALESCE(SUM(profit_loss_pips), 0) as total_profit_pips,
+          COALESCE(AVG(profit_loss_pips) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT')), 0) as avg_win_pips,
+          COALESCE(AVG(ABS(profit_loss_pips)) FILTER (WHERE outcome = 'STOP_HIT'), 0) as avg_loss_pips,
+          ROUND(
+            100.0 * COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT')) /
+            NULLIF(COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'STOP_HIT')), 0),
+            2
+          ) as win_rate
+        FROM signal_history
+        WHERE outcome != 'PENDING'
+          AND trade_live = true
+          AND tier = 'HIGH'
+          ${dateFilter}
+      `);
+
+      const fxifyOverall = (fxifyOverallResult as any)[0];
+
+      // 2. FXIFY Cumulative profit over time
+      const fxifyCumulativeProfitResult = await db.execute(sql`
+        WITH daily_profits AS (
+          SELECT
+            DATE(outcome_time) as date,
+            SUM(profit_loss_pips) as daily_pips
+          FROM signal_history
+          WHERE outcome != 'PENDING'
+            AND trade_live = true
+            AND tier = 'HIGH'
+            ${dateFilter}
+          GROUP BY DATE(outcome_time)
+          ORDER BY date ASC
+        )
+        SELECT
+          date,
+          daily_pips,
+          SUM(daily_pips) OVER (ORDER BY date ASC) as cumulative_pips
+        FROM daily_profits
+      `);
+
+      // 3. FXIFY Monthly comparison
+      const fxifyMonthlyResult = await db.execute(sql`
+        SELECT
+          DATE_TRUNC('month', outcome_time) as month,
+          COUNT(*) as total_signals,
+          COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT')) as wins,
+          COALESCE(SUM(profit_loss_pips), 0) as profit_pips,
+          ROUND(
+            100.0 * COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT')) /
+            NULLIF(COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'STOP_HIT')), 0),
+            2
+          ) as win_rate
+        FROM signal_history
+        WHERE outcome != 'PENDING'
+          AND trade_live = true
+          AND tier = 'HIGH'
+          ${dateFilter}
+        GROUP BY DATE_TRUNC('month', outcome_time)
+        ORDER BY month DESC
+        LIMIT 12
+      `);
+
+      // 4. FXIFY Symbol performance
+      const fxifySymbolResult = await db.execute(sql`
+        SELECT
+          symbol,
+          COUNT(*) as total_signals,
+          COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT')) as wins,
+          COALESCE(SUM(profit_loss_pips), 0) as profit_pips,
+          ROUND(
+            100.0 * COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT')) /
+            NULLIF(COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'STOP_HIT')), 0),
+            2
+          ) as win_rate
+        FROM signal_history
+        WHERE outcome != 'PENDING'
+          AND trade_live = true
+          AND tier = 'HIGH'
+          ${dateFilter}
+        GROUP BY symbol
+        ORDER BY profit_pips DESC
+      `);
+
+      // 5. Calculate FXIFY metrics
+      const fxifyTotalTrades = parseInt(fxifyOverall.wins) + parseInt(fxifyOverall.losses);
+      const fxifyWinRate = parseFloat(fxifyOverall.win_rate) || 0;
+      const fxifyAvgWinPips = parseFloat(fxifyOverall.avg_win_pips) || 0;
+      const fxifyAvgLossPips = parseFloat(fxifyOverall.avg_loss_pips) || 0;
+
+      const fxifyTotalWinPips = parseInt(fxifyOverall.wins) * fxifyAvgWinPips;
+      const fxifyTotalLossPips = parseInt(fxifyOverall.losses) * fxifyAvgLossPips;
+      const fxifyProfitFactor = fxifyTotalLossPips > 0 ? fxifyTotalWinPips / fxifyTotalLossPips : 0;
+
+      const fxifyAvgProfitPerTrade = parseFloat(fxifyOverall.total_profit_pips) / fxifyTotalTrades || 0;
+      const fxifySharpeRatio = fxifyAvgProfitPerTrade > 0 ? (fxifyAvgProfitPerTrade / 100) : 0;
+
+      // FXIFY Max Drawdown
+      let fxifyPeak = 0;
+      let fxifyMaxDrawdown = 0;
+
+      for (const point of fxifyCumulativeProfitResult as any[]) {
+        const current = parseFloat(point.cumulative_pips);
+        if (current > fxifyPeak) {
+          fxifyPeak = current;
+        }
+        const drawdown = fxifyPeak - current;
+        if (drawdown > fxifyMaxDrawdown) {
+          fxifyMaxDrawdown = drawdown;
+        }
+      }
+
+      // ============================================================
+      // ALL SIGNALS PERFORMANCE (HIGH + MEDIUM tier)
+      // ============================================================
+
+      // 1. All signals overall metrics
+      const allOverallResult = await db.execute(sql`
+        SELECT
+          COUNT(*) as total_signals,
+          COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT')) as wins,
+          COUNT(*) FILTER (WHERE outcome = 'STOP_HIT') as losses,
+          COALESCE(SUM(profit_loss_pips), 0) as total_profit_pips,
+          COALESCE(AVG(profit_loss_pips) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT')), 0) as avg_win_pips,
+          COALESCE(AVG(ABS(profit_loss_pips)) FILTER (WHERE outcome = 'STOP_HIT'), 0) as avg_loss_pips,
+          ROUND(
+            100.0 * COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT')) /
+            NULLIF(COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'STOP_HIT')), 0),
+            2
+          ) as win_rate
+        FROM signal_history
+        WHERE outcome != 'PENDING'
+          ${dateFilter}
+      `);
+
+      const allOverall = (allOverallResult as any)[0];
+
+      // 2. All signals cumulative profit
+      const allCumulativeProfitResult = await db.execute(sql`
+        WITH daily_profits AS (
+          SELECT
+            DATE(outcome_time) as date,
+            SUM(profit_loss_pips) as daily_pips
+          FROM signal_history
+          WHERE outcome != 'PENDING'
+            ${dateFilter}
+          GROUP BY DATE(outcome_time)
+          ORDER BY date ASC
+        )
+        SELECT
+          date,
+          daily_pips,
+          SUM(daily_pips) OVER (ORDER BY date ASC) as cumulative_pips
+        FROM daily_profits
+      `);
+
+      // 3. All signals monthly comparison
+      const allMonthlyResult = await db.execute(sql`
+        SELECT
+          DATE_TRUNC('month', outcome_time) as month,
+          COUNT(*) as total_signals,
+          COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT')) as wins,
+          COALESCE(SUM(profit_loss_pips), 0) as profit_pips,
+          ROUND(
+            100.0 * COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT')) /
+            NULLIF(COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'STOP_HIT')), 0),
+            2
+          ) as win_rate
+        FROM signal_history
+        WHERE outcome != 'PENDING'
+          ${dateFilter}
+        GROUP BY DATE_TRUNC('month', outcome_time)
+        ORDER BY month DESC
+        LIMIT 12
+      `);
+
+      // 4. All signals symbol performance
+      const allSymbolResult = await db.execute(sql`
+        SELECT
+          symbol,
+          COUNT(*) as total_signals,
+          COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT')) as wins,
+          COALESCE(SUM(profit_loss_pips), 0) as profit_pips,
+          ROUND(
+            100.0 * COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT')) /
+            NULLIF(COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'STOP_HIT')), 0),
+            2
+          ) as win_rate
+        FROM signal_history
+        WHERE outcome != 'PENDING'
+          ${dateFilter}
+        GROUP BY symbol
+        ORDER BY profit_pips DESC
+      `);
+
+      // 5. Calculate All signals metrics
+      const allTotalTrades = parseInt(allOverall.wins) + parseInt(allOverall.losses);
+      const allWinRate = parseFloat(allOverall.win_rate) || 0;
+      const allAvgWinPips = parseFloat(allOverall.avg_win_pips) || 0;
+      const allAvgLossPips = parseFloat(allOverall.avg_loss_pips) || 0;
+
+      const allTotalWinPips = parseInt(allOverall.wins) * allAvgWinPips;
+      const allTotalLossPips = parseInt(allOverall.losses) * allAvgLossPips;
+      const allProfitFactor = allTotalLossPips > 0 ? allTotalWinPips / allTotalLossPips : 0;
+
+      const allAvgProfitPerTrade = parseFloat(allOverall.total_profit_pips) / allTotalTrades || 0;
+      const allSharpeRatio = allAvgProfitPerTrade > 0 ? (allAvgProfitPerTrade / 100) : 0;
+
+      // All signals max drawdown
+      let allPeak = 0;
+      let allMaxDrawdown = 0;
+
+      for (const point of allCumulativeProfitResult as any[]) {
+        const current = parseFloat(point.cumulative_pips);
+        if (current > allPeak) {
+          allPeak = current;
+        }
+        const drawdown = allPeak - current;
+        if (drawdown > allMaxDrawdown) {
+          allMaxDrawdown = drawdown;
+        }
+      }
+
+      // ============================================================
+      // COMPARISON METRICS
+      // ============================================================
+      const signalCountDiff = parseInt(allOverall.total_signals) - parseInt(fxifyOverall.total_signals);
+      const winRateDiff = fxifyWinRate - allWinRate;
+      const profitDiff = parseFloat(fxifyOverall.total_profit_pips) - parseFloat(allOverall.total_profit_pips);
+
+      res.json({
+        fxifyOnly: {
+          overall: {
+            totalSignals: parseInt(fxifyOverall.total_signals),
+            wins: parseInt(fxifyOverall.wins),
+            losses: parseInt(fxifyOverall.losses),
+            totalProfitPips: parseFloat(fxifyOverall.total_profit_pips),
+            winRate: fxifyWinRate,
+            avgWinPips: fxifyAvgWinPips,
+            avgLossPips: fxifyAvgLossPips,
+            profitFactor: parseFloat(fxifyProfitFactor.toFixed(2)),
+            sharpeRatio: parseFloat(fxifySharpeRatio.toFixed(2)),
+            maxDrawdown: parseFloat(fxifyMaxDrawdown.toFixed(2)),
+          },
+          cumulativeProfit: fxifyCumulativeProfitResult as any[],
+          monthlyComparison: fxifyMonthlyResult as any[],
+          symbolPerformance: fxifySymbolResult as any[],
+        },
+        allSignals: {
+          overall: {
+            totalSignals: parseInt(allOverall.total_signals),
+            wins: parseInt(allOverall.wins),
+            losses: parseInt(allOverall.losses),
+            totalProfitPips: parseFloat(allOverall.total_profit_pips),
+            winRate: allWinRate,
+            avgWinPips: allAvgWinPips,
+            avgLossPips: allAvgLossPips,
+            profitFactor: parseFloat(allProfitFactor.toFixed(2)),
+            sharpeRatio: parseFloat(allSharpeRatio.toFixed(2)),
+            maxDrawdown: parseFloat(allMaxDrawdown.toFixed(2)),
+          },
+          cumulativeProfit: allCumulativeProfitResult as any[],
+          monthlyComparison: allMonthlyResult as any[],
+          symbolPerformance: allSymbolResult as any[],
+        },
+        comparison: {
+          signalCountDiff,
+          winRateDiff: parseFloat(winRateDiff.toFixed(2)),
+          profitDiff: parseFloat(profitDiff.toFixed(2)),
+        },
+        timeframe: days === 0 ? 'All Time' : `Last ${days} days`,
+      });
+    } catch (error: any) {
+      console.error('Error fetching dual growth stats:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  /**
    * GET /api/admin/growth-stats
    * Returns growth tracking metrics and profitability data
    * Query params:
