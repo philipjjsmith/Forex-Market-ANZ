@@ -419,8 +419,8 @@ class MACrossoverStrategy {
       }
     }
 
-    // 🆕 TIERED CONFIDENCE SYSTEM: 70+ = save signal, but tier determines if live/paper
-    if (!signalType || confidence < 70) return null; // Must be at least 70 points
+    // ⚡ PHASE 2 QUICK WIN: Raised minimum from 70 to 85 to filter marginal signals
+    if (!signalType || confidence < 85) return null; // Must be at least 85 points
 
     // Determine tier and trading mode
     let tier: 'HIGH' | 'MEDIUM';
@@ -538,6 +538,12 @@ export class SignalGenerator {
       for (const quote of quotes) {
         const { symbol, exchangeRate } = quote;
 
+        // 🚫 PHASE 2 QUICK WIN: Skip GBP/USD (19.6% win rate - catastrophic)
+        if (symbol === 'GBP/USD') {
+          console.log(`⏭️  Skipping ${symbol} - disabled due to poor performance (19.6% win rate)`);
+          continue;
+        }
+
         try {
           // Fetch REAL historical candles from Twelve Data API
           console.log(`📊 Fetching real historical data for ${symbol}...`);
@@ -554,8 +560,9 @@ export class SignalGenerator {
           // Analyze with strategy (🧠 AI-ENHANCED + 🎯 MILESTONE 3C: Now passes symbol for AI insights and approved parameters)
           const signal = await strategy.analyze(primaryCandles, higherCandles, symbol);
 
-          // 🆕 TIERED SYSTEM: 70+ = track (both HIGH and MEDIUM tiers)
-          if (signal && signal.confidence >= 70) {
+          // ⚡ PHASE 2 QUICK WIN: Raised from 70 to 85 to filter marginal signals
+          // Goal: Improve win rate by only taking highest confidence signals
+          if (signal && signal.confidence >= 85) {
             signalsGenerated++;
             signal.symbol = symbol; // Set the correct symbol
 
