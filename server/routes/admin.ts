@@ -593,8 +593,9 @@ export function registerAdminRoutes(app: Express) {
    * GET /api/admin/diagnose-fxify-losses
    * Diagnostic endpoint to analyze FXIFY losses
    */
-  app.get("/api/admin/diagnose-fxify-losses", async (req, res) => {
+  app.get("/api/admin/diagnose-fxify-losses", requireAuth, requireAdmin, async (req, res) => {
     try {
+      console.log('🔍 Running FXIFY diagnostic...');
       // Query 1: Monthly Performance
       const monthlyResults = await db.execute(sql`
         SELECT
@@ -682,8 +683,13 @@ export function registerAdminRoutes(app: Express) {
         summary: (summary as any)[0],
       });
     } catch (error: any) {
-      console.error('Error in diagnose-fxify-losses:', error);
-      res.status(500).json({ error: error.message });
+      console.error('❌ Error in diagnose-fxify-losses:', error);
+      console.error('Error stack:', error.stack);
+      res.status(500).json({
+        error: error.message,
+        details: error.toString(),
+        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      });
     }
   });
 }
