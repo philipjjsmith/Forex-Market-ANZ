@@ -1230,460 +1230,307 @@ export default function Admin() {
                   </Select>
                 </div>
 
-                {/* Key Metrics Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                  {/* Total Profit */}
-                  {(() => {
-                    const pipValue = { micro: 0.10, mini: 1.00, standard: 10.00 };
-                    const profitUSD = dualGrowthStats.allSignals.overall.totalProfitPips * pipValue[lotSize];
-                    const isProfit = dualGrowthStats.allSignals.overall.totalProfitPips >= 0;
-                    const cardGradient = isProfit
-                      ? "bg-gradient-to-br from-green-900/40 to-emerald-900/40 border-green-500/50"
-                      : "bg-gradient-to-br from-red-900/40 to-rose-900/40 border-red-500/50";
-                    const textColor = isProfit ? "text-green-200" : "text-red-200";
-                    const valueColor = isProfit ? "text-green-400" : "text-red-400";
-
-                    return (
-                      <Card className={`${cardGradient} backdrop-blur-sm shadow-xl`}>
-                        <CardHeader className="pb-2">
-                          <CardTitle className={`text-sm font-medium ${textColor} flex items-center gap-2`}>
-                            <DollarSign className="w-4 h-4" />
-                            Total Profit
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className={`text-2xl font-bold ${valueColor}`}>
-                            {isProfit ? '+' : ''}${profitUSD.toFixed(2)} USD
+                {/* DUAL SIDE-BY-SIDE LAYOUT */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* LEFT SIDE: FXIFY PERFORMANCE (PRIMARY) */}
+                  <div className="space-y-6">
+                    <Card className="bg-gradient-to-br from-green-900/40 to-emerald-900/40 border-green-500/50 backdrop-blur-md shadow-2xl">
+                      <CardHeader>
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <Badge className="bg-green-500/80 text-white mb-2">🎯 FXIFY TRADING</Badge>
+                            <CardTitle className="text-white text-2xl">Real Trading Performance</CardTitle>
+                            <CardDescription className="text-green-200 mt-1">
+                              HIGH tier signals (80+) sent to broker • {dualGrowthStats.timeframe}
+                            </CardDescription>
                           </div>
-                          <p className="text-xs text-slate-400 mt-1">
-                            {isProfit ? '+' : ''}{dualGrowthStats.allSignals.overall.totalProfitPips.toFixed(1)} pips
-                          </p>
-                          <p className="text-xs text-slate-500 mt-1">
-                            {dualGrowthStats.timeframe}
-                          </p>
-                        </CardContent>
-                      </Card>
-                    );
-                  })()}
-
-                  {/* Win Rate */}
-                  <Card className="bg-gradient-to-br from-blue-900/40 to-indigo-900/40 border-blue-500/50 backdrop-blur-sm shadow-xl">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm font-medium text-blue-200 flex items-center gap-2">
-                        <Target className="w-4 h-4" />
-                        Win Rate
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-bold text-white">
-                        {dualGrowthStats.allSignals.overall.winRate.toFixed(2)}%
-                      </div>
-                      <p className="text-xs text-blue-300 mt-1">
-                        {dualGrowthStats.allSignals.overall.wins}W / {dualGrowthStats.allSignals.overall.losses}L
-                      </p>
-                    </CardContent>
-                  </Card>
-
-                  {/* Profit Factor */}
-                  <Card className="bg-gradient-to-br from-purple-900/40 to-pink-900/40 border-purple-500/50 backdrop-blur-sm shadow-xl">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm font-medium text-purple-200 flex items-center gap-2">
-                        <TrendingUp className="w-4 h-4" />
-                        Profit Factor
-                        <TooltipProvider>
-                          <UITooltip>
-                            <TooltipTrigger>
-                              <HelpCircle className="w-3 h-3 text-purple-300" />
-                            </TooltipTrigger>
-                            <TooltipContent className="max-w-xs bg-slate-900 border-slate-700">
-                              <p className="font-semibold mb-1">What is Profit Factor?</p>
-                              <p className="text-sm mb-2">Total wins ÷ Total losses</p>
-                              <p className="text-xs text-slate-300">
-                                • Below 1.0: Losing more than winning<br/>
-                                • 1.0-1.75: Breaking even or small profit<br/>
-                                • 1.75-2.5: Good performance<br/>
-                                • 2.5+: Excellent performance
-                              </p>
-                            </TooltipContent>
-                          </UITooltip>
-                        </TooltipProvider>
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-bold text-white">
-                        {dualGrowthStats.allSignals.overall.profitFactor.toFixed(2)}
-                      </div>
-                      <p className={`text-xs mt-1 ${
-                        dualGrowthStats.allSignals.overall.profitFactor >= 2.5 ? 'text-green-300' :
-                        dualGrowthStats.allSignals.overall.profitFactor >= 1.75 ? 'text-blue-300' :
-                        dualGrowthStats.allSignals.overall.profitFactor >= 1.0 ? 'text-yellow-300' :
-                        'text-red-300'
-                      }`}>
-                        {dualGrowthStats.allSignals.overall.profitFactor >= 2.5 ? '⭐ Excellent' :
-                         dualGrowthStats.allSignals.overall.profitFactor >= 1.75 ? '✓ Good' :
-                         dualGrowthStats.allSignals.overall.profitFactor >= 1.0 ? '○ Breaking Even' :
-                         '✗ Needs Work'}
-                      </p>
-                    </CardContent>
-                  </Card>
-
-                  {/* Sharpe Ratio */}
-                  <Card className="bg-gradient-to-br from-yellow-900/40 to-orange-900/40 border-yellow-500/50 backdrop-blur-sm shadow-xl">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm font-medium text-yellow-200 flex items-center gap-2">
-                        <BarChart3 className="w-4 h-4" />
-                        Sharpe Ratio
-                        <TooltipProvider>
-                          <UITooltip>
-                            <TooltipTrigger>
-                              <HelpCircle className="w-3 h-3 text-yellow-300" />
-                            </TooltipTrigger>
-                            <TooltipContent className="max-w-xs bg-slate-900 border-slate-700">
-                              <p className="font-semibold mb-1">What is Sharpe Ratio?</p>
-                              <p className="text-sm mb-2">Risk-adjusted return metric</p>
-                              <p className="text-xs text-slate-300">
-                                • Below 1: High risk for returns<br/>
-                                • 1-2: Good risk-adjusted performance<br/>
-                                • 2-3: Very good performance<br/>
-                                • 3+: Exceptional performance
-                              </p>
-                            </TooltipContent>
-                          </UITooltip>
-                        </TooltipProvider>
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-bold text-white">
-                        {dualGrowthStats.allSignals.overall.sharpeRatio.toFixed(2)}
-                      </div>
-                      <p className={`text-xs mt-1 ${
-                        dualGrowthStats.allSignals.overall.sharpeRatio >= 3 ? 'text-green-300' :
-                        dualGrowthStats.allSignals.overall.sharpeRatio >= 2 ? 'text-blue-300' :
-                        dualGrowthStats.allSignals.overall.sharpeRatio >= 1 ? 'text-yellow-300' :
-                        'text-red-300'
-                      }`}>
-                        {dualGrowthStats.allSignals.overall.sharpeRatio >= 3 ? '⭐ Exceptional' :
-                         dualGrowthStats.allSignals.overall.sharpeRatio >= 2 ? '✓ Very Good' :
-                         dualGrowthStats.allSignals.overall.sharpeRatio >= 1 ? '○ Good' :
-                         '✗ High Risk'}
-                      </p>
-                    </CardContent>
-                  </Card>
-
-                  {/* Max Drawdown */}
-                  {(() => {
-                    const pipValue = { micro: 0.10, mini: 1.00, standard: 10.00 };
-                    const maxDrawdownUSD = dualGrowthStats.allSignals.overall.maxDrawdown * pipValue[lotSize];
-
-                    return (
-                      <Card className="bg-gradient-to-br from-red-900/40 to-rose-900/40 border-red-500/50 backdrop-blur-sm shadow-xl">
-                        <CardHeader className="pb-2">
-                          <CardTitle className="text-sm font-medium text-red-200 flex items-center gap-2">
-                            <TrendingDown className="w-4 h-4" />
-                            Max Drawdown
-                            <TooltipProvider>
-                              <UITooltip>
-                                <TooltipTrigger>
-                                  <HelpCircle className="w-3 h-3 text-red-300" />
-                                </TooltipTrigger>
-                                <TooltipContent className="max-w-xs bg-slate-900 border-slate-700">
-                                  <p className="font-semibold mb-1">What is Max Drawdown?</p>
-                                  <p className="text-sm mb-2">Largest peak-to-trough decline</p>
-                                  <p className="text-xs text-slate-300">
-                                    Shows the worst loss experienced from any profit peak.<br/>
-                                    Lower is better (indicates better risk management).
-                                  </p>
-                                </TooltipContent>
-                              </UITooltip>
-                            </TooltipProvider>
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="text-2xl font-bold text-red-400">
-                            -{dualGrowthStats.allSignals.overall.maxDrawdown.toFixed(1)} pips
-                          </div>
-                          <p className="text-xs text-red-300 mt-1">
-                            -${maxDrawdownUSD.toFixed(2)} USD
-                          </p>
-                        </CardContent>
-                      </Card>
-                    );
-                  })()}
-                </div>
-
-                {/* Cumulative Profit Chart */}
-                <Card className="bg-slate-800/80 border-slate-600/50 shadow-xl">
-                  <CardHeader>
-                    <CardTitle className="text-white flex items-center gap-2">
-                      <TrendingUp className="w-5 h-5 text-green-400" />
-                      Cumulative Profit Over Time
-                    </CardTitle>
-                    <CardDescription className="text-blue-200">
-                      Track your profit growth day by day
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    {dualGrowthStats.allSignals.cumulativeProfit.length > 0 ? (
-                      <ResponsiveContainer width="100%" height={300}>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
                         {(() => {
-                          const chartData = dualGrowthStats.allSignals.cumulativeProfit.map((d, idx, arr) => {
-                            const pips = parseFloat(d.cumulative_pips);
-                            const prevPips = idx > 0 ? parseFloat(arr[idx - 1].cumulative_pips) : 0;
-                            return {
-                              date: new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-                              pips: pips,
-                              color: pips >= 0 ? '#10B981' : '#EF4444',
-                              isDeclining: pips < prevPips
-                            };
-                          });
-                          const maxPips = Math.max(...chartData.map(d => d.pips), 0);
-                          const minPips = Math.min(...chartData.map(d => d.pips), 0);
+                          const fxify = dualGrowthStats.fxifyOnly.overall;
+                          const profitCalc = calculateFxifyProfit(fxify.totalProfitPips, fxify.totalSignals, 100000, 3);
+                          const requirements = meetsFxifyRequirements(fxify.winRate, fxify.profitFactor, fxify.maxDrawdown, 100000);
 
                           return (
-                            <LineChart data={chartData}>
-                              <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                              <XAxis
-                                dataKey="date"
-                                stroke="#9CA3AF"
-                                style={{ fontSize: isMobile ? '10px' : '12px' }}
-                                angle={isMobile ? -45 : 0}
-                                textAnchor={isMobile ? 'end' : 'middle'}
-                                height={isMobile ? 70 : 30}
-                              />
-                              <YAxis
-                                stroke="#9CA3AF"
-                                style={{ fontSize: isMobile ? '10px' : '12px' }}
-                              />
-
-                              {/* Zero reference line */}
-                              <ReferenceLine
-                                y={0}
-                                stroke="#6B7280"
-                                strokeDasharray="3 3"
-                                label={{ value: 'Break Even', fill: '#9CA3AF', fontSize: 12 }}
-                              />
-
-                              {/* Shaded profit zone */}
-                              {maxPips > 0 && (
-                                <ReferenceArea
-                                  y1={0}
-                                  y2={maxPips}
-                                  fill="#10B981"
-                                  fillOpacity={0.1}
-                                />
-                              )}
-
-                              {/* Shaded loss zone */}
-                              {minPips < 0 && (
-                                <ReferenceArea
-                                  y1={0}
-                                  y2={minPips}
-                                  fill="#EF4444"
-                                  fillOpacity={0.1}
-                                />
-                              )}
-
-                              <Tooltip
-                                contentStyle={{
-                                  backgroundColor: '#1F2937',
-                                  border: '1px solid #374151',
-                                  borderRadius: '8px'
-                                }}
-                                labelStyle={{ color: '#F3F4F6' }}
-                                formatter={(value: number) => [
-                                  `${value >= 0 ? '+' : ''}${value.toFixed(1)} pips`,
-                                  'Cumulative Profit'
-                                ]}
-                              />
-
-                              {/* Conditional line with colored dots */}
-                              <Line
-                                type="monotone"
-                                dataKey="pips"
-                                stroke="#10B981"
-                                strokeWidth={2}
-                                dot={(props: any) => {
-                                  const { cx, cy, payload } = props;
-                                  return (
-                                    <circle
-                                      cx={cx}
-                                      cy={cy}
-                                      r={4}
-                                      fill={payload.color}
-                                      stroke="white"
-                                      strokeWidth={2}
-                                    />
-                                  );
-                                }}
-                                activeDot={{ r: 6 }}
-                              />
-                            </LineChart>
-                          );
-                        })()}
-                      </ResponsiveContainer>
-                    ) : (
-                      <div className="text-center py-12 text-slate-400">
-                        No data available for selected time period
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-
-                {/* Monthly Charts Grid */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  {/* Monthly Profit/Loss Chart */}
-                  <Card className="bg-slate-800/80 border-slate-600/50 shadow-xl">
-                    <CardHeader>
-                      <CardTitle className="text-white flex items-center gap-2">
-                        <DollarSign className="w-5 h-5 text-green-400" />
-                        Monthly Profit/Loss
-                      </CardTitle>
-                      <CardDescription className="text-blue-200">
-                        Profit in pips per month (green = profit, red = loss)
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      {dualGrowthStats.allSignals.monthlyComparison.length > 0 ? (
-                        <ResponsiveContainer width="100%" height={250}>
-                          <BarChart data={dualGrowthStats.allSignals.monthlyComparison.slice().reverse().map(d => ({
-                            month: new Date(d.month).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
-                            pips: parseFloat(d.profit_pips),
-                            color: parseFloat(d.profit_pips) >= 0 ? '#10B981' : '#EF4444'
-                          }))}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                            <XAxis
-                              dataKey="month"
-                              stroke="#9CA3AF"
-                              style={{ fontSize: isMobile ? '10px' : '12px' }}
-                              angle={isMobile ? -45 : 0}
-                              textAnchor={isMobile ? 'end' : 'middle'}
-                              height={isMobile ? 70 : 30}
-                            />
-                            <YAxis stroke="#9CA3AF" style={{ fontSize: isMobile ? '10px' : '12px' }} />
-                            <ReferenceLine y={0} stroke="#6B7280" strokeWidth={2} />
-                            <Tooltip
-                              contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
-                              labelStyle={{ color: '#F3F4F6' }}
-                              formatter={(value: number) => [`${value >= 0 ? '+' : ''}${value.toFixed(1)} pips`, 'Profit']}
-                            />
-                            <Bar dataKey="pips" name="Profit (pips)">
-                              {dualGrowthStats.allSignals.monthlyComparison.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={parseFloat(entry.profit_pips) >= 0 ? '#10B981' : '#EF4444'} />
-                              ))}
-                            </Bar>
-                          </BarChart>
-                        </ResponsiveContainer>
-                      ) : (
-                        <div className="text-center py-12 text-slate-400">
-                          No data available for selected time period
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-
-                  {/* Monthly Win Rate Chart */}
-                  <Card className="bg-slate-800/80 border-slate-600/50 shadow-xl">
-                    <CardHeader>
-                      <CardTitle className="text-white flex items-center gap-2">
-                        <Target className="w-5 h-5 text-blue-400" />
-                        Monthly Win Rate
-                      </CardTitle>
-                      <CardDescription className="text-blue-200">
-                        Percentage of winning trades per month
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      {dualGrowthStats.allSignals.monthlyComparison.length > 0 ? (
-                        <ResponsiveContainer width="100%" height={250}>
-                          <BarChart data={dualGrowthStats.allSignals.monthlyComparison.slice().reverse().map(d => ({
-                            month: new Date(d.month).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
-                            winRate: parseFloat(d.win_rate),
-                            color: parseFloat(d.win_rate) >= 50 ? '#3B82F6' : '#F59E0B'
-                          }))}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                            <XAxis
-                              dataKey="month"
-                              stroke="#9CA3AF"
-                              style={{ fontSize: isMobile ? '10px' : '12px' }}
-                              angle={isMobile ? -45 : 0}
-                              textAnchor={isMobile ? 'end' : 'middle'}
-                              height={isMobile ? 70 : 30}
-                            />
-                            <YAxis stroke="#9CA3AF" domain={[0, 100]} style={{ fontSize: isMobile ? '10px' : '12px' }} />
-                            <ReferenceLine y={50} stroke="#6B7280" strokeDasharray="3 3" label={{ value: '50%', fill: '#9CA3AF' }} />
-                            <Tooltip
-                              contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
-                              labelStyle={{ color: '#F3F4F6' }}
-                              formatter={(value: number) => [`${value.toFixed(1)}%`, 'Win Rate']}
-                            />
-                            <Bar dataKey="winRate" name="Win Rate (%)">
-                              {dualGrowthStats.allSignals.monthlyComparison.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={parseFloat(entry.win_rate) >= 50 ? '#3B82F6' : '#F59E0B'} />
-                              ))}
-                            </Bar>
-                          </BarChart>
-                        </ResponsiveContainer>
-                      ) : (
-                        <div className="text-center py-12 text-slate-400">
-                          No data available for selected time period
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                </div>
-
-                {/* Symbol Performance Table */}
-                <Card className="bg-slate-800/80 border-slate-600/50 shadow-xl">
-                  <CardHeader>
-                    <CardTitle className="text-white flex items-center gap-2">
-                      <Target className="w-5 h-5 text-purple-400" />
-                      Symbol Performance
-                    </CardTitle>
-                    <CardDescription className="text-blue-200">
-                      Compare profitability across currency pairs
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="overflow-x-auto">
-                      <table className="w-full">
-                        <thead>
-                          <tr className="border-b border-slate-700">
-                            <th className="text-left py-3 px-4 text-sm font-semibold text-slate-300">Symbol</th>
-                            <th className="text-right py-3 px-4 text-sm font-semibold text-slate-300">Signals</th>
-                            <th className="text-right py-3 px-4 text-sm font-semibold text-slate-300">Win Rate</th>
-                            <th className="text-right py-3 px-4 text-sm font-semibold text-slate-300">Profit (pips)</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {dualGrowthStats.allSignals.symbolPerformance.map((symbol, idx) => {
-                            const profitPips = parseFloat(symbol.profit_pips);
-                            const winRate = parseFloat(symbol.win_rate);
-                            return (
-                              <tr key={idx} className="border-b border-slate-700/50 hover:bg-slate-700/30 transition-colors">
-                                <td className="py-3 px-4 font-semibold text-white">{symbol.symbol}</td>
-                                <td className="py-3 px-4 text-right text-slate-300">{symbol.total_signals}</td>
-                                <td className="py-3 px-4 text-right">
-                                  <span className={`font-semibold ${
-                                    winRate >= 50 ? 'text-green-400' :
-                                    winRate >= 35 ? 'text-yellow-400' :
+                            <div className="space-y-6">
+                              {/* Key Metrics */}
+                              <div className="grid grid-cols-2 gap-4">
+                                <div className="bg-slate-900/50 p-4 rounded-lg">
+                                  <p className="text-xs text-green-300 mb-1">Total Profit</p>
+                                  <p className={`text-3xl font-black ${fxify.totalProfitPips >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                    {formatDollars(profitCalc.totalDollars)}
+                                  </p>
+                                  <p className="text-xs text-slate-400 mt-1">
+                                    {fxify.totalProfitPips >= 0 ? '+' : ''}{fxify.totalProfitPips.toFixed(1)} pips
+                                  </p>
+                                </div>
+                                <div className="bg-slate-900/50 p-4 rounded-lg">
+                                  <p className="text-xs text-green-300 mb-1">Win Rate</p>
+                                  <p className="text-3xl font-black text-white">{fxify.winRate.toFixed(1)}%</p>
+                                  <p className="text-xs text-slate-400 mt-1">
+                                    {fxify.wins}W / {fxify.losses}L
+                                  </p>
+                                </div>
+                                <div className="bg-slate-900/50 p-4 rounded-lg">
+                                  <p className="text-xs text-green-300 mb-1">Monthly Projection</p>
+                                  <p className="text-2xl font-black text-green-400">
+                                    {formatDollars(profitCalc.monthlyDollars)}
+                                  </p>
+                                  <p className="text-xs text-slate-400 mt-1">
+                                    Based on {profitCalc.projectedMonthlyTrades} trades/mo
+                                  </p>
+                                </div>
+                                <div className="bg-slate-900/50 p-4 rounded-lg">
+                                  <p className="text-xs text-green-300 mb-1">Profit Factor</p>
+                                  <p className={`text-2xl font-black ${
+                                    fxify.profitFactor >= 2.5 ? 'text-green-400' :
+                                    fxify.profitFactor >= 1.5 ? 'text-yellow-400' :
                                     'text-red-400'
                                   }`}>
-                                    {winRate.toFixed(1)}%
-                                  </span>
-                                </td>
-                                <td className="py-3 px-4 text-right">
-                                  <span className={`font-bold ${profitPips >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                    {profitPips >= 0 ? '+' : ''}{profitPips.toFixed(1)}
-                                  </span>
-                                </td>
+                                    {fxify.profitFactor.toFixed(2)}
+                                  </p>
+                                  <p className="text-xs text-slate-400 mt-1">
+                                    {fxify.profitFactor >= 2.5 ? '⭐ Excellent' :
+                                     fxify.profitFactor >= 1.5 ? '✓ Good' :
+                                     '✗ Below Target'}
+                                  </p>
+                                </div>
+                              </div>
+
+                              {/* FXIFY Readiness */}
+                              <div className={`p-4 rounded-lg border-2 ${
+                                requirements.meetsRequirements
+                                  ? 'bg-green-900/20 border-green-500/50'
+                                  : 'bg-yellow-900/20 border-yellow-500/50'
+                              }`}>
+                                <p className="font-semibold text-white mb-2">
+                                  {requirements.meetsRequirements ? '✅ FXIFY Ready' : '⚠️ Needs Improvement'}
+                                </p>
+                                {requirements.issues.length > 0 && (
+                                  <ul className="text-xs text-yellow-300 space-y-1">
+                                    {requirements.issues.map((issue, idx) => (
+                                      <li key={idx}>• {issue}</li>
+                                    ))}
+                                  </ul>
+                                )}
+                                {requirements.meetsRequirements && (
+                                  <p className="text-xs text-green-300">All FXIFY requirements met</p>
+                                )}
+                              </div>
+
+                              {/* Stats Summary */}
+                              <div className="flex justify-between text-xs text-green-300">
+                                <div>
+                                  <span className="text-slate-400">Signals:</span> {fxify.totalSignals}
+                                </div>
+                                <div>
+                                  <span className="text-slate-400">Avg Win:</span> +{fxify.avgWinPips.toFixed(1)}p
+                                </div>
+                                <div>
+                                  <span className="text-slate-400">Avg Loss:</span> -{fxify.avgLossPips.toFixed(1)}p
+                                </div>
+                                <div>
+                                  <span className="text-slate-400">Max DD:</span> -{fxify.maxDrawdown.toFixed(1)}p
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </CardContent>
+                    </Card>
+
+                    {/* FXIFY Symbol Performance */}
+                    <Card className="bg-slate-800/80 border-green-500/30 shadow-xl">
+                      <CardHeader>
+                        <CardTitle className="text-white flex items-center gap-2">
+                          <Target className="w-5 h-5 text-green-400" />
+                          FXIFY Symbol Performance
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="overflow-x-auto">
+                          <table className="w-full">
+                            <thead>
+                              <tr className="border-b border-slate-700">
+                                <th className="text-left py-2 px-3 text-sm font-semibold text-slate-300">Symbol</th>
+                                <th className="text-center py-2 px-3 text-sm font-semibold text-slate-300">Signals</th>
+                                <th className="text-center py-2 px-3 text-sm font-semibold text-slate-300">Win Rate</th>
+                                <th className="text-right py-2 px-3 text-sm font-semibold text-slate-300">Profit (pips)</th>
                               </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  </CardContent>
-                </Card>
+                            </thead>
+                            <tbody>
+                              {dualGrowthStats.fxifyOnly.symbolPerformance.map((symbol, idx) => {
+                                const profitPips = parseFloat(symbol.profit_pips);
+                                const winRate = parseFloat(symbol.win_rate);
+                                return (
+                                  <tr key={idx} className="border-b border-slate-700/50 hover:bg-slate-700/30">
+                                    <td className="py-2 px-3 font-semibold text-white">{symbol.symbol}</td>
+                                    <td className="py-2 px-3 text-center text-slate-300">{symbol.total_signals}</td>
+                                    <td className="py-2 px-3 text-center">
+                                      <span className={`font-semibold ${
+                                        winRate >= 50 ? 'text-green-400' :
+                                        winRate >= 40 ? 'text-yellow-400' :
+                                        'text-red-400'
+                                      }`}>
+                                        {winRate.toFixed(1)}%
+                                      </span>
+                                    </td>
+                                    <td className="py-2 px-3 text-right">
+                                      <span className={`font-bold ${profitPips >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                        {profitPips >= 0 ? '+' : ''}{profitPips.toFixed(1)}
+                                      </span>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* RIGHT SIDE: ALL SIGNALS (SECONDARY) */}
+                  <div className="space-y-6">
+                    <Card className="bg-slate-800/60 border-slate-600/50 backdrop-blur-md shadow-xl">
+                      <CardHeader>
+                        <div>
+                          <Badge className="bg-slate-500/80 text-white mb-2">📊 SYSTEM LEARNING</Badge>
+                          <CardTitle className="text-white text-xl">All Signals (Including Practice)</CardTitle>
+                          <CardDescription className="text-slate-300 mt-1">
+                            HIGH + MEDIUM tier for AI training • {dualGrowthStats.timeframe}
+                          </CardDescription>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        {(() => {
+                          const all = dualGrowthStats.allSignals.overall;
+                          const comp = dualGrowthStats.comparison;
+
+                          return (
+                            <div className="space-y-6">
+                              {/* Key Metrics */}
+                              <div className="grid grid-cols-2 gap-4">
+                                <div className="bg-slate-900/30 p-4 rounded-lg">
+                                  <p className="text-xs text-slate-400 mb-1">Total Profit</p>
+                                  <p className={`text-2xl font-bold ${all.totalProfitPips >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                    {all.totalProfitPips >= 0 ? '+' : ''}{all.totalProfitPips.toFixed(1)} pips
+                                  </p>
+                                  {comp.profitDiff !== 0 && (
+                                    <p className="text-xs text-slate-500 mt-1">
+                                      ({comp.profitDiff >= 0 ? '+' : ''}{comp.profitDiff.toFixed(1)}p FXIFY diff)
+                                    </p>
+                                  )}
+                                </div>
+                                <div className="bg-slate-900/30 p-4 rounded-lg">
+                                  <p className="text-xs text-slate-400 mb-1">Win Rate</p>
+                                  <p className="text-2xl font-bold text-white">{all.winRate.toFixed(1)}%</p>
+                                  {comp.winRateDiff !== 0 && (
+                                    <p className="text-xs text-slate-500 mt-1">
+                                      ({comp.winRateDiff >= 0 ? '+' : ''}{comp.winRateDiff.toFixed(1)}% FXIFY diff)
+                                    </p>
+                                  )}
+                                </div>
+                                <div className="bg-slate-900/30 p-4 rounded-lg">
+                                  <p className="text-xs text-slate-400 mb-1">Total Signals</p>
+                                  <p className="text-2xl font-bold text-white">{all.totalSignals}</p>
+                                  <p className="text-xs text-slate-500 mt-1">
+                                    {all.wins}W / {all.losses}L
+                                  </p>
+                                </div>
+                                <div className="bg-slate-900/30 p-4 rounded-lg">
+                                  <p className="text-xs text-slate-400 mb-1">Profit Factor</p>
+                                  <p className="text-2xl font-bold text-white">{all.profitFactor.toFixed(2)}</p>
+                                </div>
+                              </div>
+
+                              {/* Comparison Insight */}
+                              {comp.signalCountDiff > 0 && (
+                                <div className="p-4 rounded-lg bg-blue-900/20 border border-blue-500/30">
+                                  <p className="font-semibold text-blue-300 mb-2">
+                                    🧠 AI Learning Progress
+                                  </p>
+                                  <p className="text-sm text-slate-300">
+                                    <span className="font-bold text-white">{comp.signalCountDiff}</span> paper trade signals (70-79% confidence) are being used to train the AI. These are NOT sent to FXIFY.
+                                  </p>
+                                  {comp.winRateDiff > 0 && (
+                                    <p className="text-xs text-blue-400 mt-2">
+                                      💡 FXIFY signals are {comp.winRateDiff.toFixed(1)}% more accurate
+                                    </p>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* Stats Summary */}
+                              <div className="flex justify-between text-xs text-slate-400">
+                                <div>
+                                  <span className="text-slate-500">Avg Win:</span> +{all.avgWinPips.toFixed(1)}p
+                                </div>
+                                <div>
+                                  <span className="text-slate-500">Avg Loss:</span> -{all.avgLossPips.toFixed(1)}p
+                                </div>
+                                <div>
+                                  <span className="text-slate-500">Max DD:</span> -{all.maxDrawdown.toFixed(1)}p
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </CardContent>
+                    </Card>
+
+                    {/* All Signals Symbol Performance */}
+                    <Card className="bg-slate-800/60 border-slate-600/50 shadow-xl">
+                      <CardHeader>
+                        <CardTitle className="text-white flex items-center gap-2">
+                          <BarChart3 className="w-5 h-5 text-slate-400" />
+                          All Signals Symbol Performance
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="overflow-x-auto">
+                          <table className="w-full">
+                            <thead>
+                              <tr className="border-b border-slate-700">
+                                <th className="text-left py-2 px-3 text-sm font-semibold text-slate-400">Symbol</th>
+                                <th className="text-center py-2 px-3 text-sm font-semibold text-slate-400">Signals</th>
+                                <th className="text-center py-2 px-3 text-sm font-semibold text-slate-400">Win Rate</th>
+                                <th className="text-right py-2 px-3 text-sm font-semibold text-slate-400">Profit (pips)</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {dualGrowthStats.allSignals.symbolPerformance.map((symbol, idx) => {
+                                const profitPips = parseFloat(symbol.profit_pips);
+                                const winRate = parseFloat(symbol.win_rate);
+                                return (
+                                  <tr key={idx} className="border-b border-slate-700/50 hover:bg-slate-700/20">
+                                    <td className="py-2 px-3 font-semibold text-slate-300">{symbol.symbol}</td>
+                                    <td className="py-2 px-3 text-center text-slate-400">{symbol.total_signals}</td>
+                                    <td className="py-2 px-3 text-center">
+                                      <span className={`font-semibold ${
+                                        winRate >= 50 ? 'text-green-400' :
+                                        winRate >= 35 ? 'text-yellow-400' :
+                                        'text-red-400'
+                                      }`}>
+                                        {winRate.toFixed(1)}%
+                                      </span>
+                                    </td>
+                                    <td className="py-2 px-3 text-right">
+                                      <span className={`font-bold ${profitPips >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                        {profitPips >= 0 ? '+' : ''}{profitPips.toFixed(1)}
+                                      </span>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </div>
               </>
             ) : (
               <Card className="bg-slate-800/80 border-slate-600/50 shadow-xl">
