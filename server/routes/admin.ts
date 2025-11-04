@@ -588,4 +588,102 @@ export function registerAdminRoutes(app: Express) {
       res.status(500).json({ error: error.message });
     }
   });
+
+  /**
+   * GET /api/admin/diagnose-fxify-losses
+   * Diagnostic endpoint to analyze FXIFY losses
+   */
+  app.get("/api/admin/diagnose-fxify-losses", async (req, res) => {
+    try {
+      // Query 1: Monthly Performance
+      const monthlyResults = await db.execute(sql`
+        SELECT
+          DATE_TRUNC('month', outcome_time) as month,
+          COUNT(*) as signals,
+          ROUND(AVG(profit_loss_pips)::numeric, 2) as avg_pips,
+          ROUND(SUM(profit_loss_pips)::numeric, 2) as total_pips,
+          ROUND(100.0 * COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT')) /
+            NULLIF(COUNT(*) FILTER (WHERE outcome != 'PENDING'), 0), 2) as win_rate
+        FROM signal_history
+        WHERE trade_live = true AND tier = 'HIGH' AND outcome != 'PENDING'
+        GROUP BY DATE_TRUNC('month', outcome_time)
+        ORDER BY month DESC
+        LIMIT 12
+      `);
+
+      // Query 2: Symbol Performance
+      const symbolResults = await db.execute(sql`
+        SELECT
+          symbol,
+          COUNT(*) as signals,
+          ROUND(AVG(profit_loss_pips)::numeric, 2) as avg_pips,
+          ROUND(SUM(profit_loss_pips)::numeric, 2) as total_pips,
+          ROUND(100.0 * COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT')) /
+            NULLIF(COUNT(*) FILTER (WHERE outcome != 'PENDING'), 0), 2) as win_rate
+        FROM signal_history
+        WHERE trade_live = true AND tier = 'HIGH' AND outcome != 'PENDING'
+        GROUP BY symbol
+        ORDER BY total_pips ASC
+      `);
+
+      // Query 3: Strategy Version Performance
+      const versionResults = await db.execute(sql`
+        SELECT
+          strategy_version,
+          COUNT(*) as signals,
+          ROUND(AVG(profit_loss_pips)::numeric, 2) as avg_pips,
+          ROUND(SUM(profit_loss_pips)::numeric, 2) as total_pips,
+          ROUND(100.0 * COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT')) /
+            NULLIF(COUNT(*) FILTER (WHERE outcome != 'PENDING'), 0), 2) as win_rate
+        FROM signal_history
+        WHERE trade_live = true AND tier = 'HIGH' AND outcome != 'PENDING'
+        GROUP BY strategy_version
+        ORDER BY total_pips ASC
+      `);
+
+      // Query 4: Recent Signals Sample
+      const recentSignals = await db.execute(sql`
+        SELECT
+          symbol,
+          signal_type,
+          confidence,
+          outcome,
+          profit_loss_pips,
+          strategy_version,
+          outcome_time
+        FROM signal_history
+        WHERE trade_live = true AND tier = 'HIGH' AND outcome != 'PENDING'
+        ORDER BY outcome_time DESC
+        LIMIT 50
+      `);
+
+      // Query 5: Overall Summary
+      const summary = await db.execute(sql`
+        SELECT
+          COUNT(*) as total_signals,
+          ROUND(AVG(confidence)::numeric, 2) as avg_confidence,
+          ROUND(MIN(profit_loss_pips)::numeric, 2) as min_pips,
+          ROUND(MAX(profit_loss_pips)::numeric, 2) as max_pips,
+          ROUND(AVG(profit_loss_pips)::numeric, 2) as avg_pips,
+          ROUND(SUM(profit_loss_pips)::numeric, 2) as total_pips,
+          ROUND(100.0 * COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT')) /
+            NULLIF(COUNT(*) FILTER (WHERE outcome != 'PENDING'), 0), 2) as win_rate,
+          COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT')) as wins,
+          COUNT(*) FILTER (WHERE outcome = 'STOP_HIT') as losses
+        FROM signal_history
+        WHERE trade_live = true AND tier = 'HIGH' AND outcome != 'PENDING'
+      `);
+
+      res.json({
+        monthly: monthlyResults,
+        bySymbol: symbolResults,
+        byVersion: versionResults,
+        recentSignals: recentSignals,
+        summary: (summary as any)[0],
+      });
+    } catch (error: any) {
+      console.error('Error in diagnose-fxify-losses:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
 }
