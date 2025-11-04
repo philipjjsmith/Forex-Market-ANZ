@@ -445,7 +445,9 @@ export default function Admin() {
         setDiagnosticData(data);
         setShowDiagnostic(true);
       } else {
-        alert(`Error: ${res.status} ${res.statusText}`);
+        const errorData = await res.json();
+        console.error('Diagnostic error:', errorData);
+        alert(`Error ${res.status}: ${errorData.error || res.statusText}\n\nDetails: ${errorData.details || 'No additional details'}`);
       }
     } catch (error) {
       console.error('Failed to run diagnostic:', error);
