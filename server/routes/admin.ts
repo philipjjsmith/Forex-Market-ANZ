@@ -646,7 +646,7 @@ export function registerAdminRoutes(app: Express) {
       const recentSignals = await db.execute(sql`
         SELECT
           symbol,
-          signal_type,
+          type as signal_type,
           confidence,
           outcome,
           profit_loss_pips,
