@@ -95,7 +95,8 @@ export function calculatePotentialProfit(
   riskUSD: number;
 } {
   // Calculate distances in pips
-  const pipValue = 0.0001;
+  // 🔧 FIX: JPY pairs use 0.01 for 1 pip, all other pairs use 0.0001
+  const pipValue = signal.symbol.includes('JPY') ? 0.01 : 0.0001;
   const stopLossDistance = Math.abs(signal.entry_price - signal.stop_loss) / pipValue;
   const tp1Distance = Math.abs(signal.tp1 - signal.entry_price) / pipValue;
 
@@ -135,7 +136,8 @@ export function calculateActualProfit(
   }
 
   // Calculate distances in pips
-  const pipValue = 0.0001;
+  // 🔧 FIX: JPY pairs use 0.01 for 1 pip, all other pairs use 0.0001
+  const pipValue = signal.symbol.includes('JPY') ? 0.01 : 0.0001;
   const stopLossDistance = Math.abs(signal.entry_price - signal.stop_loss) / pipValue;
 
   // Get optimal risk for this signal

@@ -82,7 +82,8 @@ export function ActiveSignalsTable({ signals, accountSize, performanceData, onSi
 
   const calculateCurrentPL = (signal: ActiveSignal) => {
     // Use entry_price and current_price to calculate P/L
-    const pipValue = 0.0001;
+    // 🔧 FIX: JPY pairs use 0.01 for 1 pip, all other pairs use 0.0001
+    const pipValue = signal.symbol.includes('JPY') ? 0.01 : 0.0001;
     let pips: number;
 
     if (signal.type === 'LONG') {

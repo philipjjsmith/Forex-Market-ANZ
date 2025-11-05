@@ -44,9 +44,42 @@ export class Indicators {
     return 100 - (100 / (1 + rs));
   }
 
+  static macd(closes: number[], fastPeriod = 12, slowPeriod = 26, signalPeriod = 9): { macd: number, signal: number, histogram: number } | null {
+    if (closes.length < slowPeriod + signalPeriod) return null;
+
+    const fastEMA = this.ema(closes, fastPeriod);
+    const slowEMA = this.ema(closes, slowPeriod);
+
+    if (!fastEMA || !slowEMA) return null;
+
+    const macdLine = fastEMA - slowEMA;
+
+    // Calculate signal line (EMA of MACD line)
+    // We need to calculate MACD for all data points first
+    const macdValues: number[] = [];
+    for (let i = slowPeriod - 1; i < closes.length; i++) {
+      const fEMA = this.ema(closes.slice(0, i + 1), fastPeriod);
+      const sEMA = this.ema(closes.slice(0, i + 1), slowPeriod);
+      if (fEMA && sEMA) {
+        macdValues.push(fEMA - sEMA);
+      }
+    }
+
+    const signalLine = this.ema(macdValues, signalPeriod);
+    if (!signalLine) return null;
+
+    const histogram = macdLine - signalLine;
+
+    return {
+      macd: macdLine,
+      signal: signalLine,
+      histogram: histogram
+    };
+  }
+
   static atr(candles: Array<{high: number, low: number, close: number}>, period = 14): number | null {
     if (candles.length < period + 1) return null;
-    
+
     const trueRanges: number[] = [];
     for (let i = 1; i < candles.length; i++) {
       const high = candles[i].high;

@@ -296,7 +296,8 @@ export function registerSignalRoutes(app: Express) {
       }
 
       // Calculate profit/loss
-      const pipValue = 0.0001;
+      // 🔧 FIX: JPY pairs use 0.01 for 1 pip, all other pairs use 0.0001
+      const pipValue = signal.symbol.includes('JPY') ? 0.01 : 0.0001;
       let profitLossPips: number;
 
       if (signal.type === 'LONG') {

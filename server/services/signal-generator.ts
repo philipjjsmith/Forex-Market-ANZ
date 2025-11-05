@@ -211,7 +211,11 @@ function isWithinNewsWindow(): boolean {
 
 class MACrossoverStrategy {
   name = 'Hybrid Trend Strategy';
-  version = '2.1.0'; // Updated for hybrid entry system (crossover + BB pullback)
+  // v2.2.0: Fixed confidence scoring inversion (HTF trend lag issue)
+  // - PHASE 1: Reduced HTF points from 25 to 10 (max now 111, not 126)
+  // - PHASE 2: Added trend acceleration filter (MA separation check)
+  // - PHASE 3: Added MACD momentum confirmation
+  version = '2.2.0';
 
   async analyze(primaryCandles: Candle[], higherCandles: Candle[], symbol: string): Promise<Signal | null> {
     if (primaryCandles.length < 200) return null;
@@ -248,6 +252,13 @@ class MACrossoverStrategy {
     const htfFastMA = Indicators.ema(higherCloses, fastPeriod);
     const htfSlowMA = Indicators.ema(higherCloses, slowPeriod);
     const htfTrend = htfFastMA && htfSlowMA && htfFastMA > htfSlowMA ? 'UP' : 'DOWN';
+
+    // 🔬 PHASE 2: Calculate previous HTF MAs for trend acceleration detection
+    const prevHTFFastMA = Indicators.ema(higherCloses.slice(0, -1), fastPeriod);
+    const prevHTFSlowMA = Indicators.ema(higherCloses.slice(0, -1), slowPeriod);
+
+    // 🔬 PHASE 3: Calculate MACD on higher timeframe for momentum confirmation
+    const htfMACD = Indicators.macd(higherCloses, 12, 26, 9);
 
     const prevFastMA = Indicators.ema(closes.slice(0, -1), fastPeriod);
     const prevSlowMA = Indicators.ema(closes.slice(0, -1), slowPeriod);
@@ -288,13 +299,39 @@ class MACrossoverStrategy {
       signalType = 'LONG';
       entryType = bullishCross ? 'CROSSOVER' : 'PULLBACK';
 
-      // 🆕 CONFIDENCE SCORING SYSTEM (Max: 126 points)
+      // 🆕 CONFIDENCE SCORING SYSTEM (Max: 111 points - reduced from 126)
+      // 🔬 COMPREHENSIVE FIX: Phases 1-3 implemented to prevent entering at market tops
 
-      // 1. Daily trend aligned (25 points)
+      // 1. Daily trend aligned (10 points - PHASE 1: reduced from 25)
       const htfAligned = htfTrend === 'UP' && currentPrice > (htfFastMA || 0);
-      if (htfAligned) {
-        confidence += 25;
-        rationale.push('✅ Daily trend bullish with price above HTF MAs (+25)');
+
+      if (htfAligned && htfFastMA && htfSlowMA && prevHTFFastMA && prevHTFSlowMA && htfMACD) {
+        // PHASE 2: Check if trend is ACCELERATING (not exhausting)
+        const maSeparation = (htfFastMA - htfSlowMA) / htfSlowMA;
+        const prevMASeparation = (prevHTFFastMA - prevHTFSlowMA) / prevHTFSlowMA;
+        const trendAccelerating = maSeparation > prevMASeparation;
+
+        // PHASE 3: Check MACD momentum confirmation
+        const macdBullish = htfMACD.macd > htfMACD.signal;
+
+        // Award full 10 points only if trend is accelerating AND MACD confirms
+        if (trendAccelerating && macdBullish) {
+          confidence += 10;
+          rationale.push('✅ Daily trend bullish, accelerating, MACD confirms (+10)');
+        } else if (macdBullish) {
+          confidence += 5;
+          rationale.push('⚠️ Daily trend bullish, MACD confirms but trend weakening (+5)');
+        } else if (trendAccelerating) {
+          confidence += 5;
+          rationale.push('⚠️ Daily trend bullish, accelerating but MACD diverging (+5)');
+        } else {
+          confidence += 2;
+          rationale.push('⚠️ Daily trend bullish but weakening (no momentum) (+2)');
+        }
+      } else if (htfAligned) {
+        // Fallback if we can't calculate acceleration/MACD
+        confidence += 10;
+        rationale.push('✅ Daily trend bullish with price above HTF MAs (+10)');
       }
 
       // 2. Entry signal (20 points)
@@ -358,13 +395,39 @@ class MACrossoverStrategy {
       signalType = 'SHORT';
       entryType = bearishCross ? 'CROSSOVER' : 'PULLBACK';
 
-      // 🆕 CONFIDENCE SCORING SYSTEM (Max: 126 points)
+      // 🆕 CONFIDENCE SCORING SYSTEM (Max: 111 points - reduced from 126)
+      // 🔬 COMPREHENSIVE FIX: Phases 1-3 implemented to prevent entering at market bottoms
 
-      // 1. Daily trend aligned (25 points)
+      // 1. Daily trend aligned (10 points - PHASE 1: reduced from 25)
       const htfAligned = htfTrend === 'DOWN' && currentPrice < (htfFastMA || Infinity);
-      if (htfAligned) {
-        confidence += 25;
-        rationale.push('✅ Daily trend bearish with price below HTF MAs (+25)');
+
+      if (htfAligned && htfFastMA && htfSlowMA && prevHTFFastMA && prevHTFSlowMA && htfMACD) {
+        // PHASE 2: Check if trend is ACCELERATING (not exhausting)
+        const maSeparation = (htfSlowMA - htfFastMA) / htfSlowMA; // Note: inverted for downtrend
+        const prevMASeparation = (prevHTFSlowMA - prevHTFFastMA) / prevHTFSlowMA;
+        const trendAccelerating = maSeparation > prevMASeparation;
+
+        // PHASE 3: Check MACD momentum confirmation
+        const macdBearish = htfMACD.macd < htfMACD.signal;
+
+        // Award full 10 points only if trend is accelerating AND MACD confirms
+        if (trendAccelerating && macdBearish) {
+          confidence += 10;
+          rationale.push('✅ Daily trend bearish, accelerating, MACD confirms (+10)');
+        } else if (macdBearish) {
+          confidence += 5;
+          rationale.push('⚠️ Daily trend bearish, MACD confirms but trend weakening (+5)');
+        } else if (trendAccelerating) {
+          confidence += 5;
+          rationale.push('⚠️ Daily trend bearish, accelerating but MACD diverging (+5)');
+        } else {
+          confidence += 2;
+          rationale.push('⚠️ Daily trend bearish but weakening (no momentum) (+2)');
+        }
+      } else if (htfAligned) {
+        // Fallback if we can't calculate acceleration/MACD
+        confidence += 10;
+        rationale.push('✅ Daily trend bearish with price below HTF MAs (+10)');
       }
 
       // 2. Entry signal (20 points)
