@@ -147,11 +147,22 @@ export function registerAdminRoutes(app: Express) {
   app.get("/api/admin/growth-stats-dual", requireAuth, requireAdmin, async (req, res) => {
     try {
       const days = parseInt(req.query.days as string) || 0; // 0 = all time
+      const versionFilter = req.query.version as string || 'all';
 
       // Build date filter
       const dateFilter = days > 0
         ? sql`AND outcome_time >= NOW() - INTERVAL '${sql.raw(days.toString())} days'`
         : sql``;
+
+      // 🆕 Version filtering for v2.2.0 comparison
+      let strategyVersionFilter = sql``;
+      if (versionFilter === 'v2.2.0') {
+        strategyVersionFilter = sql`AND strategy_version = '2.2.0'`;
+      } else if (versionFilter === 'v2.1.0') {
+        strategyVersionFilter = sql`AND strategy_version = '2.1.0'`;
+      } else if (versionFilter === 'legacy') {
+        strategyVersionFilter = sql`AND strategy_version IN ('1.0.0', '2.0.0')`;
+      }
 
       // ============================================================
       // FXIFY PERFORMANCE (HIGH TIER ONLY - 80+ confidence)
@@ -176,6 +187,7 @@ export function registerAdminRoutes(app: Express) {
           AND trade_live = true
           AND tier = 'HIGH'
           ${dateFilter}
+          ${strategyVersionFilter}
       `);
 
       const fxifyOverall = (fxifyOverallResult as any)[0];
@@ -191,6 +203,7 @@ export function registerAdminRoutes(app: Express) {
             AND trade_live = true
             AND tier = 'HIGH'
             ${dateFilter}
+            ${strategyVersionFilter}
           GROUP BY DATE(outcome_time)
           ORDER BY date ASC
         )
@@ -218,6 +231,7 @@ export function registerAdminRoutes(app: Express) {
           AND trade_live = true
           AND tier = 'HIGH'
           ${dateFilter}
+          ${strategyVersionFilter}
         GROUP BY DATE_TRUNC('month', outcome_time)
         ORDER BY month DESC
         LIMIT 12
