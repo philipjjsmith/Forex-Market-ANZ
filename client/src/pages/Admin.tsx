@@ -172,6 +172,7 @@ export default function Admin() {
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [activeTab, setActiveTab] = useState<'system' | 'ai' | 'growth'>('system');
   const [growthDays, setGrowthDays] = useState(0); // 0 = all time
+  const [growthVersion, setGrowthVersion] = useState<string>('all'); // 🆕 Version filter
   const [lotSize, setLotSize] = useState<'micro' | 'mini' | 'standard'>('mini');
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [showDiagnostic, setShowDiagnostic] = useState(false);
@@ -284,10 +285,10 @@ export default function Admin() {
 
   // Fetch dual growth stats (FXIFY + All Signals)
   const { data: dualGrowthStats, isLoading: growthLoading } = useQuery<DualGrowthStats>({
-    queryKey: ['growth-stats-dual', growthDays],
+    queryKey: ['growth-stats-dual', growthDays, growthVersion],
     queryFn: async () => {
       const token = getToken();
-      const res = await fetch(`${API_ENDPOINTS.ADMIN_GROWTH_STATS_DUAL}?days=${growthDays}`, {
+      const res = await fetch(`${API_ENDPOINTS.ADMIN_GROWTH_STATS_DUAL}?days=${growthDays}&version=${growthVersion}`, {
         headers: {
           'Content-Type': 'application/json',
           ...(token && { 'Authorization': `Bearer ${token}` }),
@@ -1272,6 +1273,30 @@ export default function Admin() {
                     </SelectContent>
                   </Select>
                 </div>
+
+                {/* System Upgrade Banner */}
+                <Card className="bg-blue-900/30 border-blue-500/50 mb-6">
+                  <CardContent className="p-4">
+                    <div className="flex items-start gap-3">
+                      <HelpCircle className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" />
+                      <div className="text-sm">
+                        <p className="font-semibold text-blue-200 mb-2">📢 System Upgrade Notice (Nov 4, 2025)</p>
+                        <div className="text-blue-300 space-y-1">
+                          <p><strong className="text-blue-200">Old System (v2.1.0):</strong> Signals before November 4, 2025</p>
+                          <p className="pl-4 text-xs">• Confidence scoring inversion bug (higher confidence = worse performance)</p>
+                          <p className="pl-4 text-xs">• USD/JPY pip calculation bug (100x inflated losses)</p>
+                          <p><strong className="text-blue-200">New System (v2.2.0):</strong> Signals after November 4, 2025</p>
+                          <p className="pl-4 text-xs">• Fixed HTF trend detection with acceleration + MACD confirmation</p>
+                          <p className="pl-4 text-xs">• Fixed JPY pip calculations (5 files updated)</p>
+                          <p className="pl-4 text-xs">• Expected: 50-55% win rate, reduced losses</p>
+                        </div>
+                        <p className="text-blue-400 text-xs mt-3 italic">
+                          💡 Historical data (v2.1.0) is kept for comparison and learning. Monitor v2.2.0 performance separately over the next 30 days.
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
 
                 {/* DIAGNOSTIC RESULTS */}
                 {showDiagnostic && diagnosticData && (
