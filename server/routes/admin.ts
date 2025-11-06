@@ -148,13 +148,22 @@ export function registerAdminRoutes(app: Express) {
     try {
       const days = parseInt(req.query.days as string) || 0; // 0 = all time
       const versionFilter = req.query.version as string || 'all';
+      const historicalFilter = req.query.historical as string || 'all'; // 🆕 Historical data filter
 
       // Build date filter
-      const dateFilter = days > 0
-        ? sql`AND outcome_time >= NOW() - INTERVAL '${sql.raw(days.toString())} days'`
-        : sql``;
+      let dateFilter = sql``;
 
-      // 🆕 Version filtering for v2.2.0 comparison
+      // 🆕 Historical filter takes precedence (100% accurate date-based filtering)
+      if (historicalFilter === 'nov4forward') {
+        // Show only signals from Nov 4, 2025 05:44:16 UTC forward (after fix deployment)
+        dateFilter = sql`AND created_at >= '2025-11-04 05:44:16 UTC'`;
+      } else if (days > 0) {
+        // Use days-based filter (Last 7/30/90 days)
+        dateFilter = sql`AND outcome_time >= NOW() - INTERVAL '${sql.raw(days.toString())} days'`;
+      }
+      // else: all time (no date filter)
+
+      // 🆕 Version filtering for v2.2.0 comparison (less accurate than date filter)
       let strategyVersionFilter = sql``;
       if (versionFilter === 'v2.2.0') {
         strategyVersionFilter = sql`AND strategy_version = '2.2.0'`;

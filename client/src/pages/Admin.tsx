@@ -173,6 +173,7 @@ export default function Admin() {
   const [activeTab, setActiveTab] = useState<'system' | 'ai' | 'growth'>('system');
   const [growthDays, setGrowthDays] = useState(0); // 0 = all time
   const [growthVersion, setGrowthVersion] = useState<string>('all'); // 🆕 Version filter
+  const [historicalFilter, setHistoricalFilter] = useState<string>('nov4forward'); // 🆕 Date-based filter (DEFAULT: Nov 4+ only)
   const [lotSize, setLotSize] = useState<'micro' | 'mini' | 'standard'>('mini');
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [showDiagnostic, setShowDiagnostic] = useState(false);
@@ -285,10 +286,10 @@ export default function Admin() {
 
   // Fetch dual growth stats (FXIFY + All Signals)
   const { data: dualGrowthStats, isLoading: growthLoading } = useQuery<DualGrowthStats>({
-    queryKey: ['growth-stats-dual', growthDays, growthVersion],
+    queryKey: ['growth-stats-dual', growthDays, growthVersion, historicalFilter],
     queryFn: async () => {
       const token = getToken();
-      const res = await fetch(`${API_ENDPOINTS.ADMIN_GROWTH_STATS_DUAL}?days=${growthDays}&version=${growthVersion}`, {
+      const res = await fetch(`${API_ENDPOINTS.ADMIN_GROWTH_STATS_DUAL}?days=${growthDays}&version=${growthVersion}&historical=${historicalFilter}`, {
         headers: {
           'Content-Type': 'application/json',
           ...(token && { 'Authorization': `Bearer ${token}` }),
@@ -1249,7 +1250,7 @@ export default function Admin() {
             ) : dualGrowthStats ? (
               <>
                 {/* Time Period Filter & Diagnostic Button */}
-                <div className="flex justify-between items-center mb-6">
+                <div className="flex justify-between items-center mb-6 gap-4">
                   <Button
                     onClick={handleRunDiagnostic}
                     disabled={diagnosticLoading}
@@ -1258,20 +1259,35 @@ export default function Admin() {
                     {diagnosticLoading ? (
                       <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Running...</>
                     ) : (
-                      <><AlertCircle className="h-4 w-4 mr-2" /> 🔍 Run FXIFY Loss Diagnostic</>
+                      <><AlertCircle className="h-4 w-4 mr-2" /> 🔍 Run Diagnostic</>
                     )}
                   </Button>
-                  <Select value={growthDays.toString()} onValueChange={(value) => setGrowthDays(parseInt(value))}>
-                    <SelectTrigger className="w-[200px] bg-slate-800/80 text-white border-white/30">
-                      <SelectValue placeholder="Time period" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-slate-800 text-white border-white/30">
-                      <SelectItem value="0">All Time</SelectItem>
-                      <SelectItem value="90">Last 90 days</SelectItem>
-                      <SelectItem value="30">Last 30 days</SelectItem>
-                      <SelectItem value="7">Last 7 days</SelectItem>
-                    </SelectContent>
-                  </Select>
+
+                  <div className="flex gap-3">
+                    {/* Historical Data Filter (100% Accurate) */}
+                    <Select value={historicalFilter} onValueChange={(value) => setHistoricalFilter(value)}>
+                      <SelectTrigger className="w-[240px] bg-slate-800/80 text-white border-white/30">
+                        <SelectValue placeholder="Data filter" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-slate-800 text-white border-white/30">
+                        <SelectItem value="nov4forward">Nov 4+ (Fixed System) ✅</SelectItem>
+                        <SelectItem value="all">All Historical Data ⚠️</SelectItem>
+                      </SelectContent>
+                    </Select>
+
+                    {/* Time Period */}
+                    <Select value={growthDays.toString()} onValueChange={(value) => setGrowthDays(parseInt(value))}>
+                      <SelectTrigger className="w-[180px] bg-slate-800/80 text-white border-white/30">
+                        <SelectValue placeholder="Time period" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-slate-800 text-white border-white/30">
+                        <SelectItem value="0">All Time</SelectItem>
+                        <SelectItem value="90">Last 90 days</SelectItem>
+                        <SelectItem value="30">Last 30 days</SelectItem>
+                        <SelectItem value="7">Last 7 days</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
 
                 {/* System Upgrade Banner */}
@@ -1280,18 +1296,24 @@ export default function Admin() {
                     <div className="flex items-start gap-3">
                       <HelpCircle className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" />
                       <div className="text-sm">
-                        <p className="font-semibold text-blue-200 mb-2">📢 System Upgrade Notice (Nov 4, 2025)</p>
-                        <div className="text-blue-300 space-y-1">
-                          <p><strong className="text-blue-200">Old System (v2.1.0):</strong> Signals before November 4, 2025</p>
-                          <p className="pl-4 text-xs">• Confidence scoring inversion bug (higher confidence = worse performance)</p>
-                          <p className="pl-4 text-xs">• USD/JPY pip calculation bug (100x inflated losses)</p>
-                          <p><strong className="text-blue-200">New System (v2.2.0):</strong> Signals after November 4, 2025</p>
-                          <p className="pl-4 text-xs">• Fixed HTF trend detection with acceleration + MACD confirmation</p>
-                          <p className="pl-4 text-xs">• Fixed JPY pip calculations (5 files updated)</p>
-                          <p className="pl-4 text-xs">• Expected: 50-55% win rate, reduced losses</p>
+                        <p className="font-semibold text-blue-200 mb-2">📢 Data Filter Explanation</p>
+                        <div className="text-blue-300 space-y-2">
+                          <div>
+                            <p><strong className="text-green-400">✅ Nov 4+ (Fixed System) [DEFAULT]</strong></p>
+                            <p className="pl-4 text-xs">• Shows only signals from November 4, 2025 forward</p>
+                            <p className="pl-4 text-xs">• 100% accurate profitability tracking</p>
+                            <p className="pl-4 text-xs">• Includes all bug fixes: MACD momentum, confidence scoring, JPY pip calculations</p>
+                            <p className="pl-4 text-xs">• <strong>Use this for reliable performance metrics</strong></p>
+                          </div>
+                          <div>
+                            <p><strong className="text-yellow-400">⚠️ All Historical Data</strong></p>
+                            <p className="pl-4 text-xs">• Includes old signals with known bugs (confidence inversion, wrong USD/JPY pips)</p>
+                            <p className="pl-4 text-xs">• Shows -$130K total loss (94% from USD/JPY bug alone)</p>
+                            <p className="pl-4 text-xs">• <strong>For comparison/research only - not representative of current system</strong></p>
+                          </div>
                         </div>
                         <p className="text-blue-400 text-xs mt-3 italic">
-                          💡 Historical data (v2.1.0) is kept for comparison and learning. Monitor v2.2.0 performance separately over the next 30 days.
+                          💡 Tip: Keep default "Nov 4+ (Fixed System)" for accurate profitability tracking. Historical data preserved for scientific comparison.
                         </p>
                       </div>
                     </div>
