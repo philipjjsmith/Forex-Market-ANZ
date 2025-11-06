@@ -123,6 +123,38 @@ class Indicators {
       lower: middle - (std * stdDev)
     };
   }
+
+  static macd(closes: number[], fastPeriod = 12, slowPeriod = 26, signalPeriod = 9): { macd: number; signal: number; histogram: number } | null {
+    if (closes.length < slowPeriod + signalPeriod) return null;
+
+    // Calculate MACD values for all data points
+    const macdValues: number[] = [];
+    for (let i = slowPeriod - 1; i < closes.length; i++) {
+      const fEMA = this.ema(closes.slice(0, i + 1), fastPeriod);
+      const sEMA = this.ema(closes.slice(0, i + 1), slowPeriod);
+      if (fEMA && sEMA) {
+        macdValues.push(fEMA - sEMA);
+      }
+    }
+
+    if (macdValues.length < signalPeriod) return null;
+
+    // Get current MACD line value
+    const macdLine = macdValues[macdValues.length - 1];
+
+    // Calculate signal line (EMA of MACD values)
+    const signalLine = this.ema(macdValues, signalPeriod);
+    if (!signalLine) return null;
+
+    // Calculate histogram
+    const histogram = macdLine - signalLine;
+
+    return {
+      macd: macdLine,
+      signal: signalLine,
+      histogram: histogram
+    };
+  }
 }
 
 // Helper function: Detect Support/Resistance levels
@@ -505,8 +537,8 @@ class MACrossoverStrategy {
       }
     }
 
-    // ⚡ PHASE 2 QUICK WIN: Raised minimum from 70 to 85 to filter marginal signals
-    if (!signalType || confidence < 85) return null; // Must be at least 85 points
+    // ⚡ PHASE 2 QUICK WIN: Raised minimum to 80 to align with HIGH tier threshold and industry standards
+    if (!signalType || confidence < 80) return null; // Must be at least 80 points (industry standard for live trading)
 
     // Determine tier and trading mode
     let tier: 'HIGH' | 'MEDIUM';
@@ -650,9 +682,9 @@ export class SignalGenerator {
           // Analyze with strategy (🧠 AI-ENHANCED + 🎯 MILESTONE 3C: Now passes symbol for AI insights and approved parameters)
           const signal = await strategy.analyze(primaryCandles, higherCandles, symbol);
 
-          // ⚡ PHASE 2 QUICK WIN: Raised from 70 to 85 to filter marginal signals
-          // Goal: Improve win rate by only taking highest confidence signals
-          if (signal && signal.confidence >= 85) {
+          // ⚡ PHASE 2 QUICK WIN: Raised from 70 to 80 to align with industry standards
+          // Goal: Improve win rate while allowing HIGH tier signals (80+)
+          if (signal && signal.confidence >= 80) {
             signalsGenerated++;
             signal.symbol = symbol; // Set the correct symbol
 
