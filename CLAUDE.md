@@ -113,7 +113,7 @@ Always use these aliases for imports to maintain consistency.
 ## External APIs & Data Sources
 
 ### Frankfurter.app (Primary Forex Data)
-**Location:** `server/services/exchangerate-api.ts`
+**Location:** `server/services/exchangerate-api.ts` (note: file name is legacy, actually uses Frankfurter.app)
 - **Purpose:** Real-time forex exchange rates
 - **Base URL:** `https://api.frankfurter.app`
 - **Authentication:** None required (free, unlimited)
@@ -122,10 +122,10 @@ Always use these aliases for imports to maintain consistency.
 - **Pairs:** EUR/USD, GBP/USD, USD/JPY, AUD/USD, USD/CHF
 
 **Why Frankfurter:**
-- Switched from ExchangeRate-API (October 25, 2025) due to quota limits
-- Truly unlimited usage (no API key, no quotas)
-- Free forever with ECB backing
-- Perfect for 480+ calls/day usage pattern
+- No API key required (unlimited, free forever)
+- Official European Central Bank exchange rate data
+- Reliable and accurate for forex trading signals
+- Perfect for 96+ calls/day usage pattern (every 15 min × 5 pairs)
 
 ### Twelve Data API (Historical Candles)
 **Location:** `server/services/twelve-data.ts`

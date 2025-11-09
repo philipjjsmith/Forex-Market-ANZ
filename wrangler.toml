@@ -8,11 +8,8 @@ compatibility_date = "2025-10-10"
 directory = "./client/src"
 
 # 🌐 Deployment environment variables
-# These are pulled from your .env file during build/deploy.
+# Note: Database credentials (DATABASE_URL, SUPABASE_URL, etc.) should be set via Cloudflare dashboard
+# for security. Only non-sensitive configs are listed here.
 [vars]
-FOREX_API_KEY = "5ES11PSM60ESIMHH"
-FOREX_API_PROVIDER = "alphavantage"
-FOREX_API_BASE_URL = "https://www.alphavantage.co/query"
 NODE_ENV = "production"
 PORT = "5000"
-SESSION_SECRET = "dev-secret-change-in-production"

@@ -51,7 +51,8 @@ export function generateCandlesFromRealPrice(currentPrice: number, count = 1440)
 }
 
 /**
- * Convert Alpha Vantage forex quote to candles
+ * Convert forex quote to synthetic candle data
+ * Uses current price from Frankfurter.app to generate historical candles via random walk
  */
 export function generateCandlesFromQuote(
   symbol: string,

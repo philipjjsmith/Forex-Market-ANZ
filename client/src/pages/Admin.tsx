@@ -767,11 +767,11 @@ export default function Admin() {
 
       {/* API Usage */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* ExchangeRate API */}
+        {/* Frankfurter API */}
         <Card className="bg-slate-800/80 border-slate-600/50 backdrop-blur-md shadow-xl">
           <CardHeader>
-            <CardTitle className="text-white">ExchangeRate API</CardTitle>
-            <CardDescription className="text-blue-200">Real-time forex quotes</CardDescription>
+            <CardTitle className="text-white">Frankfurter API</CardTitle>
+            <CardDescription className="text-blue-200">Real-time forex quotes (ECB data)</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <div>

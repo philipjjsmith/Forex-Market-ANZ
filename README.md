@@ -4,10 +4,12 @@ A professional forex market analysis platform with real-time data integration, t
 
 ## Features
 
-- Real-time forex data from Alpha Vantage API
-- Technical analysis with multiple indicators (RSI, ADX, Bollinger Bands, ATR, Moving Averages)
+- Real-time forex quotes from Frankfurter.app (European Central Bank data)
+- Historical candle data from Twelve Data API
+- Technical analysis with multiple indicators (RSI, ADX, Bollinger Bands, ATR, MACD, Moving Averages)
 - AI-powered trading signal generation with entry/exit recommendations
-- Daily quota system (24 analyses per day)
+- Automated signal generation every 15 minutes (24/7)
+- Growth tracking and performance analytics
 - Save and manage trading signals
 - Professional UI with responsive design
 
@@ -40,13 +42,19 @@ npm install
 
 This will install all dependencies listed in `package.json`. It may take a few minutes.
 
-### Step 3: Get Your Alpha Vantage API Key
+### Step 3: Get Your Twelve Data API Key
 
-1. Go to [Alpha Vantage](https://www.alphavantage.co/support/#api-key)
-2. Enter your email and click "GET FREE API KEY"
-3. Copy the API key you receive (it will look like: `ABC123XYZ456...`)
+1. Go to [Twelve Data](https://twelvedata.com/pricing)
+2. Sign up for a free account (800 API calls/day)
+3. Copy your API key from the dashboard
 
-### Step 4: Configure Environment Variables
+### Step 4: Set Up Supabase Database
+
+1. Go to [Supabase](https://supabase.com) and create a new project
+2. Get your database credentials from Settings → Database
+3. Get your service role key from Settings → API
+
+### Step 5: Configure Environment Variables
 
 Create a `.env` file in the root directory:
 
@@ -54,20 +62,26 @@ Create a `.env` file in the root directory:
 cp .env.example .env
 ```
 
-Open the `.env` file in a text editor and add your Alpha Vantage API key:
+Open the `.env` file and add your credentials:
 
 ```env
-FOREX_API_KEY=your_actual_api_key_here
-FOREX_API_PROVIDER=alphavantage
-FOREX_API_BASE_URL=https://www.alphavantage.co/query
+# Twelve Data API (historical candles)
+TWELVE_DATA_KEY=your_twelve_data_api_key_here
+
+# Supabase Database
+DATABASE_URL=postgresql://postgres.[project-ref]:[password]@aws-0-[region].pooler.supabase.com:5432/postgres
+SUPABASE_URL=https://[project-ref].supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your-supabase-service-role-key-here
+
+# Server Configuration
 NODE_ENV=development
 PORT=5000
 SESSION_SECRET=your-secret-key-change-this
 ```
 
-**Important:** Replace `your_actual_api_key_here` with the API key you got from Step 3.
+**Important:** Replace all placeholder values with your actual credentials.
 
-### Step 5: Start the Development Server
+### Step 6: Start the Development Server
 
 Run the application:
 
@@ -81,7 +95,7 @@ You should see output like:
 serving on port 5000
 ```
 
-### Step 6: Open in Your Browser
+### Step 7: Open in Your Browser
 
 Open your web browser and navigate to:
 
@@ -93,13 +107,19 @@ You should now see the Forex Signal Engine dashboard!
 
 ## How to Use the Application
 
-1. **Click "Analyze Now"** - This fetches real-time forex data and generates trading signals
-2. **View Signals** - Browse through the generated trading signals with entry/exit prices
-3. **Filter Signals** - Use the confidence level and signal type filters to narrow results
-4. **Save Signals** - Click the star icon on any signal to save it for later
-5. **View Indicators** - Check the right panel for real-time technical indicators
+### Automated Signal Generation
+- Signals are automatically generated every 15 minutes for all currency pairs
+- View real-time signals on the Dashboard
+- Admin panel shows system health and signal performance
 
-**Note:** You have 24 analyses per day. The quota resets at midnight UTC.
+### Manual Analysis
+1. **Click "Analyze Now"** on Dashboard - Generates signals on-demand
+2. **View Signals** - Browse through generated signals with entry/exit prices
+3. **Filter Signals** - Use confidence level and signal type filters
+4. **Save Signals** - Click the star icon to save signals for later
+5. **Growth Tracking** - Monitor performance in the Admin panel
+
+**Note:** No daily quotas - system runs 24/7 automatically.
 
 ## Available Scripts
 
@@ -120,12 +140,13 @@ PORT=3000
 
 Then access the app at `http://localhost:3000`
 
-### API Key Not Working
+### API Keys Not Working
 
 Make sure:
 - Your `.env` file is in the root directory (same folder as `package.json`)
-- You copied the API key correctly (no extra spaces)
-- The API key is from Alpha Vantage (not another provider)
+- You copied the Twelve Data API key correctly (no extra spaces)
+- Your Supabase credentials are correct
+- Database connection string includes password and correct region
 
 ### Dependencies Won't Install
 
@@ -155,7 +176,7 @@ Forex-Market-ANZ/
 │   │   ├── lib/           # Technical indicators & strategies
 │   │   └── pages/         # Page components
 ├── server/                # Express backend
-│   ├── services/          # API services (Alpha Vantage)
+│   ├── services/          # API services (Frankfurter, Twelve Data)
 │   └── routes.ts          # API endpoints
 ├── shared/                # Shared types & schemas
 ├── .env                   # Environment variables (create this)
@@ -167,16 +188,20 @@ Forex-Market-ANZ/
 
 - **Frontend:** React, TypeScript, Vite, TailwindCSS, shadcn/ui
 - **Backend:** Node.js, Express, TypeScript
-- **Data Source:** Alpha Vantage API
+- **Database:** PostgreSQL (Supabase)
+- **Data Sources:**
+  - Frankfurter.app (forex quotes - unlimited, free)
+  - Twelve Data API (historical candles)
 - **Charts:** Recharts
 - **State Management:** React Query
+- **ORM:** Drizzle ORM
 
-## API Rate Limits
+## API Information
 
-- **Alpha Vantage Free Tier:** 25 API calls per day
-- **App Quota System:** 24 analyses per day (saves 1 call as buffer)
-- **Server Cache:** 5-minute cache to reduce API calls
-- **Reset Time:** Midnight UTC
+- **Frankfurter.app:** Unlimited API calls, no authentication required, ECB data
+- **Twelve Data Free Tier:** 800 API calls per day
+- **Server Cache:** 15-minute cache to reduce API calls
+- **Signal Generation:** Every 15 minutes (96 times/day)
 
 ## Support & Documentation
 
