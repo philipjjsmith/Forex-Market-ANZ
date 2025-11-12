@@ -698,12 +698,62 @@ export function registerAdminRoutes(app: Express) {
         WHERE trade_live = true AND tier = 'HIGH' AND outcome != 'PENDING'
       `);
 
+      // Query 6: Pending v2.2.0 Signals (Phase 2 & 3 tracking)
+      const pendingV220 = await db.execute(sql`
+        SELECT
+          COUNT(*) as count,
+          MIN(created_at) as first_signal,
+          MAX(created_at) as latest_signal
+        FROM signal_history
+        WHERE strategy_version = '2.2.0'
+          AND outcome = 'PENDING'
+          AND trade_live = true
+          AND tier = 'HIGH'
+      `);
+
+      // Query 7: Post-Nov4 Completed Signals (date-based Phase 2 & 3 results)
+      const postFixResults = await db.execute(sql`
+        SELECT
+          COUNT(*) as signals,
+          COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT')) as wins,
+          COUNT(*) FILTER (WHERE outcome = 'STOP_HIT') as losses,
+          ROUND(SUM(profit_loss_pips)::numeric, 2) as total_pips,
+          ROUND(AVG(profit_loss_pips)::numeric, 2) as avg_pips,
+          ROUND(100.0 * COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT')) /
+            NULLIF(COUNT(*), 0), 2) as win_rate,
+          MIN(outcome_time) as first_completion,
+          MAX(outcome_time) as latest_completion
+        FROM signal_history
+        WHERE created_at >= '2025-11-04 05:44:16 UTC'
+          AND outcome != 'PENDING'
+          AND trade_live = true
+          AND tier = 'HIGH'
+      `);
+
+      const v220Data = (pendingV220 as any[])[0];
+      const postFixData = (postFixResults as any[])[0];
+
       res.json({
         monthly: monthlyResults,
         bySymbol: symbolResults,
         byVersion: versionResults,
         recentSignals: recentSignals,
         summary: (summary as any)[0],
+        pendingV220: {
+          count: v220Data?.count || 0,
+          firstSignal: v220Data?.first_signal,
+          latestSignal: v220Data?.latest_signal,
+        },
+        postNov4: {
+          signals: postFixData?.signals || 0,
+          wins: postFixData?.wins || 0,
+          losses: postFixData?.losses || 0,
+          totalPips: postFixData?.total_pips || 0,
+          avgPips: postFixData?.avg_pips || 0,
+          winRate: postFixData?.win_rate || 0,
+          firstCompletion: postFixData?.first_completion,
+          latestCompletion: postFixData?.latest_completion,
+        },
       });
     } catch (error: any) {
       console.error('❌ Error in diagnose-fxify-losses:', error);

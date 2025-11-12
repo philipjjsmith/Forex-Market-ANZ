@@ -1367,46 +1367,126 @@ export default function Admin() {
                           </div>
                         </div>
 
-                        {/* Analysis */}
+                        {/* v2.2.0 System Status - Phase 2 & 3 Tracking */}
+                        {diagnosticData.pendingV220 && diagnosticData.pendingV220.count > 0 ? (
+                          <div className="bg-blue-900/30 border border-blue-500/50 p-4 rounded-lg">
+                            <h3 className="text-blue-400 font-bold mb-2">✅ v2.2.0 SYSTEM ACTIVE (Phase 2 & 3 Deployed)</h3>
+                            <div className="space-y-2 text-sm">
+                              <p className="text-blue-200">
+                                <span className="font-bold">{diagnosticData.pendingV220.count} pending v2.2.0 signals</span> awaiting resolution
+                              </p>
+                              <p className="text-blue-300">
+                                📅 First signal: {diagnosticData.pendingV220.firstSignal ? new Date(diagnosticData.pendingV220.firstSignal).toLocaleString() : 'N/A'}
+                              </p>
+                              <p className="text-blue-300">
+                                📅 Latest signal: {diagnosticData.pendingV220.latestSignal ? new Date(diagnosticData.pendingV220.latestSignal).toLocaleString() : 'N/A'}
+                              </p>
+                              <p className="text-white mt-2">
+                                ⏳ Signals typically take 3-7 days to resolve (swing trading strategy)
+                              </p>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="bg-yellow-900/30 border border-yellow-500/50 p-4 rounded-lg">
+                            <h3 className="text-yellow-400 font-bold mb-2">⚠️ NO v2.2.0 PENDING SIGNALS</h3>
+                            <p className="text-yellow-200 text-sm">
+                              No pending v2.2.0 signals found. Check that signal generator is running.
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Post-Nov4 Results (Date-Based Phase 2 & 3 Performance) */}
+                        {diagnosticData.postNov4 && (
+                          <div className="bg-slate-800/50 border border-slate-700 p-4 rounded-lg">
+                            <h3 className="text-white font-bold mb-3">📊 Post-Nov4 Results (Phase 2 & 3 Performance)</h3>
+                            {diagnosticData.postNov4.signals > 0 ? (
+                              <div className="space-y-2">
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                                  <div>
+                                    <p className="text-slate-400">Completed:</p>
+                                    <p className="text-white font-bold">{diagnosticData.postNov4.signals}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-slate-400">Win Rate:</p>
+                                    <p className={`font-bold ${parseFloat(diagnosticData.postNov4.winRate) >= 40 ? 'text-green-400' : parseFloat(diagnosticData.postNov4.winRate) >= 30 ? 'text-yellow-400' : 'text-red-400'}`}>
+                                      {diagnosticData.postNov4.winRate}%
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <p className="text-slate-400">Total Pips:</p>
+                                    <p className={`font-bold ${parseFloat(diagnosticData.postNov4.totalPips) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                      {parseFloat(diagnosticData.postNov4.totalPips).toFixed(2)}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <p className="text-slate-400">Record:</p>
+                                    <p className="text-white font-bold">{diagnosticData.postNov4.wins}W / {diagnosticData.postNov4.losses}L</p>
+                                  </div>
+                                </div>
+
+                                {/* Smart Status Analysis */}
+                                {diagnosticData.postNov4.signals < 50 ? (
+                                  <div className="bg-blue-900/20 border-l-4 border-blue-500 p-3 mt-3">
+                                    <p className="text-blue-300 text-sm font-semibold">
+                                      📊 INSUFFICIENT DATA ({diagnosticData.postNov4.signals}/50 signals)
+                                    </p>
+                                    <p className="text-blue-200 text-sm mt-1">
+                                      Need 50-100 completed signals for statistical significance. Continue monitoring.
+                                    </p>
+                                  </div>
+                                ) : diagnosticData.postNov4.winRate >= 40 && diagnosticData.postNov4.totalPips > 0 ? (
+                                  <div className="bg-green-900/20 border-l-4 border-green-500 p-3 mt-3">
+                                    <p className="text-green-300 text-sm font-semibold">
+                                      ✅ PHASE 2 & 3 WORKING - System profitable!
+                                    </p>
+                                    <p className="text-green-200 text-sm mt-1">
+                                      Win rate above 40% target. Continue monitoring for consistency.
+                                    </p>
+                                  </div>
+                                ) : diagnosticData.postNov4.signals < 100 ? (
+                                  <div className="bg-yellow-900/20 border-l-4 border-yellow-500 p-3 mt-3">
+                                    <p className="text-yellow-300 text-sm font-semibold">
+                                      ⚠️ MONITORING REQUIRED ({diagnosticData.postNov4.signals}/100 signals)
+                                    </p>
+                                    <p className="text-yellow-200 text-sm mt-1">
+                                      Current win rate below target. Wait for 100 signals before taking action.
+                                    </p>
+                                  </div>
+                                ) : (
+                                  <div className="bg-red-900/20 border-l-4 border-red-500 p-3 mt-3">
+                                    <p className="text-red-300 text-sm font-semibold">
+                                      🚨 ACTION REQUIRED - Win rate &lt; 30% after 100+ signals
+                                    </p>
+                                    <p className="text-red-200 text-sm mt-1">
+                                      Phase 2 & 3 may need additional tuning. Review strategy parameters.
+                                    </p>
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <p className="text-slate-400 text-sm">
+                                No completed signals since Nov 4. Signals typically take 3-7 days to resolve.
+                              </p>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Historical Context */}
                         {(() => {
-                          const oldVersions = diagnosticData.byVersion.filter((v: any) => parseFloat(v.strategy_version || '0') < 2.1);
-                          const newVersions = diagnosticData.byVersion.filter((v: any) => parseFloat(v.strategy_version || '0') >= 2.1);
-
-                          if (oldVersions.length > 0 && newVersions.length > 0) {
+                          const oldVersions = diagnosticData.byVersion.filter((v: any) => parseFloat(v.strategy_version || '0') < 2.2);
+                          if (oldVersions.length > 0) {
                             const oldPips = oldVersions.reduce((sum: number, v: any) => sum + parseFloat(v.total_pips), 0);
-                            const newPips = newVersions.reduce((sum: number, v: any) => sum + parseFloat(v.total_pips), 0);
-
-                            if (oldPips < 0 && newPips > oldPips) {
-                              return (
-                                <div className="bg-green-900/30 border border-green-500/50 p-4 rounded-lg">
-                                  <h3 className="text-green-400 font-bold mb-2">✅ ROOT CAUSE: HISTORICAL DATA</h3>
-                                  <p className="text-green-200 text-sm mb-2">
-                                    Old versions (&lt; 2.1.0): <span className="font-bold">{oldPips.toFixed(2)} pips</span> (${(oldPips * 10).toLocaleString()})
-                                  </p>
-                                  <p className="text-green-200 text-sm mb-2">
-                                    New versions (≥ 2.1.0): <span className="font-bold">{newPips.toFixed(2)} pips</span> (${(newPips * 10).toLocaleString()})
-                                  </p>
-                                  <p className="text-white font-bold mt-3">
-                                    ✅ SOLUTION: The -$2.25M loss is from OLD signals before Phase 2 & 3 optimizations.
-                                  </p>
-                                  <p className="text-green-200 text-sm mt-2">
-                                    Filter Growth Tracking to show only strategy_version ≥ 2.1.0 to see current performance.
-                                  </p>
-                                </div>
-                              );
-                            } else if (newPips < -10000) {
-                              return (
-                                <div className="bg-red-900/30 border border-red-500/50 p-4 rounded-lg">
-                                  <h3 className="text-red-400 font-bold mb-2">🚨 CRITICAL: CURRENT SYSTEM LOSING MONEY</h3>
-                                  <p className="text-red-200 text-sm mb-2">
-                                    New versions (≥ 2.1.0): <span className="font-bold">{newPips.toFixed(2)} pips</span> (${(newPips * 10).toLocaleString()})
-                                  </p>
-                                  <p className="text-white font-bold mt-3">
-                                    🚨 ACTION REQUIRED: Phase 2 & 3 optimizations are NOT working. STOP generating new signals.
-                                  </p>
-                                </div>
-                              );
-                            }
+                            return (
+                              <div className="bg-slate-800/30 border border-slate-600 p-4 rounded-lg">
+                                <h3 className="text-slate-300 font-bold mb-2">📜 Historical Context</h3>
+                                <p className="text-slate-400 text-sm mb-2">
+                                  Pre-Phase 2 & 3 versions (&lt; v2.2.0): <span className="text-red-400 font-bold">{oldPips.toFixed(2)} pips</span>
+                                </p>
+                                <p className="text-slate-400 text-sm">
+                                  ℹ️ Use "Nov 4+ (Fixed System)" filter in Growth Tracking to see v2.2.0 performance only
+                                </p>
+                              </div>
+                            );
                           }
                           return null;
                         })()}
