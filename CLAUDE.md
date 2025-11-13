@@ -77,7 +77,6 @@ The codebase is organized into three main directories:
   - `client/src/components/` - React components (UI primitives in `ui/`, feature components at root)
     - `TradingChartWidget.tsx` - Interactive trading charts with lightweight-charts
     - `ProjectionTradingGame.tsx` - Educational trading simulator game
-    - `TradingSimulator.tsx` - Practice trading with mock data
   - `client/src/lib/` - Core logic: technical indicators, trading strategies, utilities
   - `client/src/pages/` - Page-level components
     - `Dashboard.tsx` - Main dashboard with charts and signals

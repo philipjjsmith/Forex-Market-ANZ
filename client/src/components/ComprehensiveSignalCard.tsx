@@ -260,6 +260,7 @@ export function ComprehensiveSignalCard({ signal, candles, onToggleSave, isSaved
   const explanation = getSignalExplanation(signal);
 
   // Copy signal details for MT5 (Format B - Compact)
+  // Safari-compatible with fallback for iOS/older browsers
   const copyForMT5 = async () => {
     const directionEmoji = signal.type === 'LONG' ? '📈' : '📉';
     const signalText = `${directionEmoji} ${signal.symbol} ${signal.orderType.replace(/_/g, ' ')}
@@ -272,18 +273,49 @@ TP3: ${signal.targets[2]} (34%)
 R:R: 1:${signal.riskReward}
 Risk: 1-2%${signal.stopLimitPrice ? `\nStop Limit: ${signal.stopLimitPrice}` : ''}`;
 
+    // Try modern Clipboard API first (works on Chrome, Firefox, Edge)
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      try {
+        await navigator.clipboard.writeText(signalText);
+        toast({
+          title: "✅ Signal copied to clipboard!",
+          description: "Ready to paste into MT5 or your trading journal",
+        });
+        return;
+      } catch (err) {
+        console.warn('Clipboard API failed, trying fallback:', err);
+      }
+    }
+
+    // Fallback for Safari/iOS and older browsers using execCommand
+    const textarea = document.createElement('textarea');
+    textarea.value = signalText;
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    textarea.style.top = '0';
+    textarea.style.left = '0';
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+
     try {
-      await navigator.clipboard.writeText(signalText);
-      toast({
-        title: "✅ Signal copied to clipboard!",
-        description: "Ready to paste into MT5 or your trading journal",
-      });
+      const success = document.execCommand('copy');
+      if (success) {
+        toast({
+          title: "✅ Signal copied to clipboard!",
+          description: "Ready to paste into MT5 or your trading journal",
+        });
+      } else {
+        throw new Error('execCommand failed');
+      }
     } catch (err) {
       toast({
-        title: "❌ Failed to copy",
-        description: "Please try again or copy manually",
+        title: "❌ Copy not supported",
+        description: "Your browser doesn't support clipboard copying. Try using Chrome or Firefox, or copy the signal details manually.",
         variant: "destructive",
       });
+    } finally {
+      document.body.removeChild(textarea);
     }
   };
 

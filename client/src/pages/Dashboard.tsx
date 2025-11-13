@@ -14,7 +14,7 @@ export default function Dashboard() {
   const [, setLocation] = useLocation();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
-  const [pairs] = useState(['EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'USD/CHF']);
+  const [pairs] = useState(['EUR/USD', 'USD/JPY', 'AUD/USD', 'USD/CHF']); // GBP/USD disabled (signal-generator.ts:664)
   const [selectedPair, setSelectedPair] = useState('EUR/USD');
   const [signals, setSignals] = useState<Signal[]>([]);
   const [marketData, setMarketData] = useState<Record<string, { candles: any[], currentPrice: number }>>({});
@@ -167,7 +167,9 @@ export default function Dashboard() {
     setApiError(null);
 
     try {
-      console.log('🚀 Fetching real forex data from API...');
+      if (import.meta.env.DEV) {
+        console.log('🚀 Fetching real forex data from API...');
+      }
 
       // Fetch real forex quotes from backend
       const response = await fetch(API_ENDPOINTS.FOREX_QUOTES);
@@ -182,7 +184,9 @@ export default function Dashboard() {
         throw new Error(result.error || 'Failed to fetch forex data');
       }
 
-      console.log('✅ Received forex quotes:', result.data);
+      if (import.meta.env.DEV) {
+        console.log('✅ Received forex quotes:', result.data);
+      }
 
       // Use one analysis from quota
       const quotaUsed = useAnalysis();
@@ -224,12 +228,17 @@ export default function Dashboard() {
 
       setSignals(prev => [...newSignals, ...prev].slice(0, 20));
       setMarketData(newMarketData);
-      console.log(`✅ Generated ${newSignals.length} signals from real data`);
+
+      if (import.meta.env.DEV) {
+        console.log(`✅ Generated ${newSignals.length} signals from real data`);
+      }
 
       // Auto-track signals with 70%+ confidence
       const signalsToTrack = newSignals.filter(s => s.confidence >= 70);
       if (signalsToTrack.length > 0) {
-        console.log(`📊 Auto-tracking ${signalsToTrack.length} signals with 70%+ confidence`);
+        if (import.meta.env.DEV) {
+          console.log(`📊 Auto-tracking ${signalsToTrack.length} signals with 70%+ confidence`);
+        }
 
         let trackedCount = 0;
         for (const signal of signalsToTrack) {
@@ -250,10 +259,14 @@ export default function Dashboard() {
               })
             });
 
-            console.log(`✅ Tracked signal ${signal.id} (${signal.confidence}% confidence)`);
+            if (import.meta.env.DEV) {
+              console.log(`✅ Tracked signal ${signal.id} (${signal.confidence}% confidence)`);
+            }
             trackedCount++;
           } catch (trackError) {
-            console.error(`❌ Failed to track signal ${signal.id}:`, trackError);
+            if (import.meta.env.DEV) {
+              console.error(`❌ Failed to track signal ${signal.id}:`, trackError);
+            }
           }
         }
 
@@ -268,7 +281,9 @@ export default function Dashboard() {
       }
 
     } catch (error: any) {
-      console.error('❌ Error analyzing market:', error);
+      if (import.meta.env.DEV) {
+        console.error('❌ Error analyzing market:', error);
+      }
       setApiError(error.message || 'Failed to fetch market data. Please try again.');
     } finally {
       setIsAnalyzing(false);
