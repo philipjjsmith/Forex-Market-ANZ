@@ -25,17 +25,48 @@ export class TwelveDataAPI {
   private baseUrl: string;
   private apiKey: string;
   private cache: Map<string, { candles: Candle[]; timestamp: number }>;
-  private cacheTTL: number;
 
   constructor() {
     this.baseUrl = 'https://api.twelvedata.com';
     this.apiKey = process.env.TWELVE_DATA_KEY || '';
     this.cache = new Map();
-    this.cacheTTL = 15 * 60 * 1000; // 15 minutes cache
 
     if (!this.apiKey) {
       console.warn('⚠️  TWELVE_DATA_KEY not set in environment variables');
     }
+  }
+
+  /**
+   * Get cache TTL based on timeframe interval
+   * Higher timeframes change less frequently, so cache longer
+   * This reduces API calls dramatically while keeping data fresh
+   *
+   * @param interval - Timeframe interval (e.g., "1week", "1day", "4h", "1h", "5min")
+   * @returns Cache TTL in milliseconds
+   */
+  private getCacheTTL(interval: string): number {
+    // Weekly candles update once per week - cache for 6 hours
+    if (interval === '1week' || interval === '1w') {
+      return 6 * 60 * 60 * 1000; // 6 hours
+    }
+
+    // Daily candles update once per day - cache for 4 hours
+    if (interval === '1day' || interval === '1d') {
+      return 4 * 60 * 60 * 1000; // 4 hours
+    }
+
+    // 4-hour candles update every 4 hours - cache for 2 hours
+    if (interval === '4h') {
+      return 2 * 60 * 60 * 1000; // 2 hours
+    }
+
+    // 1-hour candles update every hour - cache for 30 minutes
+    if (interval === '1h') {
+      return 30 * 60 * 1000; // 30 minutes
+    }
+
+    // Lower timeframes (5min, 15min, 30min) - cache for 15 minutes
+    return 15 * 60 * 1000; // 15 minutes (default)
   }
 
   /**
@@ -51,10 +82,14 @@ export class TwelveDataAPI {
   ): Promise<Candle[]> {
     const cacheKey = `${symbol}-${interval}`;
 
+    // Get interval-specific cache TTL (longer for higher timeframes)
+    const cacheTTL = this.getCacheTTL(interval);
+
     // Check cache first
     const cached = this.cache.get(cacheKey);
-    if (cached && Date.now() - cached.timestamp < this.cacheTTL) {
-      console.log(`✅ Cache hit for ${cacheKey}`);
+    if (cached && Date.now() - cached.timestamp < cacheTTL) {
+      const cacheAgeMinutes = Math.round((Date.now() - cached.timestamp) / (60 * 1000));
+      console.log(`✅ Cache hit for ${cacheKey} (age: ${cacheAgeMinutes}min, TTL: ${Math.round(cacheTTL / (60 * 1000))}min)`);
       return cached.candles;
     }
 

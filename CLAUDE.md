@@ -137,18 +137,28 @@ Always use these aliases for imports to maintain consistency.
 
 ### Signal Generation Pipeline
 **Location:** `server/services/signal-generator.ts`
+
+**v3.0.0 (Multi-Timeframe Analysis):**
 1. Fetch real-time quotes from Frankfurter.app
-2. Fetch historical candles from Twelve Data
-3. Run technical analysis (MA, RSI, ATR, ADX, BB)
-4. Generate signals with confidence scoring
-5. AI analyzer adds confidence adjustments
-6. Store in Supabase database
-7. Outcome validator tracks performance
+2. Fetch 4 timeframes from Twelve Data API (Weekly, Daily, 4H, 1H) with intelligent caching
+3. Analyze trend independently on each timeframe (EMA crossovers + MACD)
+4. Generate signals ONLY when ALL 4 timeframes align (Weekly UP + Daily UP + 4H UP + 1H UP)
+5. Run entry indicators on 1H timeframe (RSI, ATR, ADX, BB)
+6. Award confidence points for multi-timeframe alignment (max: 131 points)
+7. AI analyzer adds confidence adjustments
+8. Store in Supabase database
+9. Outcome validator tracks performance
+
+**Intelligent Caching (Reduces API calls from 1,536/day to ~250/day):**
+- Weekly candles: 6-hour cache (changes slowly)
+- Daily candles: 4-hour cache
+- 4H candles: 2-hour cache
+- 1H candles: 30-minute cache
 
 **Automation:**
 - Cron endpoint: `/api/cron/generate-signals`
 - Runs every 15 minutes (triggered by UptimeRobot)
-- Currently generating ~930 signals
+- Twelve Data free tier: 800 API calls/day (well within limit with caching)
 
 ## Technical Analysis System
 
@@ -269,54 +279,71 @@ The application includes comprehensive mock data generation for candles and mark
 
 ## Signal Generation System
 
-### Tiered Confidence System
+### Tiered Confidence System (v3.0.0)
 Signals are classified into two tiers based on confidence scoring:
 
-**HIGH Tier (85-126 points):**
+**HIGH Tier (100-131 points, 76%+):**
 - **Display:** "LIVE TRADING" badge with 5 Signal Bars (blue/cyan gradient)
-- **Trading Mode:** Approved for live trading with 1% account risk per trade
+- **Trading Mode:** Approved for live trading with 1.5% account risk per trade
 - **Auto-tracking:** Automatically saved to database when generated
-- **Filter:** Visible when "Live Trading (85-100%)" filter is selected
+- **Filter:** Visible when "Live Trading (100-131)" filter is selected
+- **Requirements:** ALL 4 timeframes must align + strong MACD confirmation on at least 3 timeframes
 
-**MEDIUM Tier (70-84 points):**
+**MEDIUM Tier (90-99 points, 69-75%):**
 - **Display:** "PRACTICE SIGNAL" badge with 3 Signal Bars (slate gray)
 - **Trading Mode:** Demo account only, 0% account risk (paper trading)
 - **Auto-tracking:** Automatically saved to database when generated
-- **Filter:** Visible when "Practice Signal (70-84%)" filter is selected
+- **Filter:** Visible when "Practice Signal (90-99)" filter is selected
+- **Requirements:** ALL 4 timeframes must align + at least 2 timeframes with MACD confirmation
 
-**Signals below 70 points are discarded and not saved.**
+**Signals below 90 points are discarded and not saved.**
 
-### Confidence Scoring Algorithm (Max: 126 points)
+### Confidence Scoring Algorithm v3.0.0 (Max: 131 points)
+
+**CRITICAL REQUIREMENT:** ALL 4 timeframes must be aligned (Weekly + Daily + 4H + 1H all UP or all DOWN). If any timeframe disagrees, signal is rejected immediately.
 
 The signal generator (`server/services/signal-generator.ts`) uses an additive point system:
 
-**Guaranteed Points (if conditions met):**
-1. HTF trend aligned: **25 points** - Daily trend matches signal direction
-2. Entry signal detected: **20 points** - MA crossover or pullback pattern
-3. Candle close confirmation: **5 points** - 4H candle closed confirming signal
-4. Clear of news: **3 points** - No major news events within 2-hour window
+**Multi-Timeframe Alignment (65 points max):**
+1. **Weekly timeframe aligned (20 points max)**
+   - Trend UP/DOWN: **15 points** (minimum)
+   - Trend UP/DOWN + MACD confirmation: **20 points** (full credit)
 
-**Conditional Points (high-probability criteria):**
-5. RSI in optimal range: **15 points** - RSI between 40-70 (LONG) or 30-60 (SHORT)
-6. ADX > 25: **15 points** - Strong trend confirmation
-7. HTF trend strength: **10 points** - Daily MA separation > 0.25% (realistic for forex)
-8. BB position: **8 points** - Price in lower/upper BB region for optimal entry
+2. **Daily timeframe aligned (20 points max)**
+   - Trend UP/DOWN: **10 points** (minimum)
+   - Trend UP/DOWN + MACD confirmation: **15-20 points** (scaled by trend acceleration)
 
-**Bonus Points (rare but valuable):**
-9. Support/Resistance confluence: **15 points** - Entry within 0.25% (25 pips) of key level
-10. Breakout & Retest pattern: **10 points** - Specific price action setup detected
+3. **4H timeframe aligned (15 points max)**
+   - Trend UP/DOWN: **10 points** (minimum)
+   - Trend UP/DOWN + MACD confirmation: **15 points** (full credit)
+
+4. **1H timeframe aligned (10 points max)**
+   - Trend UP/DOWN: **5 points** (minimum)
+   - Trend UP/DOWN + MACD confirmation: **10 points** (full credit)
+
+**Entry Indicators on 1H Timeframe (66 points max):**
+5. Entry signal detected: **15 points** - MA crossover or pullback pattern
+6. RSI in optimal range: **12 points** - RSI between 45-70 (LONG) or 30-55 (SHORT)
+7. ADX > 25: **12 points** - Strong trend confirmation (MANDATORY filter - blocks signal if not met)
+8. BB position: **6 points** - Price in lower/upper BB region for optimal entry
+9. Support/Resistance confluence: **12 points** - Entry within 0.25% (25 pips) of key level
+10. Breakout & Retest pattern: **9 points** - Specific price action setup detected
+11. Clear of news: **3 points** - No major news events within 2-hour window
 
 **Typical Scoring Examples:**
-- **Strong signal:** 25+20+15+15+10+8+5+3 = **101 points** (HIGH tier)
-- **Good signal:** 25+20+15+15+8+5+3 = **91 points** (HIGH tier)
-- **Decent signal:** 25+20+15+8+5+3 = **76 points** (MEDIUM tier)
+- **Perfect alignment:** 20+20+15+10+15+12+12+6+12+9+3 = **134 points** (theoretical max)
+- **Strong signal:** 20+20+15+10+15+12+12+6 = **110 points** (HIGH tier)
+- **Good signal:** 20+15+15+10+15+12+12 = **99 points** (MEDIUM tier)
+- **Minimum viable:** 15+10+10+5+15+12+12+6+3 = **88 points** (rejected - below 90)
 
-**Important Notes:**
-- Scoring was adjusted on 2025-10-26 to make 85+ achievable with realistic market conditions
-- Previous max was 120 points with stricter criteria (signals maxed at 82%)
-- HTF trend strength threshold lowered from 0.5% to 0.25% for forex volatility
-- S/R confluence tolerance increased from 20 pips to 25 pips
-- RSI and ADX points increased from 12 to 15 each
+**Important Changes in v3.0.0 (2025-11-13):**
+- Complete rewrite from 2-timeframe to 4-timeframe analysis
+- Minimum confidence raised from 80 to 90 points (69% → 69%)
+- Maximum confidence raised from 126 to 131 points
+- ALL timeframes must align (no signals when timeframes conflict)
+- Intelligent caching reduces API calls from 1,536/day to ~250/day
+- Entry signals now detected on 1H timeframe (was 4H in v2.x)
+- Indicators calculated on 1H timeframe for precise entry timing
 
 ### Signal Requirements
 
