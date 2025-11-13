@@ -381,7 +381,7 @@ class MACrossoverStrategy {
       }
 
       // 4. RSI in optimal range (15 points)
-      if (rsi && rsi > 40 && rsi < 70) {
+      if (rsi && rsi > 45 && rsi < 70) {
         confidence += 15;
         rationale.push(`✅ RSI in optimal range: ${rsi.toFixed(1)} (+15)`);
       }
@@ -477,7 +477,7 @@ class MACrossoverStrategy {
       }
 
       // 4. RSI in optimal range (15 points)
-      if (rsi && rsi > 30 && rsi < 60) {
+      if (rsi && rsi > 30 && rsi < 55) {
         confidence += 15;
         rationale.push(`✅ RSI in optimal range: ${rsi.toFixed(1)} (+15)`);
       }
