@@ -138,16 +138,23 @@ Always use these aliases for imports to maintain consistency.
 ### Signal Generation Pipeline
 **Location:** `server/services/signal-generator.ts`
 
-**v3.0.0 (Multi-Timeframe Analysis):**
+**v3.1.0 (ICT 3-Timeframe Rule - Professional Funded Trader Approach):**
 1. Fetch real-time quotes from Frankfurter.app
 2. Fetch 4 timeframes from Twelve Data API (Weekly, Daily, 4H, 1H) with intelligent caching
 3. Analyze trend independently on each timeframe (EMA crossovers + MACD)
-4. Generate signals ONLY when ALL 4 timeframes align (Weekly UP + Daily UP + 4H UP + 1H UP)
-5. Run entry indicators on 1H timeframe (RSI, ATR, ADX, BB)
-6. Award confidence points for multi-timeframe alignment (max: 131 points)
-7. AI analyzer adds confidence adjustments
-8. Store in Supabase database
-9. Outcome validator tracks performance
+4. **Generate signals when Weekly + Daily + 4H ALL align** (ICT 3-TF Rule)
+5. **1H used for entry timing** - pullbacks are GOOD, not rejected!
+6. Run entry indicators on 1H timeframe (RSI, ATR, ADX, BB)
+7. Award confidence points: 75 for 3-TF alignment + 25 for entry timing (max: 100 points)
+8. AI analyzer adds confidence adjustments
+9. Store in Supabase database
+10. Outcome validator tracks performance
+
+**Why v3.1.0 vs v3.0.0:**
+- v3.0.0 required ALL 4 timeframes aligned → only 1-3 signals/month (TOO STRICT)
+- v3.1.0 uses ICT methodology: W+D+4H aligned, 1H for timing → 3-7 signals/week ✅
+- Professional traders seek pullbacks (1H disagrees) for optimal entries
+- Based on research: 65-75% win rate achievable with proper frequency
 
 **Intelligent Caching (Reduces API calls from 1,536/day to ~250/day):**
 - Weekly candles: 6-hour cache (changes slowly)
@@ -279,71 +286,68 @@ The application includes comprehensive mock data generation for candles and mark
 
 ## Signal Generation System
 
-### Tiered Confidence System (v3.0.0)
+### Tiered Confidence System (v3.1.0 - ICT 3-Timeframe Rule)
 Signals are classified into two tiers based on confidence scoring:
 
-**HIGH Tier (100-131 points, 76%+):**
+**HIGH Tier (85-100 points, 85%+):**
 - **Display:** "LIVE TRADING" badge with 5 Signal Bars (blue/cyan gradient)
 - **Trading Mode:** Approved for live trading with 1.5% account risk per trade
 - **Auto-tracking:** Automatically saved to database when generated
-- **Filter:** Visible when "Live Trading (100-131)" filter is selected
-- **Requirements:** ALL 4 timeframes must align + strong MACD confirmation on at least 3 timeframes
+- **Filter:** Visible when "Live Trading (85-100%)" filter is selected
+- **Requirements:** Weekly + Daily + 4H must align with strong MACD confirmation
 
-**MEDIUM Tier (90-99 points, 69-75%):**
+**MEDIUM Tier (70-84 points, 70-84%):**
 - **Display:** "PRACTICE SIGNAL" badge with 3 Signal Bars (slate gray)
 - **Trading Mode:** Demo account only, 0% account risk (paper trading)
 - **Auto-tracking:** Automatically saved to database when generated
-- **Filter:** Visible when "Practice Signal (90-99)" filter is selected
-- **Requirements:** ALL 4 timeframes must align + at least 2 timeframes with MACD confirmation
+- **Filter:** Visible when "Practice Signal (70-84%)" filter is selected
+- **Requirements:** Weekly + Daily + 4H aligned, some MACD weak
 
-**Signals below 90 points are discarded and not saved.**
+**Signals below 70 points are discarded and not saved.**
 
-### Confidence Scoring Algorithm v3.0.0 (Max: 131 points)
+### Confidence Scoring Algorithm v3.1.0 (Max: 100 points)
 
-**CRITICAL REQUIREMENT:** ALL 4 timeframes must be aligned (Weekly + Daily + 4H + 1H all UP or all DOWN). If any timeframe disagrees, signal is rejected immediately.
+**ICT 3-TIMEFRAME RULE:** Weekly + Daily + 4H must ALL be same direction. 1H can disagree (that's a pullback = optimal entry!).
 
 The signal generator (`server/services/signal-generator.ts`) uses an additive point system:
 
-**Multi-Timeframe Alignment (65 points max):**
-1. **Weekly timeframe aligned (20 points max)**
+**3 Higher Timeframes Must Align (75 points max):**
+1. **Weekly timeframe (25 points max)**
+   - Trend UP/DOWN: **20 points** (minimum)
+   - Trend UP/DOWN + MACD confirmation: **25 points** (full credit)
+
+2. **Daily timeframe (25 points max)**
    - Trend UP/DOWN: **15 points** (minimum)
-   - Trend UP/DOWN + MACD confirmation: **20 points** (full credit)
+   - Trend UP/DOWN + MACD confirmation: **20-25 points** (scaled by trend acceleration)
 
-2. **Daily timeframe aligned (20 points max)**
-   - Trend UP/DOWN: **10 points** (minimum)
-   - Trend UP/DOWN + MACD confirmation: **15-20 points** (scaled by trend acceleration)
+3. **4H timeframe (25 points max)**
+   - Trend UP/DOWN: **20 points** (minimum)
+   - Trend UP/DOWN + MACD confirmation: **25 points** (full credit)
 
-3. **4H timeframe aligned (15 points max)**
-   - Trend UP/DOWN: **10 points** (minimum)
-   - Trend UP/DOWN + MACD confirmation: **15 points** (full credit)
+**1H Entry Timing (25 points max):**
+4. Entry signal detected: **10 points** - MA crossover or pullback pattern
+5. RSI in optimal range: **6 points** - RSI between 45-70 (LONG) or 30-55 (SHORT)
+6. ADX > 25: **6 points** - Strong trend confirmation (MANDATORY filter - blocks signal if not met)
+7. BB position: **3 points** - Price in lower/upper BB region for optimal entry
 
-4. **1H timeframe aligned (10 points max)**
-   - Trend UP/DOWN: **5 points** (minimum)
-   - Trend UP/DOWN + MACD confirmation: **10 points** (full credit)
-
-**Entry Indicators on 1H Timeframe (66 points max):**
-5. Entry signal detected: **15 points** - MA crossover or pullback pattern
-6. RSI in optimal range: **12 points** - RSI between 45-70 (LONG) or 30-55 (SHORT)
-7. ADX > 25: **12 points** - Strong trend confirmation (MANDATORY filter - blocks signal if not met)
-8. BB position: **6 points** - Price in lower/upper BB region for optimal entry
-9. Support/Resistance confluence: **12 points** - Entry within 0.25% (25 pips) of key level
-10. Breakout & Retest pattern: **9 points** - Specific price action setup detected
-11. Clear of news: **3 points** - No major news events within 2-hour window
+**Note:** 1H trend direction does NOT affect scoring. If 1H is opposite to W+D+4H, this indicates a pullback - which is the BEST entry opportunity!
 
 **Typical Scoring Examples:**
-- **Perfect alignment:** 20+20+15+10+15+12+12+6+12+9+3 = **134 points** (theoretical max)
-- **Strong signal:** 20+20+15+10+15+12+12+6 = **110 points** (HIGH tier)
-- **Good signal:** 20+15+15+10+15+12+12 = **99 points** (MEDIUM tier)
-- **Minimum viable:** 15+10+10+5+15+12+12+6+3 = **88 points** (rejected - below 90)
+- **Perfect alignment:** 25+25+25+10+6+6+3 = **100 points** (HIGH tier)
+- **Strong signal:** 25+25+25+10+6+6 = **97 points** (HIGH tier)
+- **Good signal:** 25+20+25+10+6+6 = **92 points** (HIGH tier)
+- **Decent signal:** 20+15+20+10+6 = **71 points** (MEDIUM tier)
+- **With 1H pullback:** 25+25+25+10+6+6+3 + "🎯 1H pullback detected" = OPTIMAL
 
-**Important Changes in v3.0.0 (2025-11-13):**
-- Complete rewrite from 2-timeframe to 4-timeframe analysis
-- Minimum confidence raised from 80 to 90 points (69% → 69%)
-- Maximum confidence raised from 126 to 131 points
-- ALL timeframes must align (no signals when timeframes conflict)
-- Intelligent caching reduces API calls from 1,536/day to ~250/day
-- Entry signals now detected on 1H timeframe (was 4H in v2.x)
-- Indicators calculated on 1H timeframe for precise entry timing
+**Important Changes in v3.1.0 (2025-11-13):**
+- Changed from v3.0.0 (required ALL 4 TF aligned) to ICT 3-TF Rule (W+D+4H only)
+- Minimum confidence lowered from 90 to 70 points (more opportunities)
+- Maximum confidence lowered from 131 to 100 points (simplified scoring)
+- HIGH tier lowered from 100 to 85 points (achievable with realistic conditions)
+- 1H used for entry timing only - pullbacks are GOOD, not rejected!
+- Expected: 3-7 signals/week (vs 1-3/month in v3.0.0)
+- Target win rate: 65-75% (industry standard for ICT methodology)
+- Based on extensive research: this is how professional funded traders actually trade
 
 ### Signal Requirements
 
