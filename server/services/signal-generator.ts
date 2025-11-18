@@ -874,23 +874,27 @@ export class SignalGenerator {
     try {
       console.log(`🔍 On-demand analysis for ${symbol}...`);
 
-      // Fetch multi-timeframe candles from Twelve Data API
-      const { weekly, daily, fourHour, oneHour } =
-        await twelveDataAPI.getMultiTimeframeCandles(symbol);
+      // Fetch all 4 timeframes in parallel (same as automated cron method)
+      const [weeklyCandles, dailyCandles, fourHourCandles, oneHourCandles] = await Promise.all([
+        twelveDataAPI.fetchHistoricalCandles(symbol, '1week', 52),   // 52 weeks = 1 year
+        twelveDataAPI.fetchHistoricalCandles(symbol, '1day', 200),   // 200 days
+        twelveDataAPI.fetchHistoricalCandles(symbol, '4h', 360),     // 360 4H candles = 60 days
+        twelveDataAPI.fetchHistoricalCandles(symbol, '1h', 720),     // 720 1H candles = 30 days
+      ]);
 
       // Validate minimum candles for reliable analysis
-      if (weekly.length < 26 || daily.length < 50 ||
-          fourHour.length < 50 || oneHour.length < 100) {
+      if (weeklyCandles.length < 26 || dailyCandles.length < 50 ||
+          fourHourCandles.length < 50 || oneHourCandles.length < 100) {
         console.log(`⚠️ Insufficient candle data for ${symbol}`);
         return null;
       }
 
       // Run v3.1.0 ICT 3-Timeframe analysis
       const signal = await this.strategy.analyze(
-        weekly,
-        daily,
-        fourHour,
-        oneHour,
+        weeklyCandles,
+        dailyCandles,
+        fourHourCandles,
+        oneHourCandles,
         symbol
       );
 
@@ -898,7 +902,7 @@ export class SignalGenerator {
         console.log(`✅ Generated ${signal.tier} signal for ${symbol} (${signal.confidence}% confidence)`);
 
         // Save to database (same as cron-generated signals)
-        await this.saveSignalToDatabase(signal, oneHour);
+        await this.saveSignalToDatabase(signal, oneHourCandles);
       } else {
         console.log(`ℹ️ No signal for ${symbol} (W+D+4H not aligned or filters not met)`);
       }
