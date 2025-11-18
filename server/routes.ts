@@ -516,6 +516,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  /**
+   * On-Demand Signal Analysis (v3.1.0)
+   * Allows manual signal generation for specific symbol
+   * Uses ICT 3-Timeframe methodology with real Twelve Data candles
+   */
+  app.post("/api/signals/analyze", async (req, res) => {
+    try {
+      const { symbol } = req.body;
+
+      if (!symbol) {
+        return res.status(400).json({
+          success: false,
+          error: 'Symbol is required'
+        });
+      }
+
+      // Validate symbol
+      const validSymbols = ['EUR/USD', 'USD/JPY', 'AUD/USD', 'USD/CHF'];
+      if (!validSymbols.includes(symbol)) {
+        return res.status(400).json({
+          success: false,
+          error: `Invalid symbol. Must be one of: ${validSymbols.join(', ')}`
+        });
+      }
+
+      // Generate signal using v3.1.0 ICT methodology
+      const signal = await signalGenerator.generateSignalForSymbol(symbol);
+
+      res.json({
+        success: true,
+        signal: signal || null,
+        message: signal
+          ? `Generated ${signal.tier} tier signal with ${signal.confidence}% confidence`
+          : 'No signal generated (market conditions not aligned)'
+      });
+
+    } catch (error: any) {
+      console.error('❌ Error in on-demand analysis:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to analyze market'
+      });
+    }
+  });
+
   // use storage to perform CRUD operations on the storage interface
   // e.g. storage.insertUser(user) or storage.getUserByUsername(username)
 

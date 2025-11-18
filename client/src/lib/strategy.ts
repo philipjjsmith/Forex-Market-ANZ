@@ -1,3 +1,13 @@
+/**
+ * @deprecated This client-side strategy is deprecated as of November 18, 2025
+ *
+ * All signal generation now uses server-side v3.1.0 ICT 3-Timeframe methodology
+ * via the /api/signals/analyze endpoint with real Twelve Data candles.
+ *
+ * This file is kept for backward compatibility only.
+ * DO NOT USE for new signal generation - it uses synthetic candles and v1.0.0 logic.
+ */
+
 import { Indicators } from './indicators';
 
 interface Candle {

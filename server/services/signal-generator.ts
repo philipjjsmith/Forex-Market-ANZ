@@ -865,6 +865,53 @@ export class SignalGenerator {
   }
 
   /**
+   * Generate signal for specific symbol (on-demand analysis)
+   * Used by /api/signals/analyze endpoint for manual "Analyze Now" button
+   * @param symbol - Currency pair (e.g., 'EUR/USD')
+   * @returns Signal or null if no opportunity
+   */
+  async generateSignalForSymbol(symbol: string): Promise<Signal | null> {
+    try {
+      console.log(`🔍 On-demand analysis for ${symbol}...`);
+
+      // Fetch multi-timeframe candles from Twelve Data API
+      const { weekly, daily, fourHour, oneHour } =
+        await twelveDataAPI.getMultiTimeframeCandles(symbol);
+
+      // Validate minimum candles for reliable analysis
+      if (weekly.length < 26 || daily.length < 50 ||
+          fourHour.length < 50 || oneHour.length < 100) {
+        console.log(`⚠️ Insufficient candle data for ${symbol}`);
+        return null;
+      }
+
+      // Run v3.1.0 ICT 3-Timeframe analysis
+      const signal = await this.strategy.analyze(
+        weekly,
+        daily,
+        fourHour,
+        oneHour,
+        symbol
+      );
+
+      if (signal) {
+        console.log(`✅ Generated ${signal.tier} signal for ${symbol} (${signal.confidence}% confidence)`);
+
+        // Save to database (same as cron-generated signals)
+        await this.saveSignalToDatabase(signal, oneHour);
+      } else {
+        console.log(`ℹ️ No signal for ${symbol} (W+D+4H not aligned or filters not met)`);
+      }
+
+      return signal;
+
+    } catch (error) {
+      console.error(`❌ Error generating signal for ${symbol}:`, error);
+      throw error;
+    }
+  }
+
+  /**
    * REMOVED: start() method no longer needed
    * Signal generation is now triggered via HTTP endpoint /api/cron/generate-signals
    * This allows the service to work on Render free tier (which sleeps after 15 min)

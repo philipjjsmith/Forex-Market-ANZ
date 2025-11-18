@@ -159,7 +159,11 @@ export default function Dashboard() {
   const analyzeMarket = useCallback(async () => {
     // Check quota before analyzing
     if (!canAnalyze) {
-      setApiError(`Daily limit reached (${dailyLimit} analyses). Resets in ${timeUntilReset}.`);
+      toast({
+        title: "Analysis Limit Reached",
+        description: `Daily limit of ${dailyLimit} analyses reached. Resets in ${timeUntilReset}.`,
+        variant: "destructive",
+      });
       return;
     }
 
@@ -168,24 +172,7 @@ export default function Dashboard() {
 
     try {
       if (import.meta.env.DEV) {
-        console.log('🚀 Fetching real forex data from API...');
-      }
-
-      // Fetch real forex quotes from backend
-      const response = await fetch(API_ENDPOINTS.FOREX_QUOTES);
-
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status}`);
-      }
-
-      const result = await response.json();
-
-      if (!result.success || !result.data) {
-        throw new Error(result.error || 'Failed to fetch forex data');
-      }
-
-      if (import.meta.env.DEV) {
-        console.log('✅ Received forex quotes:', result.data);
+        console.log('🚀 Analyzing markets using v3.1.0 ICT methodology...');
       }
 
       // Use one analysis from quota
@@ -194,101 +181,107 @@ export default function Dashboard() {
         throw new Error('Failed to use analysis quota');
       }
 
+      const pairs = ['EUR/USD', 'USD/JPY', 'AUD/USD', 'USD/CHF'];
       const newSignals: Signal[] = [];
       const newMarketData: Record<string, { candles: any[], currentPrice: number }> = {};
-      const strategy = new MACrossoverStrategy();
 
-      // Process each forex quote
-      result.data.forEach((quote: any) => {
-        const pair = quote.symbol;
-        const currentPrice = quote.exchangeRate;
+      // Fetch current prices for display (still using Frankfurter for quotes)
+      const priceResponse = await fetch(API_ENDPOINTS.FOREX_QUOTES);
+      const priceResult = await priceResponse.json();
+      const priceMap: Record<string, number> = {};
 
-        // Generate candles based on real price (5-minute intervals, 1440 candles = 5 days)
-        const primaryCandles = generateCandlesFromQuote(pair, currentPrice, 1440);
-        const higherCandles = primaryCandles.filter((_, idx) => idx % 4 === 0);
-
-        newMarketData[pair] = {
-          candles: primaryCandles,
-          currentPrice: currentPrice,
-        };
-
-        // Analyze with real data
-        const signal = strategy.analyze(primaryCandles, higherCandles);
-
-        if (signal || Math.random() > 0.3) {
-          const finalSignal = signal || generateDemoSignal(pair, primaryCandles);
-          newSignals.push({
-            ...finalSignal,
-            symbol: pair,
-            currentPrice: currentPrice,
-            status: 'active',
-          });
-        }
-      });
-
-      setSignals(prev => [...newSignals, ...prev].slice(0, 20));
-      setMarketData(newMarketData);
-
-      if (import.meta.env.DEV) {
-        console.log(`✅ Generated ${newSignals.length} signals from real data`);
+      if (priceResult.success && priceResult.data) {
+        priceResult.data.forEach((quote: any) => {
+          priceMap[quote.symbol] = quote.exchangeRate;
+        });
       }
 
-      // Auto-track signals with 70%+ confidence
-      const signalsToTrack = newSignals.filter(s => s.confidence >= 70);
-      if (signalsToTrack.length > 0) {
-        if (import.meta.env.DEV) {
-          console.log(`📊 Auto-tracking ${signalsToTrack.length} signals with 70%+ confidence`);
-        }
+      // Call SERVER endpoint for each pair (v3.1.0 ICT analysis)
+      for (const pair of pairs) {
+        try {
+          if (import.meta.env.DEV) {
+            console.log(`🔍 Analyzing ${pair} on server...`);
+          }
 
-        let trackedCount = 0;
-        for (const signal of signalsToTrack) {
-          try {
-            const candles = newMarketData[signal.symbol]?.candles || [];
-            const token = getToken();
+          const response = await fetch('/api/signals/analyze', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ symbol: pair })
+          });
 
-            await fetch(API_ENDPOINTS.SIGNALS_TRACK, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                ...(token && { 'Authorization': `Bearer ${token}` }),
-              },
-              credentials: 'include',
-              body: JSON.stringify({
-                signal,
-                candles: candles.slice(-200) // Store last 200 candles for AI learning
-              })
+          const result = await response.json();
+
+          if (result.success && result.signal) {
+            const signal = result.signal;
+
+            newSignals.push({
+              ...signal,
+              symbol: pair,
+              status: 'active'
             });
 
             if (import.meta.env.DEV) {
-              console.log(`✅ Tracked signal ${signal.id} (${signal.confidence}% confidence)`);
+              console.log(`✅ ${pair}: ${result.message}`);
             }
-            trackedCount++;
-          } catch (trackError) {
+          } else if (result.success && !result.signal) {
             if (import.meta.env.DEV) {
-              console.error(`❌ Failed to track signal ${signal.id}:`, trackError);
+              console.log(`ℹ️ ${pair}: No signal (market not aligned)`);
             }
+          } else {
+            console.error(`❌ ${pair}: ${result.error}`);
           }
-        }
 
-        // Show success toast
-        if (trackedCount > 0) {
-          toast({
-            title: "🤖 AI Learning Active",
-            description: `Auto-tracked ${trackedCount} signal${trackedCount > 1 ? 's' : ''} (70%+ confidence) for AI analysis`,
-            duration: 5000,
-          });
+          // Store current price for market data display
+          const currentPrice = priceMap[pair] || signal?.currentPrice || 1.0;
+          newMarketData[pair] = {
+            candles: [],
+            currentPrice: currentPrice
+          };
+
+        } catch (error) {
+          console.error(`❌ Error analyzing ${pair}:`, error);
         }
+      }
+
+      // Update state with new v3.1.0 signals
+      setSignals(prev => [...newSignals, ...prev].slice(0, 20));
+      setMarketData(newMarketData);
+
+      // Show success toast
+      if (newSignals.length > 0) {
+        toast({
+          title: "✅ Analysis Complete",
+          description: `Generated ${newSignals.length} v3.1.0 signal${newSignals.length > 1 ? 's' : ''} using ICT methodology`,
+          duration: 5000,
+        });
+      } else {
+        toast({
+          title: "ℹ️ No Signals Generated",
+          description: "Market conditions not aligned (W+D+4H timeframes must match)",
+          duration: 5000,
+        });
+      }
+
+      if (import.meta.env.DEV) {
+        console.log(`✅ Generated ${newSignals.length} v3.1.0 signals from server`);
       }
 
     } catch (error: any) {
       if (import.meta.env.DEV) {
         console.error('❌ Error analyzing market:', error);
       }
-      setApiError(error.message || 'Failed to fetch market data. Please try again.');
+      setApiError(error.message || 'Failed to analyze market. Please try again.');
+      toast({
+        title: "❌ Analysis Failed",
+        description: error.message || 'Failed to analyze market',
+        variant: "destructive",
+      });
     } finally {
       setIsAnalyzing(false);
     }
-  }, [canAnalyze, dailyLimit, timeUntilReset, useAnalysis]);
+  }, [canAnalyze, dailyLimit, timeUntilReset, useAnalysis, toast]);
 
   // Initial analysis on mount (commented out to save quota)
   // useEffect(() => {
