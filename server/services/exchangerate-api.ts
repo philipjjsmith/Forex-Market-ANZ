@@ -1,4 +1,14 @@
+/**
+ * v2.0.0: Uses file-based persistent cache (node-persist)
+ * - Cache survives server restarts and deployments
+ * - Frankfurter.app is unlimited, but caching improves performance
+ */
+
 import { Request, Response } from 'express';
+import nodePersist from 'node-persist';
+
+// Create dedicated storage instance for Forex Quotes
+const storage = nodePersist.create();
 
 interface ForexQuote {
   symbol: string;
@@ -19,24 +29,40 @@ interface CacheEntry {
 export class ExchangeRateAPI {
   private baseUrl: string;
   private apiKey: string;
-  private cache: Map<string, CacheEntry>;
   private cacheTTL: number; // 15 minutes in milliseconds
+  private cacheInitialized: Promise<void>;
 
   constructor() {
     this.baseUrl = 'https://api.frankfurter.app';
     this.apiKey = ''; // Frankfurter.app doesn't require API key
-    this.cache = new Map();
     this.cacheTTL = 15 * 60 * 1000; // 15 minutes cache
+
+    // Initialize persistent storage (survives server restarts)
+    this.cacheInitialized = storage.init({
+      dir: '.node-persist/forex-quotes',
+      stringify: JSON.stringify,
+      parse: JSON.parse,
+      encoding: 'utf8',
+      logging: false,
+      ttl: false, // We handle TTL manually
+      expiredInterval: 2 * 60 * 1000,
+      forgiveParseErrors: true
+    }).then(() => {
+      console.log('💾 Forex quotes file-based cache initialized');
+    });
   }
 
   /**
    * Fetch forex quote from Frankfurter.app or cache
    */
   private async fetchQuote(fromCurrency: string, toCurrency: string): Promise<ForexQuote> {
+    // Ensure cache is initialized
+    await this.cacheInitialized;
+
     const cacheKey = `${fromCurrency}/${toCurrency}`;
 
-    // Check cache first
-    const cached = this.cache.get(cacheKey);
+    // Check persistent cache first
+    const cached = await storage.getItem(cacheKey) as CacheEntry | undefined;
     if (cached && Date.now() - cached.timestamp < this.cacheTTL) {
       console.log(`✅ Cache hit for ${cacheKey}`);
       return cached.data;
@@ -79,13 +105,13 @@ export class ExchangeRateAPI {
         timezone: 'UTC',
       };
 
-      // Store in cache
-      this.cache.set(cacheKey, {
+      // Store in persistent cache
+      await storage.setItem(cacheKey, {
         data: quote,
         timestamp: Date.now(),
       });
 
-      console.log(`✅ Fetched ${cacheKey}: ${quote.exchangeRate}`);
+      console.log(`✅ Fetched ${cacheKey}: ${quote.exchangeRate} (saved to persistent cache)`);
       return quote;
     } catch (error) {
       console.error(`❌ Error fetching ${cacheKey}:`, error);
@@ -118,25 +144,38 @@ export class ExchangeRateAPI {
   }
 
   /**
-   * Get cache statistics
+   * Get cache statistics from persistent storage
    */
-  getCacheStats() {
+  async getCacheStats() {
+    await this.cacheInitialized;
+
+    const keys = await storage.keys();
+    const entries = [];
+
+    for (const key of keys) {
+      const entry = await storage.getItem(key) as CacheEntry | undefined;
+      if (entry) {
+        entries.push({
+          pair: key,
+          age: Math.round((Date.now() - entry.timestamp) / 1000),
+          rate: entry.data.exchangeRate,
+        });
+      }
+    }
+
     return {
-      size: this.cache.size,
-      entries: Array.from(this.cache.entries()).map(([key, entry]) => ({
-        pair: key,
-        age: Math.round((Date.now() - entry.timestamp) / 1000),
-        rate: entry.data.exchangeRate,
-      })),
+      size: keys.length,
+      entries,
     };
   }
 
   /**
-   * Clear cache (useful for testing)
+   * Clear persistent cache (useful for testing)
    */
-  clearCache() {
-    this.cache.clear();
-    console.log('🗑️  Cache cleared');
+  async clearCache() {
+    await this.cacheInitialized;
+    await storage.clear();
+    console.log('🗑️  Persistent cache cleared');
   }
 }
 
