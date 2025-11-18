@@ -718,9 +718,9 @@ export class SignalGenerator {
           // Analyze with multi-timeframe strategy (🧠 AI-ENHANCED + 🎯 MILESTONE 3C)
           const signal = await strategy.analyze(weeklyCandles, dailyCandles, fourHourCandles, oneHourCandles, symbol);
 
-          // ⚡ PHASE 2 QUICK WIN: Raised from 70 to 80 to align with industry standards
-          // Goal: Improve win rate while allowing HIGH tier signals (80+)
-          if (signal && signal.confidence >= 80) {
+          // ✅ v3.1.0 ICT 3-Timeframe: Accept both HIGH (85-100) and MEDIUM (70-84) tier signals
+          // MEDIUM tier = Practice signals, HIGH tier = Live trading
+          if (signal && signal.confidence >= 70) {
             signalsGenerated++;
             signal.symbol = symbol; // Set the correct symbol
 
