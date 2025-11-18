@@ -872,7 +872,7 @@ export class SignalGenerator {
    */
   async generateSignalForSymbol(symbol: string): Promise<Signal | null> {
     try {
-      console.log(`🔍 On-demand analysis for ${symbol}...`);
+      console.log(`🔍 On-demand analysis for ${symbol} [FIX v2 - Strategy Instantiation]...`);
 
       // Fetch all 4 timeframes in parallel (same as automated cron method)
       const [weeklyCandles, dailyCandles, fourHourCandles, oneHourCandles] = await Promise.all([
