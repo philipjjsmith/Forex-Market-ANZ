@@ -203,7 +203,7 @@ export default function Dashboard() {
             console.log(`🔍 Analyzing ${pair} on server...`);
           }
 
-          const response = await fetch('/api/signals/analyze', {
+          const response = await fetch(API_ENDPOINTS.SIGNALS_ANALYZE, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json'

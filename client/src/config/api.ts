@@ -25,6 +25,7 @@ export const API_ENDPOINTS = {
 
   // Signal tracking endpoints
   SIGNALS_TRACK: `${API_BASE_URL}/api/signals/track`,
+  SIGNALS_ANALYZE: `${API_BASE_URL}/api/signals/analyze`,
   SIGNALS_ACTIVE: `${API_BASE_URL}/api/signals/active`,
   SIGNALS_PERFORMANCE: `${API_BASE_URL}/api/signals/performance`,
   SIGNALS_HISTORY: `${API_BASE_URL}/api/signals/history`,
