@@ -889,8 +889,11 @@ export class SignalGenerator {
         return null;
       }
 
+      // Create strategy instance (same as generateSignals method)
+      const strategy = new MACrossoverStrategy();
+
       // Run v3.1.0 ICT 3-Timeframe analysis
-      const signal = await this.strategy.analyze(
+      const signal = await strategy.analyze(
         weeklyCandles,
         dailyCandles,
         fourHourCandles,
