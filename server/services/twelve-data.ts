@@ -149,7 +149,23 @@ export class TwelveDataAPI {
           throw new Error('Invalid Twelve Data API key');
         }
         if (data.message?.includes('limit')) {
-          throw new Error('API rate limit reached (800/day). Using cache.');
+          // Rate limit hit - try to use cached data even if expired
+          console.warn(`⚠️  API rate limit reached for ${symbol}. Attempting to use cached data...`);
+
+          if (cached && cached.candles.length > 0) {
+            const cacheAgeMinutes = Math.round((Date.now() - cached.timestamp) / (60 * 1000));
+            console.log(`✅ Using stale cache for ${cacheKey} (age: ${cacheAgeMinutes}min) due to rate limit`);
+
+            // Return stale cache data
+            const candles = cached.candles.map(c => ({
+              ...c,
+              timestamp: new Date(c.timestamp)
+            }));
+            return candles;
+          } else {
+            // No cache available at all
+            throw new Error(`API rate limit reached (800/day) and no cached data available for ${symbol}`);
+          }
         }
         throw new Error(data.message || 'API error occurred');
       }

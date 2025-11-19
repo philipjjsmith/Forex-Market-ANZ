@@ -242,7 +242,12 @@ export default function Dashboard() {
               currentPrice: priceMap[pair] || 1.0
             };
           } else {
-            console.error(`❌ ${pair}: ${result.error}`);
+            // Check if it's a rate limit error
+            if (result.isRateLimit) {
+              console.warn(`⚠️  ${pair}: API rate limit - using cached data`);
+            } else {
+              console.error(`❌ ${pair}: ${result.error}`);
+            }
 
             // Error case, no data available
             newMarketData[pair] = {

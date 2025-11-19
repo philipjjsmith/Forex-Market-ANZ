@@ -555,9 +555,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     } catch (error: any) {
       console.error('❌ Error in on-demand analysis:', error);
-      res.status(500).json({
+
+      // Check if it's a rate limit error
+      const isRateLimit = error.message?.includes('rate limit');
+      const statusCode = isRateLimit ? 429 : 500;
+
+      res.status(statusCode).json({
         success: false,
-        error: error.message || 'Failed to analyze market'
+        error: error.message || 'Failed to analyze market',
+        isRateLimit: isRateLimit
       });
     }
   });
