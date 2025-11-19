@@ -262,8 +262,14 @@ class MACrossoverStrategy {
     dailyCandles: Candle[],
     fourHourCandles: Candle[],
     oneHourCandles: Candle[],
-    symbol: string
+    symbol: string,
+    options?: {
+      adxThreshold?: number;      // For sensitivity testing (default: 25)
+      diagnosticMode?: boolean;   // Enable detailed logging
+    }
   ): Promise<Signal | null> {
+    const adxThreshold = options?.adxThreshold || 25;
+    const diagnosticMode = options?.diagnosticMode || false;
     // Need minimum candles for reliable analysis
     if (weeklyCandles.length < 26 || dailyCandles.length < 50 ||
         fourHourCandles.length < 50 || oneHourCandles.length < 100) {
@@ -319,10 +325,24 @@ class MACrossoverStrategy {
 
     if (!oneHourFastMA || !oneHourSlowMA || !atr || !bb) return null;
 
-    // ⚡ MANDATORY ADX > 25 filter (blocks ranging markets)
-    // Industry standard: "Never enter a trade unless ADX is above 25"
+    // 🔍 DIAGNOSTIC: Track trend directions for all timeframes
+    if (diagnosticMode) {
+      console.log(`\n📊 ${symbol} Diagnostic Analysis:`);
+      console.log(`├─ Weekly Trend: ${weeklyTrend}`);
+      console.log(`├─ Daily Trend: ${dailyTrend}`);
+      console.log(`├─ 4H Trend: ${fourHourTrend}`);
+      console.log(`├─ 1H Trend: ${oneHourTrend}`);
+      console.log(`├─ ADX Value: ${adx?.adx.toFixed(2) || 'N/A'} (threshold: ${adxThreshold})`);
+      console.log(`├─ RSI Value: ${rsi?.toFixed(2) || 'N/A'}`);
+    }
+
+    // ⚡ MANDATORY ADX filter (blocks ranging markets)
+    // Industry standard: "Never enter a trade unless ADX is above threshold"
     // This eliminates 60-80% of false signals in choppy, ranging conditions
-    if (!adx || adx.adx < 25) {
+    if (!adx || adx.adx < adxThreshold) {
+      if (diagnosticMode) {
+        console.log(`└─ ❌ REJECTED: ADX ${adx?.adx.toFixed(2) || 'N/A'} < ${adxThreshold} (ranging market)\n`);
+      }
       return null; // Block trade - market is ranging, not trending
     }
 
@@ -550,7 +570,24 @@ class MACrossoverStrategy {
     // 🚀 v3.1.0: ICT 3-Timeframe Rule - Minimum confidence 70 points
     // With W+D+4H aligned, minimum score: 20+15+20+10+6 = 71 points
     // This allows signals even when MACD is weak on some timeframes
-    if (!signalType || confidence < 70) return null; // Must be at least 70/100 points (70% minimum)
+    // 🔍 DIAGNOSTIC: Log rejection reasons
+    if (!signalType || confidence < 70) {
+      if (diagnosticMode) {
+        if (!signalType) {
+          const aligned3TF = (weeklyTrend === dailyTrend && dailyTrend === fourHourTrend);
+          console.log(`└─ ❌ REJECTED: W+D+4H ${aligned3TF ? 'ALIGNED' : 'NOT ALIGNED'} (W:${weeklyTrend}, D:${dailyTrend}, 4H:${fourHourTrend})`);
+          console.log(`   No entry signal detected (bullishCross: ${bullishCross}, bearishCross: ${bearishCross})\n`);
+        } else {
+          console.log(`└─ ❌ REJECTED: Confidence ${confidence} < 70 (minimum threshold)\n`);
+        }
+      }
+      return null; // Must be at least 70/100 points (70% minimum)
+    }
+
+    // 🔍 DIAGNOSTIC: Log successful signal
+    if (diagnosticMode) {
+      console.log(`└─ ✅ SIGNAL GENERATED: ${signalType} with ${confidence}% confidence\n`);
+    }
 
     // Determine tier and trading mode
     let tier: 'HIGH' | 'MEDIUM';
@@ -915,6 +952,68 @@ export class SignalGenerator {
     } catch (error) {
       console.error(`❌ Error generating signal for ${symbol}:`, error);
       throw error;
+    }
+  }
+
+  /**
+   * Test ADX Threshold Sensitivity (Parameter Robustness Testing)
+   * Used for validating system isn't over-fitted
+   * Industry best practice: Test multiple parameter values
+   * @param symbol - Currency pair to test
+   * @param adxThreshold - ADX threshold to test (e.g., 20, 22, 25, 27, 30)
+   * @returns Test result with signal (if generated) and diagnostic info
+   */
+  async testAdxThreshold(symbol: string, adxThreshold: number): Promise<any> {
+    try {
+      // Fetch all 4 timeframes (same as generateSignalForSymbol)
+      const [weeklyCandles, dailyCandles, fourHourCandles, oneHourCandles] = await Promise.all([
+        twelveDataAPI.fetchHistoricalCandles(symbol, '1week', 52),
+        twelveDataAPI.fetchHistoricalCandles(symbol, '1day', 200),
+        twelveDataAPI.fetchHistoricalCandles(symbol, '4h', 360),
+        twelveDataAPI.fetchHistoricalCandles(symbol, '1h', 720),
+      ]);
+
+      // Validate minimum candles
+      if (weeklyCandles.length < 26 || dailyCandles.length < 50 ||
+          fourHourCandles.length < 50 || oneHourCandles.length < 100) {
+        return {
+          threshold: adxThreshold,
+          signal: null,
+          reason: 'Insufficient candle data'
+        };
+      }
+
+      // Create strategy instance
+      const strategy = new MACrossoverStrategy();
+
+      // Run analysis with CUSTOM ADX threshold and DIAGNOSTIC MODE enabled
+      const signal = await strategy.analyze(
+        weeklyCandles,
+        dailyCandles,
+        fourHourCandles,
+        oneHourCandles,
+        symbol,
+        {
+          adxThreshold: adxThreshold,
+          diagnosticMode: true  // Enable detailed logging
+        }
+      );
+
+      return {
+        threshold: adxThreshold,
+        signal: signal,
+        signalGenerated: signal !== null,
+        confidence: signal?.confidence || 0,
+        tier: signal?.tier || null
+      };
+
+    } catch (error: any) {
+      console.error(`❌ Error testing ADX ${adxThreshold} for ${symbol}:`, error);
+      return {
+        threshold: adxThreshold,
+        signal: null,
+        error: error.message
+      };
     }
   }
 

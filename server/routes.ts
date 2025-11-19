@@ -561,6 +561,89 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  /**
+   * ADX Sensitivity Test (Admin/Debug endpoint)
+   * Tests multiple ADX thresholds to validate system robustness
+   * Used for parameter sensitivity analysis (industry best practice)
+   */
+  app.post("/api/admin/test-adx-sensitivity", async (req, res) => {
+    try {
+      const { symbol } = req.body;
+
+      if (!symbol) {
+        return res.status(400).json({
+          success: false,
+          error: 'Symbol is required'
+        });
+      }
+
+      const validSymbols = ['EUR/USD', 'USD/JPY', 'AUD/USD', 'USD/CHF'];
+      if (!validSymbols.includes(symbol)) {
+        return res.status(400).json({
+          success: false,
+          error: `Invalid symbol. Must be one of: ${validSymbols.join(', ')}`
+        });
+      }
+
+      console.log(`\n🧪 ADX SENSITIVITY TEST for ${symbol}`);
+      console.log(`${'='.repeat(60)}\n`);
+
+      // Test multiple ADX thresholds: [20, 22, 25, 27, 30]
+      const thresholds = [20, 22, 25, 27, 30];
+      const results = [];
+
+      for (const threshold of thresholds) {
+        console.log(`\n🔬 Testing ADX Threshold: ${threshold}`);
+        console.log(`${'-'.repeat(60)}`);
+
+        const result = await signalGenerator.testAdxThreshold(symbol, threshold);
+        results.push(result);
+      }
+
+      console.log(`\n${'='.repeat(60)}`);
+      console.log(`✅ ADX Sensitivity Test Complete\n`);
+
+      res.json({
+        success: true,
+        symbol,
+        results,
+        recommendation: analyzeResults(results)
+      });
+
+    } catch (error: any) {
+      console.error('❌ Error in ADX sensitivity test:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to run sensitivity test'
+      });
+    }
+  });
+
+  // Helper function to analyze test results
+  function analyzeResults(results: any[]) {
+    const signalCounts = results.map(r => ({
+      threshold: r.threshold,
+      signalGenerated: r.signal !== null,
+      confidence: r.signal?.confidence || 0
+    }));
+
+    const lowestWithSignal = signalCounts.find(r => r.signalGenerated);
+    const highestQuality = signalCounts.reduce((max, r) =>
+      r.confidence > max.confidence ? r : max,
+      { threshold: 0, confidence: 0 }
+    );
+
+    return {
+      summary: `Tested ${results.length} ADX thresholds`,
+      lowestThresholdWithSignal: lowestWithSignal?.threshold || 'None',
+      highestQualityThreshold: highestQuality.threshold || 'None',
+      highestConfidence: highestQuality.confidence,
+      recommendation: lowestWithSignal
+        ? `System can generate signals. ADX ${lowestWithSignal.threshold} allows signals, but ADX 25 (industry standard) is recommended for profitability.`
+        : 'No signals at any threshold - market conditions genuinely poor (W+D+4H not aligned)'
+    };
+  }
+
   // use storage to perform CRUD operations on the storage interface
   // e.g. storage.insertUser(user) or storage.getUserByUsername(username)
 
