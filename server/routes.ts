@@ -542,13 +542,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Generate signal using v3.1.0 ICT methodology
-      const signal = await signalGenerator.generateSignalForSymbol(symbol);
+      const result = await signalGenerator.generateSignalForSymbol(symbol);
 
       res.json({
         success: true,
-        signal: signal || null,
-        message: signal
-          ? `Generated ${signal.tier} tier signal with ${signal.confidence}% confidence`
+        signal: result?.signal || null,
+        candles: result?.candles || [],
+        message: result?.signal
+          ? `Generated ${result.signal.tier} tier signal with ${result.signal.confidence}% confidence`
           : 'No signal generated (market conditions not aligned)'
       });
 

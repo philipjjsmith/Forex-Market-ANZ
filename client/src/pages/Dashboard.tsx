@@ -225,20 +225,31 @@ export default function Dashboard() {
             if (import.meta.env.DEV) {
               console.log(`✅ ${pair}: ${result.message}`);
             }
+
+            // Store candles and current price for chart display
+            newMarketData[pair] = {
+              candles: result.candles || [],
+              currentPrice: signal.currentPrice
+            };
           } else if (result.success && !result.signal) {
             if (import.meta.env.DEV) {
               console.log(`ℹ️ ${pair}: No signal (market not aligned)`);
             }
+
+            // No signal, no candles needed
+            newMarketData[pair] = {
+              candles: [],
+              currentPrice: priceMap[pair] || 1.0
+            };
           } else {
             console.error(`❌ ${pair}: ${result.error}`);
-          }
 
-          // Store current price for market data display
-          const currentPrice = priceMap[pair] || signal?.currentPrice || 1.0;
-          newMarketData[pair] = {
-            candles: [],
-            currentPrice: currentPrice
-          };
+            // Error case, no data available
+            newMarketData[pair] = {
+              candles: [],
+              currentPrice: priceMap[pair] || 1.0
+            };
+          }
 
         } catch (error) {
           console.error(`❌ Error analyzing ${pair}:`, error);

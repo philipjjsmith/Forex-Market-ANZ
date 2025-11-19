@@ -613,21 +613,21 @@ class MACrossoverStrategy {
       ? currentPrice - (atr * stopMultiplier)
       : currentPrice + (atr * stopMultiplier);
 
-    // ⚡ PHASE 3B + 3C: Optimized TP levels for partial profit taking
-    // TP1: 2.0x ATR (1:1 R:R with 2.0x stop) - Take 50% profit here
-    // TP2: 4.0x ATR (2:1 R:R) - Take remaining 50% here
-    // TP3: 8.0x ATR (4:1 R:R) - Bonus target for big moves
+    // 🎯 ATR-based Take Profit Targets (Reverted from Phase 3)
+    // TP1: 3.0x ATR (1.5:1 R:R with 2.0x stop) - First target
+    // TP2: 6.0x ATR (3:1 R:R) - Second target
+    // TP3: 12.0x ATR (6:1 R:R) - Bonus target for big moves
     const tp1 = signalType === 'LONG'
-      ? currentPrice + (atr * 2.0) // TP1 at 2.0 ATR (1:1 R:R) - PARTIAL CLOSE
-      : currentPrice - (atr * 2.0);
+      ? currentPrice + (atr * 3.0) // TP1 at 3.0 ATR (1.5:1 R:R)
+      : currentPrice - (atr * 3.0);
 
     const tp2 = signalType === 'LONG'
-      ? currentPrice + (atr * 4.0) // TP2 at 4.0 ATR (2:1 R:R) - FULL CLOSE
-      : currentPrice - (atr * 4.0);
+      ? currentPrice + (atr * 6.0) // TP2 at 6.0 ATR (3:1 R:R)
+      : currentPrice - (atr * 6.0);
 
     const tp3 = signalType === 'LONG'
-      ? currentPrice + (atr * 8.0) // TP3 at 8.0 ATR (4:1 R:R) - BONUS
-      : currentPrice - (atr * 8.0);
+      ? currentPrice + (atr * 12.0) // TP3 at 12.0 ATR (6:1 R:R)
+      : currentPrice - (atr * 12.0);
 
     const riskPerTrade = Math.abs(currentPrice - stop);
     const riskReward = Math.abs(tp1 - currentPrice) / riskPerTrade;
@@ -905,9 +905,9 @@ export class SignalGenerator {
    * Generate signal for specific symbol (on-demand analysis)
    * Used by /api/signals/analyze endpoint for manual "Analyze Now" button
    * @param symbol - Currency pair (e.g., 'EUR/USD')
-   * @returns Signal or null if no opportunity
+   * @returns Object with signal and candles, or null if no opportunity
    */
-  async generateSignalForSymbol(symbol: string): Promise<Signal | null> {
+  async generateSignalForSymbol(symbol: string): Promise<{ signal: Signal, candles: Candle[] } | null> {
     try {
       console.log(`🔍 On-demand analysis for ${symbol} [FIX v2 - Strategy Instantiation]...`);
 
@@ -944,11 +944,13 @@ export class SignalGenerator {
         // Save to database (same as cron-generated signals)
         const currentPrice = signal.entry;
         await this.trackSignal(signal, symbol, currentPrice, oneHourCandles);
+
+        // Return both signal and candles for chart display
+        return { signal, candles: oneHourCandles };
       } else {
         console.log(`ℹ️ No signal for ${symbol} (W+D+4H not aligned or filters not met)`);
+        return null;
       }
-
-      return signal;
 
     } catch (error) {
       console.error(`❌ Error generating signal for ${symbol}:`, error);
