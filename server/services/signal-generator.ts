@@ -942,7 +942,8 @@ export class SignalGenerator {
         console.log(`✅ Generated ${signal.tier} signal for ${symbol} (${signal.confidence}% confidence)`);
 
         // Save to database (same as cron-generated signals)
-        await this.saveSignalToDatabase(signal, oneHourCandles);
+        const currentPrice = signal.entry;
+        await this.trackSignal(signal, symbol, currentPrice, oneHourCandles);
       } else {
         console.log(`ℹ️ No signal for ${symbol} (W+D+4H not aligned or filters not met)`);
       }
