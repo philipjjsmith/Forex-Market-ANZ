@@ -127,4 +127,7 @@ END $$;
 -- ============================================================================
 
 -- Migration complete!
-RAISE NOTICE '✅ Data quality migration complete - ready for production use';
+DO $$
+BEGIN
+  RAISE NOTICE '✅ Data quality migration complete - ready for production use';
+END $$;
