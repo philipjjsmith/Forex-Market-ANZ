@@ -149,6 +149,7 @@ export function registerAdminRoutes(app: Express) {
       const days = parseInt(req.query.days as string) || 0; // 0 = all time
       const versionFilter = req.query.version as string || 'all';
       const historicalFilter = req.query.historical as string || 'all'; // 🆕 Historical data filter
+      const dataQualityFilter = req.query.dataQuality as string || 'production'; // 🆕 Data quality filter (DEFAULT: production only)
 
       // Build date filter
       let dateFilter = sql``;
@@ -172,6 +173,17 @@ export function registerAdminRoutes(app: Express) {
       } else if (versionFilter === 'legacy') {
         strategyVersionFilter = sql`AND strategy_version IN ('1.0.0', '2.0.0')`;
       }
+
+      // 🆕 Data quality filtering (Professional soft delete)
+      // Defaults to 'production' to show only clean v3.1.0+ signals
+      // Options: 'production' (v3.1.0+), 'legacy' (pre-Nov 19 buggy data), 'all' (everything)
+      let dataQualitySQL = sql``;
+      if (dataQualityFilter === 'production') {
+        dataQualitySQL = sql`AND data_quality = 'production'`;
+      } else if (dataQualityFilter === 'legacy') {
+        dataQualitySQL = sql`AND data_quality = 'legacy'`;
+      }
+      // else: 'all' - no filter, show everything
 
       // ============================================================
       // FXIFY PERFORMANCE (HIGH TIER ONLY - 80+ confidence)
@@ -197,6 +209,7 @@ export function registerAdminRoutes(app: Express) {
           AND tier = 'HIGH'
           ${dateFilter}
           ${strategyVersionFilter}
+          ${dataQualitySQL}
       `);
 
       const fxifyOverall = (fxifyOverallResult as any)[0];
@@ -213,6 +226,7 @@ export function registerAdminRoutes(app: Express) {
             AND tier = 'HIGH'
             ${dateFilter}
             ${strategyVersionFilter}
+            ${dataQualitySQL}
           GROUP BY DATE(outcome_time)
           ORDER BY date ASC
         )
@@ -241,6 +255,7 @@ export function registerAdminRoutes(app: Express) {
           AND tier = 'HIGH'
           ${dateFilter}
           ${strategyVersionFilter}
+          ${dataQualitySQL}
         GROUP BY DATE_TRUNC('month', outcome_time)
         ORDER BY month DESC
         LIMIT 12
@@ -263,6 +278,8 @@ export function registerAdminRoutes(app: Express) {
           AND trade_live = true
           AND tier = 'HIGH'
           ${dateFilter}
+          ${strategyVersionFilter}
+          ${dataQualitySQL}
         GROUP BY symbol
         ORDER BY profit_pips DESC
       `);
@@ -316,6 +333,8 @@ export function registerAdminRoutes(app: Express) {
         FROM signal_history
         WHERE outcome != 'PENDING'
           ${dateFilter}
+          ${strategyVersionFilter}
+          ${dataQualitySQL}
       `);
 
       const allOverall = (allOverallResult as any)[0];
@@ -329,6 +348,8 @@ export function registerAdminRoutes(app: Express) {
           FROM signal_history
           WHERE outcome != 'PENDING'
             ${dateFilter}
+            ${strategyVersionFilter}
+            ${dataQualitySQL}
           GROUP BY DATE(outcome_time)
           ORDER BY date ASC
         )
@@ -354,6 +375,8 @@ export function registerAdminRoutes(app: Express) {
         FROM signal_history
         WHERE outcome != 'PENDING'
           ${dateFilter}
+          ${strategyVersionFilter}
+          ${dataQualitySQL}
         GROUP BY DATE_TRUNC('month', outcome_time)
         ORDER BY month DESC
         LIMIT 12
@@ -374,6 +397,8 @@ export function registerAdminRoutes(app: Express) {
         FROM signal_history
         WHERE outcome != 'PENDING'
           ${dateFilter}
+          ${strategyVersionFilter}
+          ${dataQualitySQL}
         GROUP BY symbol
         ORDER BY profit_pips DESC
       `);

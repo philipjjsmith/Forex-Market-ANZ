@@ -174,6 +174,7 @@ export default function Admin() {
   const [growthDays, setGrowthDays] = useState(0); // 0 = all time
   const [growthVersion, setGrowthVersion] = useState<string>('all'); // 🆕 Version filter
   const [historicalFilter, setHistoricalFilter] = useState<string>('nov4forward'); // 🆕 Date-based filter (DEFAULT: Nov 4+ only)
+  const [dataQualityFilter, setDataQualityFilter] = useState<string>('production'); // 🆕 Data quality filter (DEFAULT: production only)
   const [lotSize, setLotSize] = useState<'micro' | 'mini' | 'standard'>('mini');
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [showDiagnostic, setShowDiagnostic] = useState(false);
@@ -286,10 +287,10 @@ export default function Admin() {
 
   // Fetch dual growth stats (FXIFY + All Signals)
   const { data: dualGrowthStats, isLoading: growthLoading } = useQuery<DualGrowthStats>({
-    queryKey: ['growth-stats-dual', growthDays, growthVersion, historicalFilter],
+    queryKey: ['growth-stats-dual', growthDays, growthVersion, historicalFilter, dataQualityFilter],
     queryFn: async () => {
       const token = getToken();
-      const res = await fetch(`${API_ENDPOINTS.ADMIN_GROWTH_STATS_DUAL}?days=${growthDays}&version=${growthVersion}&historical=${historicalFilter}`, {
+      const res = await fetch(`${API_ENDPOINTS.ADMIN_GROWTH_STATS_DUAL}?days=${growthDays}&version=${growthVersion}&historical=${historicalFilter}&dataQuality=${dataQualityFilter}`, {
         headers: {
           'Content-Type': 'application/json',
           ...(token && { 'Authorization': `Bearer ${token}` }),
@@ -1264,6 +1265,18 @@ export default function Admin() {
                   </Button>
 
                   <div className="flex gap-3">
+                    {/* Data Quality Filter (Professional Soft Delete) */}
+                    <Select value={dataQualityFilter} onValueChange={(value) => setDataQualityFilter(value)}>
+                      <SelectTrigger className="w-[240px] bg-slate-800/80 text-white border-white/30">
+                        <SelectValue placeholder="Data quality" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-slate-800 text-white border-white/30">
+                        <SelectItem value="production">Production Only (v3.1.0+) ✅</SelectItem>
+                        <SelectItem value="legacy">Legacy Data (pre-Nov 19) ⚠️</SelectItem>
+                        <SelectItem value="all">All Data (Production + Legacy)</SelectItem>
+                      </SelectContent>
+                    </Select>
+
                     {/* Historical Data Filter (100% Accurate) */}
                     <Select value={historicalFilter} onValueChange={(value) => setHistoricalFilter(value)}>
                       <SelectTrigger className="w-[240px] bg-slate-800/80 text-white border-white/30">
