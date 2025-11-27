@@ -1,12 +1,13 @@
 // API Configuration - handles different URLs for dev vs production
 
 const getApiBaseUrl = (): string => {
-  if (import.meta.env.PROD) {
-    // Production: Frontend on Cloudflare Pages, Backend on Render
-    return 'https://forex-market-anz.onrender.com';
+  // Development: Use relative paths (Vite dev server proxies to local Express)
+  if (import.meta.env.DEV) {
+    return '';
   }
-  // Development: Both frontend and backend on localhost:5000
-  return '';
+  // Production: ALWAYS use absolute Render URL (bypasses Cloudflare Pages)
+  // This prevents Cloudflare Pages from trying to serve /api/* as static files (which causes 405)
+  return 'https://forex-market-anz.onrender.com';
 };
 
 export const API_BASE_URL = getApiBaseUrl();
