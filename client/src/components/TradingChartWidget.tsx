@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useImperativeHandle, forwardRef } from "react";
-import { createChart, IChartApi, ISeriesApi, CandlestickData, CandlestickSeries, LineData, Time, MouseEventParams, IPriceLine } from "lightweight-charts";
+import { createChart, IChartApi, ISeriesApi, CandlestickData, CandlestickSeries, LineSeries, LineData, Time, MouseEventParams, IPriceLine } from "lightweight-charts";
 
 interface Candle {
   date?: string;
@@ -103,7 +103,7 @@ const TradingChartWidget = forwardRef<TradingChartHandle, TradingChartWidgetProp
       // Add EMA line series (if enabled)
       if (showEMA) {
         // EMA 20 (Fast) - Orange/Gold
-        const ema20Series = chart.addLineSeries({
+        const ema20Series = chart.addSeries(LineSeries, {
           color: "#F59E0B",
           lineWidth: 2,
           title: "EMA 20",
@@ -113,7 +113,7 @@ const TradingChartWidget = forwardRef<TradingChartHandle, TradingChartWidgetProp
         ema20SeriesRef.current = ema20Series;
 
         // EMA 50 (Slow) - Blue
-        const ema50Series = chart.addLineSeries({
+        const ema50Series = chart.addSeries(LineSeries, {
           color: "#3B82F6",
           lineWidth: 2,
           title: "EMA 50",
