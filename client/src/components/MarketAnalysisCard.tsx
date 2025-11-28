@@ -1,7 +1,9 @@
+import { useState } from 'react';
 import { TrendingUp, TrendingDown, BarChart3, AlertTriangle, Info } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
-import TradingChartWidget from './TradingChartWidget';
+import TradingChartWidget, { EMAData } from './TradingChartWidget';
 import { Indicators } from '@/lib/indicators';
+import { LineData, Time } from 'lightweight-charts';
 
 interface Candle {
   timestamp: Date;
@@ -27,12 +29,89 @@ interface MarketAnalysisCardProps {
 }
 
 export function MarketAnalysisCard({ symbol, candles, currentPrice, analysis }: MarketAnalysisCardProps) {
-  // Calculate indicators from candle data
-  const closes = candles.map(c => c.close);
+  const [timeframe, setTimeframe] = useState<'1H' | '4H' | '1D'>('1H');
+  // Aggregate candles based on timeframe (candles are 1H intervals)
+  const filteredCandles = (() => {
+    if (timeframe === '1H') {
+      return candles; // Already 1H
+    } else if (timeframe === '4H') {
+      // Aggregate 4 consecutive 1H candles into 1 4H candle
+      const aggregated = [];
+      for (let i = 0; i < candles.length; i += 4) {
+        const chunk = candles.slice(i, i + 4);
+        if (chunk.length === 4) {
+          aggregated.push({
+            timestamp: chunk[3].timestamp,
+            open: chunk[0].open,
+            high: Math.max(...chunk.map(c => c.high)),
+            low: Math.min(...chunk.map(c => c.low)),
+            close: chunk[3].close,
+            volume: chunk.reduce((sum, c) => sum + c.volume, 0),
+          });
+        }
+      }
+      return aggregated;
+    } else {
+      // Aggregate 24 consecutive 1H candles into 1 1D candle
+      const aggregated = [];
+      for (let i = 0; i < candles.length; i += 24) {
+        const chunk = candles.slice(i, i + 24);
+        if (chunk.length === 24) {
+          aggregated.push({
+            timestamp: chunk[23].timestamp,
+            open: chunk[0].open,
+            high: Math.max(...chunk.map(c => c.high)),
+            low: Math.min(...chunk.map(c => c.low)),
+            close: chunk[23].close,
+            volume: chunk.reduce((sum, c) => sum + c.volume, 0),
+          });
+        }
+      }
+      return aggregated;
+    }
+  })();
+
+  // Calculate indicators from filtered candle data
+  const closes = filteredCandles.map(c => c.close);
   const rsi = Indicators.rsi(closes, 14);
   const bb = Indicators.bollingerBands(closes, 20, 2);
-  const atr = Indicators.atr(candles, 14);
-  const adx = Indicators.adx(candles, 14);
+  const atr = Indicators.atr(filteredCandles, 14);
+  const adx = Indicators.adx(filteredCandles, 14);
+
+  // Calculate EMAs for chart overlay (progressive calculation for each point)
+  const calculateEMAArray = (data: number[], period: number): number[] => {
+    if (data.length < period) return [];
+
+    const k = 2 / (period + 1);
+    const emaArray: number[] = [];
+
+    // Start with SMA
+    let ema = data.slice(0, period).reduce((sum, val) => sum + val, 0) / period;
+    emaArray.push(ema);
+
+    // Calculate EMA for remaining points
+    for (let i = period; i < data.length; i++) {
+      ema = data[i] * k + ema * (1 - k);
+      emaArray.push(ema);
+    }
+
+    return emaArray;
+  };
+
+  const ema20Array = calculateEMAArray(closes, 20);
+  const ema50Array = calculateEMAArray(closes, 50);
+
+  // Prepare EMA data for chart (convert to LineData format)
+  const emaData: EMAData = {
+    ema20: ema20Array.length > 0 ? filteredCandles.slice(20).map((candle, i) => ({
+      time: (new Date(candle.timestamp).getTime() / 1000) as Time,
+      value: ema20Array[i],
+    })) : undefined,
+    ema50: ema50Array.length > 0 ? filteredCandles.slice(50).map((candle, i) => ({
+      time: (new Date(candle.timestamp).getTime() / 1000) as Time,
+      value: ema50Array[i],
+    })) : undefined,
+  };
 
   const TimeframeBadge = ({ trend, points }: { trend: 'UP' | 'DOWN'; points?: number }) => (
     <div className="flex items-center gap-2">
@@ -64,7 +143,7 @@ export function MarketAnalysisCard({ symbol, candles, currentPrice, analysis }: 
 
       {/* Timeframe Alignment Status */}
       {analysis && (
-        <div className="bg-slate-800 p-6 rounded-lg border border-slate-700">
+        <div className="glass-card p-6 rounded-xl hover-lift transition-all duration-300">
           <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
             <BarChart3 className="w-5 h-5 text-amber-400" />
             Current Timeframe States
@@ -116,26 +195,78 @@ export function MarketAnalysisCard({ symbol, candles, currentPrice, analysis }: 
       )}
 
       {/* Trading Chart */}
-      <div className="bg-slate-800 p-6 rounded-lg border border-slate-700">
-        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-          <BarChart3 className="w-5 h-5 text-purple-400" />
-          {symbol} Chart (1-Hour)
-        </h3>
+      <div className="glass-card p-6 rounded-xl hover-lift hover-glow-blue transition-all duration-300">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold flex items-center gap-2">
+            <BarChart3 className="w-5 h-5 text-purple-400" />
+            {symbol} Chart with Strategy EMAs
+          </h3>
+          {/* Timeframe Selector */}
+          <div className="flex gap-1">
+            <button
+              onClick={() => setTimeframe('1H')}
+              className={`px-3 py-1.5 text-xs rounded-lg transition-all duration-300 ${
+                timeframe === '1H'
+                  ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-lg shadow-blue-500/50'
+                  : 'bg-slate-700/50 text-slate-300 hover:bg-slate-600/50'
+              }`}
+            >
+              1H
+            </button>
+            <button
+              onClick={() => setTimeframe('4H')}
+              className={`px-3 py-1.5 text-xs rounded-lg transition-all duration-300 ${
+                timeframe === '4H'
+                  ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-lg shadow-blue-500/50'
+                  : 'bg-slate-700/50 text-slate-300 hover:bg-slate-600/50'
+              }`}
+            >
+              4H
+            </button>
+            <button
+              onClick={() => setTimeframe('1D')}
+              className={`px-3 py-1.5 text-xs rounded-lg transition-all duration-300 ${
+                timeframe === '1D'
+                  ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-lg shadow-blue-500/50'
+                  : 'bg-slate-700/50 text-slate-300 hover:bg-slate-600/50'
+              }`}
+            >
+              1D
+            </button>
+          </div>
+        </div>
 
-        {candles.length > 0 ? (
-          <TradingChartWidget
-            candles={candles}
-            positions={[]}
-            currentPrice={currentPrice}
-          />
+        {filteredCandles.length > 0 ? (
+          <div className="rounded-lg overflow-hidden">
+            <TradingChartWidget
+              candles={filteredCandles}
+              positions={[]}
+              currentPrice={currentPrice}
+              emaData={emaData}
+              showEMA={true}
+              height={350}
+            />
+          </div>
         ) : (
           <p className="text-slate-500 text-center py-8">No chart data available</p>
         )}
+
+        {/* EMA Legend */}
+        <div className="flex items-center justify-center gap-6 mt-3 text-xs">
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-0.5 bg-amber-500"></div>
+            <span className="text-slate-400">EMA 20 (Fast)</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-0.5 bg-blue-500"></div>
+            <span className="text-slate-400">EMA 50 (Slow)</span>
+          </div>
+        </div>
       </div>
 
       {/* Market Indicators */}
       {candles.length > 0 && (
-        <div className="bg-slate-800 p-6 rounded-lg border border-slate-700">
+        <div className="glass-card p-6 rounded-xl hover-lift transition-all duration-300">
           <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
             <BarChart3 className="w-5 h-5 text-blue-400" />
             Market Indicators

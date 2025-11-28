@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useImperativeHandle, forwardRef } from "react";
-import { createChart, IChartApi, ISeriesApi, CandlestickData, CandlestickSeries, Time, MouseEventParams, IPriceLine } from "lightweight-charts";
+import { createChart, IChartApi, ISeriesApi, CandlestickData, CandlestickSeries, LineData, Time, MouseEventParams, IPriceLine } from "lightweight-charts";
 
 interface Candle {
   date?: string;
@@ -18,12 +18,19 @@ export interface Position {
   takeProfit?: number;
 }
 
+export interface EMAData {
+  ema20?: LineData[];
+  ema50?: LineData[];
+}
+
 interface TradingChartWidgetProps {
   candles: Candle[];
   height?: number;
   position?: Position;
   currentPL?: number;
   onEntryClick?: (price: number, time: number) => void;
+  emaData?: EMAData;
+  showEMA?: boolean;
 }
 
 export interface TradingChartHandle {
@@ -31,10 +38,12 @@ export interface TradingChartHandle {
 }
 
 const TradingChartWidget = forwardRef<TradingChartHandle, TradingChartWidgetProps>(
-  ({ candles, height = 500, position, currentPL, onEntryClick }, ref) => {
+  ({ candles, height = 500, position, currentPL, onEntryClick, emaData, showEMA = true }, ref) => {
     const chartContainerRef = useRef<HTMLDivElement>(null);
     const chartRef = useRef<IChartApi | null>(null);
     const candlestickSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
+    const ema20SeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
+    const ema50SeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
     const priceLinesRef = useRef<IPriceLine[]>([]);
 
     // Expose methods to parent component
@@ -90,6 +99,29 @@ const TradingChartWidget = forwardRef<TradingChartHandle, TradingChartWidgetProp
       });
 
       candlestickSeriesRef.current = candlestickSeries;
+
+      // Add EMA line series (if enabled)
+      if (showEMA) {
+        // EMA 20 (Fast) - Orange/Gold
+        const ema20Series = chart.addLineSeries({
+          color: "#F59E0B",
+          lineWidth: 2,
+          title: "EMA 20",
+          priceLineVisible: false,
+          lastValueVisible: true,
+        });
+        ema20SeriesRef.current = ema20Series;
+
+        // EMA 50 (Slow) - Blue
+        const ema50Series = chart.addLineSeries({
+          color: "#3B82F6",
+          lineWidth: 2,
+          title: "EMA 50",
+          priceLineVisible: false,
+          lastValueVisible: true,
+        });
+        ema50SeriesRef.current = ema50Series;
+      }
 
       // Handle window resize
       const handleResize = () => {
@@ -149,6 +181,19 @@ const TradingChartWidget = forwardRef<TradingChartHandle, TradingChartWidgetProp
       }
 
     }, [candles, position]);
+
+    // Update EMA data when emaData changes
+    useEffect(() => {
+      if (!showEMA || !emaData) return;
+
+      if (ema20SeriesRef.current && emaData.ema20) {
+        ema20SeriesRef.current.setData(emaData.ema20);
+      }
+
+      if (ema50SeriesRef.current && emaData.ema50) {
+        ema50SeriesRef.current.setData(emaData.ema50);
+      }
+    }, [emaData, showEMA]);
 
     // Handle click events for entry placement
     useEffect(() => {

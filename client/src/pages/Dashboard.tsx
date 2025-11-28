@@ -337,7 +337,7 @@ export default function Dashboard() {
   const currentData = marketData[selectedPair];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 text-white p-3 md:p-6">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-indigo-950 animate-gradient-slow text-white p-3 md:p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">
@@ -415,10 +415,10 @@ export default function Dashboard() {
               <button
                 onClick={analyzeMarket}
                 disabled={isAnalyzing || !canAnalyze}
-                className={`px-6 py-2 rounded-lg flex items-center gap-2 transition-all ${
+                className={`px-6 py-2 rounded-lg flex items-center gap-2 transition-all duration-300 ${
                   !canAnalyze
                     ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
-                    : 'bg-blue-600 hover:bg-blue-700 text-white'
+                    : 'bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white shadow-lg shadow-blue-500/50 hover:shadow-xl hover:shadow-cyan-500/60 ring-2 ring-blue-400/20 hover:ring-blue-400/40'
                 } disabled:opacity-70`}
                 data-testid="button-analyze-now"
               >
@@ -439,15 +439,15 @@ export default function Dashboard() {
 
         {/* Stats Overview */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
+          <div className="glass-card p-4 rounded-xl hover-lift hover-glow-blue transition-all duration-300">
             <div className="flex items-center justify-between mb-2">
               <span className="text-slate-400 text-sm">Active Signals</span>
               <Activity className="w-4 h-4 text-blue-400" />
             </div>
             <div className="text-2xl font-bold" data-testid="text-active-signals">{activeSignals.length}</div>
           </div>
-          
-          <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
+
+          <div className="glass-card p-4 rounded-xl hover-lift hover-glow-blue transition-all duration-300">
             <div className="flex items-center justify-between mb-2">
               <span className="text-slate-400 text-sm">LONG Signals</span>
               <TrendingUp className="w-4 h-4 text-green-400" />
@@ -456,8 +456,8 @@ export default function Dashboard() {
               {activeSignals.filter(s => s.type === 'LONG').length}
             </div>
           </div>
-          
-          <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
+
+          <div className="glass-card p-4 rounded-xl hover-lift hover-glow-blue transition-all duration-300">
             <div className="flex items-center justify-between mb-2">
               <span className="text-slate-400 text-sm">SHORT Signals</span>
               <TrendingDown className="w-4 h-4 text-red-400" />
@@ -466,14 +466,14 @@ export default function Dashboard() {
               {activeSignals.filter(s => s.type === 'SHORT').length}
             </div>
           </div>
-          
-          <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
+
+          <div className="glass-card p-4 rounded-xl hover-lift hover-glow-blue transition-all duration-300">
             <div className="flex items-center justify-between mb-2">
               <span className="text-slate-400 text-sm">Avg Confidence</span>
               <Target className="w-4 h-4 text-purple-400" />
             </div>
             <div className="text-2xl font-bold text-purple-400" data-testid="text-avg-confidence">
-              {activeSignals.length > 0 
+              {activeSignals.length > 0
                 ? Math.round(activeSignals.reduce((sum, s) => sum + s.confidence, 0) / activeSignals.length)
                 : 0}%
             </div>
@@ -487,10 +487,10 @@ export default function Dashboard() {
               <button
                 key={pair}
                 onClick={() => setSelectedPair(pair)}
-                className={`px-4 py-2 rounded-lg transition-all ${
+                className={`px-4 py-2 rounded-lg transition-all duration-300 ${
                   selectedPair === pair
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                    ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-lg shadow-blue-500/50'
+                    : 'glass text-slate-300 hover:bg-slate-700/50'
                 }`}
                 data-testid={`button-pair-${pair.replace('/', '-')}`}
               >
@@ -506,7 +506,7 @@ export default function Dashboard() {
         </div>
 
         {/* Filter Section */}
-        <div className="mb-6 bg-slate-800 rounded-lg p-4 border border-slate-700">
+        <div className="mb-6 glass-card rounded-xl p-4">
           <div className="flex flex-col lg:flex-row items-start lg:items-center gap-4 lg:gap-6">
             <div className="flex items-center gap-3">
               <span className="text-sm text-slate-400 font-semibold">Signal Quality:</span>

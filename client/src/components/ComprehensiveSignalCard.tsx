@@ -339,7 +339,7 @@ Risk: 1-2%${signal.stopLimitPrice ? `\nStop Limit: ${signal.stopLimitPrice}` : '
   const positionSizePercent = signal.positionSizePercent !== undefined ? signal.positionSizePercent : (signal.confidence >= 80 ? 1.50 : 0.00);
 
   return (
-    <div className="bg-slate-800 rounded-lg p-5 border border-slate-700 hover:border-blue-500 transition-all">
+    <div className="glass-card rounded-xl p-5 hover-lift hover:border-blue-500/50 transition-all duration-300 hover-glow-blue">
       <div className="flex items-start justify-between mb-4">
         <div className="flex items-center gap-3">
           <div className={`p-2 rounded-lg ${
@@ -544,7 +544,7 @@ Risk: 1-2%${signal.stopLimitPrice ? `\nStop Limit: ${signal.stopLimitPrice}` : '
       {/* Copy for MT5 Button */}
       <button
         onClick={copyForMT5}
-        className="w-full py-3 px-4 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 rounded-lg text-white font-bold transition-all flex items-center justify-center gap-2 shadow-lg mb-3"
+        className="w-full py-3 px-4 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 rounded-lg text-white font-bold transition-all duration-300 flex items-center justify-center gap-2 shadow-lg shadow-green-500/50 hover:shadow-xl hover:shadow-emerald-500/60 mb-3"
         data-testid={`button-copy-mt5-${signal.id}`}
       >
         <Copy className="w-5 h-5" />
