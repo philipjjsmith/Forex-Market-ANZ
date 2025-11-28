@@ -533,7 +533,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Validate symbol
-      const validSymbols = ['EUR/USD', 'USD/JPY', 'AUD/USD', 'USD/CHF'];
+      const validSymbols = ['EUR/USD', 'USD/JPY']; // Top 2 pairs by volume
       if (!validSymbols.includes(symbol)) {
         return res.status(400).json({
           success: false,
@@ -584,7 +584,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const validSymbols = ['EUR/USD', 'USD/JPY', 'AUD/USD', 'USD/CHF'];
+      const validSymbols = ['EUR/USD', 'USD/JPY']; // Top 2 pairs by volume
       if (!validSymbols.includes(symbol)) {
         return res.status(400).json({
           success: false,

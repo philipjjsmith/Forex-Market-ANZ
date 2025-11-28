@@ -118,7 +118,7 @@ Always use these aliases for imports to maintain consistency.
 - **Authentication:** None required (free, unlimited)
 - **Data Source:** European Central Bank official rates
 - **Caching:** 15-minute TTL to reduce API calls
-- **Pairs:** EUR/USD, GBP/USD, USD/JPY, AUD/USD, USD/CHF
+- **Pairs:** EUR/USD, USD/JPY (top 2 by volume - 36% of global FX market)
 
 **Why Frankfurter:**
 - No API key required (unlimited, free forever)

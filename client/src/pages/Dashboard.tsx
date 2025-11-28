@@ -14,7 +14,7 @@ export default function Dashboard() {
   const [, setLocation] = useLocation();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
-  const [pairs] = useState(['EUR/USD', 'USD/JPY', 'AUD/USD', 'USD/CHF']); // GBP/USD disabled (signal-generator.ts:664)
+  const [pairs] = useState(['EUR/USD', 'USD/JPY']); // Focused on top 2 pairs (36% global volume)
   const [selectedPair, setSelectedPair] = useState('EUR/USD');
   const [signals, setSignals] = useState<Signal[]>([]);
   const [marketData, setMarketData] = useState<Record<string, { candles: any[], currentPrice: number }>>({});
@@ -181,7 +181,7 @@ export default function Dashboard() {
         throw new Error('Failed to use analysis quota');
       }
 
-      const pairs = ['EUR/USD', 'USD/JPY', 'AUD/USD', 'USD/CHF'];
+      const pairs = ['EUR/USD', 'USD/JPY']; // Reduced to stay within Twelve Data 8 calls/min limit
       const newSignals: Signal[] = [];
       const newMarketData: Record<string, { candles: any[], currentPrice: number }> = {};
 

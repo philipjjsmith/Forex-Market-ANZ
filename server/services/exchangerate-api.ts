@@ -125,11 +125,8 @@ export class ExchangeRateAPI {
   async fetchAllQuotes(): Promise<ForexQuote[]> {
     const pairs = [
       { from: 'EUR', to: 'USD' },
-      { from: 'GBP', to: 'USD' },
       { from: 'USD', to: 'JPY' },
-      { from: 'AUD', to: 'USD' },
-      { from: 'USD', to: 'CHF' },
-    ];
+    ]; // Reduced to top 2 pairs (36% global volume)
 
     try {
       const quotes = await Promise.all(

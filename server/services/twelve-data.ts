@@ -205,7 +205,7 @@ export class TwelveDataAPI {
    * Fetch candles for all major forex pairs
    */
   async fetchAllPairs(interval: string = '5min', outputsize: number = 1440): Promise<Map<string, Candle[]>> {
-    const pairs = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'USD/CHF'];
+    const pairs = ['EUR/USD', 'USD/JPY']; // Reduced to top 2 pairs (36% global volume)
     const candlesMap = new Map<string, Candle[]>();
 
     for (const pair of pairs) {
