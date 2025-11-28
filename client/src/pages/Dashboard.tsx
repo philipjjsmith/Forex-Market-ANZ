@@ -489,7 +489,7 @@ export default function Dashboard() {
                   <p className="text-slate-400">
                     {activeTab === 'saved'
                       ? 'No saved signals yet. Click the star icon on any signal to save it.'
-                      : 'No signals generated yet. Click "Analyze Now" to scan the market.'}
+                      : 'No signals generated yet. Our system automatically scans the market every 15 minutes - check back soon!'}
                   </p>
                 </div>
               )
