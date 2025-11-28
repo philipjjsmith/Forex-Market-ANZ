@@ -117,6 +117,7 @@ export function registerSignalRoutes(app: Express) {
   /**
    * GET /api/signals/active
    * Get all active (pending) signals for current user
+   * Includes both user-specific manual signals AND global automated signals from ai-system
    */
   app.get("/api/signals/active", requireAuth, async (req, res) => {
     try {
@@ -147,7 +148,10 @@ export function registerSignalRoutes(app: Express) {
           expires_at,
           indicators
         FROM signal_history
-        WHERE user_id = ${userId}
+        WHERE (
+          user_id = ${userId}
+          OR user_id = (SELECT id FROM users WHERE email = 'ai@system.internal')
+        )
           AND outcome = 'PENDING'
           AND expires_at > NOW()
         ORDER BY created_at DESC
