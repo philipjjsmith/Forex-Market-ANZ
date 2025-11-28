@@ -726,7 +726,7 @@ export class SignalGenerator {
             twelveDataAPI.fetchHistoricalCandles(symbol, '1week', 52),   // 52 weeks = 1 year
             twelveDataAPI.fetchHistoricalCandles(symbol, '1day', 200),   // 200 days
             twelveDataAPI.fetchHistoricalCandles(symbol, '4h', 360),     // 360 4H candles = 60 days
-            twelveDataAPI.fetchHistoricalCandles(symbol, '1h', 720),     // 720 1H candles = 30 days
+            twelveDataAPI.fetchHistoricalCandles(symbol, '1h', 1440),    // 1440 1H candles = 60 days (better 1D chart density)
           ]);
 
           // Validate we have sufficient data on all timeframes
@@ -916,7 +916,7 @@ export class SignalGenerator {
         twelveDataAPI.fetchHistoricalCandles(symbol, '1week', 52),   // 52 weeks = 1 year
         twelveDataAPI.fetchHistoricalCandles(symbol, '1day', 200),   // 200 days
         twelveDataAPI.fetchHistoricalCandles(symbol, '4h', 360),     // 360 4H candles = 60 days
-        twelveDataAPI.fetchHistoricalCandles(symbol, '1h', 720),     // 720 1H candles = 30 days
+        twelveDataAPI.fetchHistoricalCandles(symbol, '1h', 1440),    // 1440 1H candles = 60 days (better 1D chart density)
       ]);
 
       // Validate minimum candles for reliable analysis
@@ -1013,7 +1013,7 @@ export class SignalGenerator {
         twelveDataAPI.fetchHistoricalCandles(symbol, '1week', 52),
         twelveDataAPI.fetchHistoricalCandles(symbol, '1day', 200),
         twelveDataAPI.fetchHistoricalCandles(symbol, '4h', 360),
-        twelveDataAPI.fetchHistoricalCandles(symbol, '1h', 720),
+        twelveDataAPI.fetchHistoricalCandles(symbol, '1h', 1440),
       ]);
 
       // Validate minimum candles

@@ -39,13 +39,13 @@ export function MarketAnalysisCard({ symbol, candles, currentPrice, analysis }: 
       const aggregated = [];
       for (let i = 0; i < candles.length; i += 4) {
         const chunk = candles.slice(i, i + 4);
-        if (chunk.length === 4) {
+        if (chunk.length >= 2) {  // Accept partial 4H periods (at least 2 hours)
           aggregated.push({
-            timestamp: chunk[3].timestamp,
+            timestamp: chunk[chunk.length - 1].timestamp,  // Use last candle's timestamp
             open: chunk[0].open,
             high: Math.max(...chunk.map(c => c.high)),
             low: Math.min(...chunk.map(c => c.low)),
-            close: chunk[3].close,
+            close: chunk[chunk.length - 1].close,  // Use last candle's close
             volume: chunk.reduce((sum, c) => sum + c.volume, 0),
           });
         }
@@ -56,13 +56,13 @@ export function MarketAnalysisCard({ symbol, candles, currentPrice, analysis }: 
       const aggregated = [];
       for (let i = 0; i < candles.length; i += 24) {
         const chunk = candles.slice(i, i + 24);
-        if (chunk.length === 24) {
+        if (chunk.length >= 12) {  // Accept partial days (at least 12 hours = half a day)
           aggregated.push({
-            timestamp: chunk[23].timestamp,
+            timestamp: chunk[chunk.length - 1].timestamp,  // Use last candle's timestamp
             open: chunk[0].open,
             high: Math.max(...chunk.map(c => c.high)),
             low: Math.min(...chunk.map(c => c.low)),
-            close: chunk[23].close,
+            close: chunk[chunk.length - 1].close,  // Use last candle's close
             volume: chunk.reduce((sum, c) => sum + c.volume, 0),
           });
         }
