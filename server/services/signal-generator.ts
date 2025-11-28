@@ -949,7 +949,47 @@ export class SignalGenerator {
         return { signal, candles: oneHourCandles };
       } else {
         console.log(`ℹ️ No signal for ${symbol} (W+D+4H not aligned or filters not met)`);
-        return null;
+
+        // Calculate trends for educational display (same logic as in strategy.analyze)
+        const weeklyCloses = weeklyCandles.map(c => c.close);
+        const dailyCloses = dailyCandles.map(c => c.close);
+        const fourHourCloses = fourHourCandles.map(c => c.close);
+        const oneHourCloses = oneHourCandles.map(c => c.close);
+
+        const weeklyFastMA = Indicators.ema(weeklyCloses, 20);
+        const weeklySlowMA = Indicators.ema(weeklyCloses, 50);
+        const weeklyTrend = weeklyFastMA && weeklySlowMA && weeklyFastMA > weeklySlowMA ? 'UP' : 'DOWN';
+
+        const dailyFastMA = Indicators.ema(dailyCloses, 20);
+        const dailySlowMA = Indicators.ema(dailyCloses, 50);
+        const dailyTrend = dailyFastMA && dailySlowMA && dailyFastMA > dailySlowMA ? 'UP' : 'DOWN';
+
+        const fourHourFastMA = Indicators.ema(fourHourCloses, 20);
+        const fourHourSlowMA = Indicators.ema(fourHourCloses, 50);
+        const fourHourTrend = fourHourFastMA && fourHourSlowMA && fourHourFastMA > fourHourSlowMA ? 'UP' : 'DOWN';
+
+        const oneHourFastMA = Indicators.ema(oneHourCloses, 20);
+        const oneHourSlowMA = Indicators.ema(oneHourCloses, 50);
+        const oneHourTrend = oneHourFastMA && oneHourSlowMA && oneHourFastMA > oneHourSlowMA ? 'UP' : 'DOWN';
+
+        // Calculate alignment percentage (3 higher timeframes only)
+        const allAligned = weeklyTrend === dailyTrend && dailyTrend === fourHourTrend;
+        const twoAligned = (weeklyTrend === dailyTrend) || (dailyTrend === fourHourTrend) || (weeklyTrend === fourHourTrend);
+        const alignmentPct = allAligned ? 100 : (twoAligned ? 67 : 33);
+
+        // Return candles + analysis for educational display
+        return {
+          signal: null,
+          candles: oneHourCandles,
+          analysis: {
+            weeklyTrend,
+            dailyTrend,
+            fourHourTrend,
+            oneHourTrend,
+            alignmentPct,
+            reason: 'W+D+4H timeframes not fully aligned'
+          }
+        };
       }
 
     } catch (error) {

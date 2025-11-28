@@ -4,6 +4,8 @@ import { Activity, TrendingUp, TrendingDown, Target, BarChart3, AlertTriangle, C
 import { Indicators } from '@/lib/indicators';
 import { MACrossoverStrategy, Signal } from '@/lib/strategy';
 import { ComprehensiveSignalCard } from '@/components/ComprehensiveSignalCard';
+import { MarketAnalysisCard } from '@/components/MarketAnalysisCard';
+import { StrategyFooter } from '@/components/StrategyFooter';
 import { useQuotaTracker } from '@/hooks/use-quota-tracker';
 import { generateCandlesFromQuote } from '@/lib/candle-generator';
 import { API_ENDPOINTS } from '@/config/api';
@@ -17,7 +19,18 @@ export default function Dashboard() {
   const [pairs] = useState(['EUR/USD', 'USD/JPY']); // Focused on top 2 pairs (36% global volume)
   const [selectedPair, setSelectedPair] = useState('EUR/USD');
   const [signals, setSignals] = useState<Signal[]>([]);
-  const [marketData, setMarketData] = useState<Record<string, { candles: any[], currentPrice: number }>>({});
+  const [marketData, setMarketData] = useState<Record<string, {
+    candles: any[],
+    currentPrice: number,
+    analysis?: {
+      weeklyTrend: 'UP' | 'DOWN';
+      dailyTrend: 'UP' | 'DOWN';
+      fourHourTrend: 'UP' | 'DOWN';
+      oneHourTrend: 'UP' | 'DOWN';
+      alignmentPct: number;
+      reason: string;
+    }
+  }>>({});
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [confidenceFilter, setConfidenceFilter] = useState('all');
   const [signalTypeFilter, setSignalTypeFilter] = useState('all');
@@ -236,10 +249,11 @@ export default function Dashboard() {
               console.log(`ℹ️ ${pair}: No signal (market not aligned)`);
             }
 
-            // No signal, no candles needed
+            // No signal, but SHOW candles and analysis for educational display
             newMarketData[pair] = {
-              candles: [],
-              currentPrice: priceMap[pair] || 1.0
+              candles: result.candles || [],
+              currentPrice: priceMap[pair] || 1.0,
+              analysis: result.analysis
             };
           } else {
             // Check if it's a rate limit error
@@ -574,14 +588,24 @@ export default function Dashboard() {
             </h2>
             
             {displaySignals.length === 0 ? (
-              <div className="bg-slate-800 rounded-lg p-8 text-center border border-slate-700">
-                <AlertTriangle className="w-12 h-12 text-yellow-500 mx-auto mb-3" />
-                <p className="text-slate-400">
-                  {activeTab === 'saved' 
-                    ? 'No saved signals yet. Click the star icon on any signal to save it.'
-                    : 'No signals generated yet. Click "Analyze Now" to scan the market.'}
-                </p>
-              </div>
+              activeTab === 'signals' && currentData?.candles.length > 0 ? (
+                // Show market analysis when no signals but we have candles
+                <MarketAnalysisCard
+                  symbol={selectedPair}
+                  candles={currentData.candles}
+                  currentPrice={currentData.currentPrice}
+                  analysis={currentData.analysis}
+                />
+              ) : (
+                <div className="bg-slate-800 rounded-lg p-8 text-center border border-slate-700">
+                  <AlertTriangle className="w-12 h-12 text-yellow-500 mx-auto mb-3" />
+                  <p className="text-slate-400">
+                    {activeTab === 'saved'
+                      ? 'No saved signals yet. Click the star icon on any signal to save it.'
+                      : 'No signals generated yet. Click "Analyze Now" to scan the market.'}
+                  </p>
+                </div>
+              )
             ) : (
               displaySignals.map(signal => (
                 <ComprehensiveSignalCard
@@ -710,6 +734,9 @@ export default function Dashboard() {
             })()}
           </div>
         </div>
+
+        {/* Strategy Footer */}
+        <StrategyFooter />
       </div>
     </div>
   );
