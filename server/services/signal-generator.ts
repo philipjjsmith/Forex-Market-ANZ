@@ -107,7 +107,81 @@ class Indicators {
 
   static adx(candles: Candle[], period = 14): { adx: number; plusDI: number; minusDI: number } | null {
     if (candles.length < period * 2) return null;
-    return { adx: 25, plusDI: 25, minusDI: 15 }; // Simplified for now
+
+    // Step 1: Calculate +DM, -DM, and TR for each period
+    const plusDM: number[] = [];
+    const minusDM: number[] = [];
+    const trueRange: number[] = [];
+
+    for (let i = 1; i < candles.length; i++) {
+      // Directional movements
+      const highDiff = candles[i].high - candles[i - 1].high;
+      const lowDiff = candles[i - 1].low - candles[i].low;
+
+      // +DM: upward movement (only if larger than downward movement)
+      plusDM.push(highDiff > lowDiff && highDiff > 0 ? highDiff : 0);
+
+      // -DM: downward movement (only if larger than upward movement)
+      minusDM.push(lowDiff > highDiff && lowDiff > 0 ? lowDiff : 0);
+
+      // True Range
+      const tr = Math.max(
+        candles[i].high - candles[i].low,
+        Math.abs(candles[i].high - candles[i - 1].close),
+        Math.abs(candles[i].low - candles[i - 1].close)
+      );
+      trueRange.push(tr);
+    }
+
+    // Step 2: Smooth +DM, -DM, and TR using Wilder's smoothing (similar to EMA but different factor)
+    const smoothed = (values: number[]): number => {
+      let sum = values.slice(0, period).reduce((a, b) => a + b, 0);
+      for (let i = period; i < values.length; i++) {
+        sum = sum - (sum / period) + values[i];
+      }
+      return sum;
+    };
+
+    const smoothedPlusDM = smoothed(plusDM);
+    const smoothedMinusDM = smoothed(minusDM);
+    const smoothedTR = smoothed(trueRange);
+
+    // Step 3: Calculate +DI and -DI
+    const plusDI = (smoothedPlusDM / smoothedTR) * 100;
+    const minusDI = (smoothedMinusDM / smoothedTR) * 100;
+
+    // Step 4: Calculate DX (Directional Index)
+    const dxValues: number[] = [];
+    for (let i = period; i < candles.length - 1; i++) {
+      // Recalculate smoothed values for each position
+      let sPlusDM = plusDM.slice(0, period).reduce((a, b) => a + b, 0);
+      let sMinusDM = minusDM.slice(0, period).reduce((a, b) => a + b, 0);
+      let sTR = trueRange.slice(0, period).reduce((a, b) => a + b, 0);
+
+      for (let j = period; j <= i; j++) {
+        sPlusDM = sPlusDM - (sPlusDM / period) + plusDM[j];
+        sMinusDM = sMinusDM - (sMinusDM / period) + minusDM[j];
+        sTR = sTR - (sTR / period) + trueRange[j];
+      }
+
+      const pDI = (sPlusDM / sTR) * 100;
+      const mDI = (sMinusDM / sTR) * 100;
+
+      const dx = (Math.abs(pDI - mDI) / (pDI + mDI)) * 100;
+      dxValues.push(dx);
+    }
+
+    // Step 5: Calculate ADX (smoothed DX)
+    if (dxValues.length < period) return null;
+
+    const adxValue = this.sma(dxValues.slice(-period), period);
+    if (!adxValue) return null;
+
+    return {
+      adx: adxValue,
+      plusDI: plusDI,
+      minusDI: minusDI
+    };
   }
 
   static bollingerBands(data: number[], period = 20, stdDev = 2): { upper: number; middle: number; lower: number } | null {
