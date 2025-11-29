@@ -494,15 +494,14 @@ export function registerSignalRoutes(app: Express) {
       }
 
       // Fetch winning trades from past 30 days (extended from 7 to show more examples)
+      // Note: tier, trade_live, position_size_percent columns removed for backwards compatibility
+      // tier is calculated from confidence (85+ = HIGH, 70-84 = MEDIUM)
       const result = await db.execute(sql`
         SELECT
           signal_id,
           symbol,
           type,
           confidence,
-          tier,
-          trade_live,
-          position_size_percent,
           entry_price,
           stop_loss,
           tp1,
@@ -564,6 +563,7 @@ export function registerSignalRoutes(app: Express) {
 
         return {
           ...parsed,
+          tier: parsed.confidence >= 85 ? 'HIGH' : 'MEDIUM', // Calculate tier from confidence
           duration: durationFormatted,
           durationHours,
           achievedRR: parseFloat(achievedRR)
