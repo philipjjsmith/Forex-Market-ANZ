@@ -339,6 +339,117 @@ export function registerSignalRoutes(app: Express) {
   });
 
   /**
+   * GET /api/signals/winning-trades-week
+   * Get top winning trades from the past 7 days for dashboard showcase
+   * Includes full chart data (candles) and technical indicators for detailed analysis
+   * Query params:
+   * - limit: number of trades to return (default 5, max 10)
+   */
+  app.get("/api/signals/winning-trades-week", requireAuth, async (req, res) => {
+    try {
+      const userId = req.userId!;
+      const limit = Math.min(parseInt(req.query.limit as string) || 5, 10);
+
+      if (!userId) {
+        return res.status(401).json({ message: "Must be logged in" });
+      }
+
+      // Fetch winning trades from past 7 days
+      // Include both user's trades AND global automated signals from ai@system.internal
+      const result = await db.execute(sql`
+        SELECT
+          signal_id,
+          symbol,
+          type,
+          confidence,
+          tier,
+          trade_live,
+          position_size_percent,
+          entry_price,
+          stop_loss,
+          tp1,
+          tp2,
+          tp3,
+          outcome,
+          outcome_price,
+          outcome_time,
+          profit_loss_pips,
+          indicators,
+          candles,
+          strategy_name,
+          strategy_version,
+          created_at,
+          manually_closed_by_user
+        FROM signal_history
+        WHERE (
+          user_id = ${userId}
+          OR user_id = (SELECT id FROM users WHERE email = 'ai@system.internal')
+        )
+          AND outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT')
+          AND outcome_time >= NOW() - INTERVAL '7 days'
+          AND profit_loss_pips > 0
+        ORDER BY profit_loss_pips DESC
+        LIMIT ${limit}
+      `);
+
+      // Parse numeric fields and calculate additional metrics
+      const trades = (result as any[]).map((trade: any) => {
+        const parsed = parseNumericFields(trade, [
+          'confidence',
+          'entry_price',
+          'stop_loss',
+          'tp1',
+          'tp2',
+          'tp3',
+          'outcome_price',
+          'profit_loss_pips'
+        ]);
+
+        // Calculate trade duration in hours
+        const createdAt = new Date(parsed.created_at);
+        const outcomeTime = new Date(parsed.outcome_time);
+        const durationMs = outcomeTime.getTime() - createdAt.getTime();
+        const durationHours = Math.round(durationMs / (1000 * 60 * 60));
+
+        // Calculate achieved risk:reward ratio
+        const riskPips = Math.abs(parsed.entry_price - parsed.stop_loss);
+        const pipValue = trade.symbol.includes('JPY') ? 0.01 : 0.0001;
+        const riskInPips = riskPips / pipValue;
+        const achievedRR = riskInPips > 0 ? (parsed.profit_loss_pips / riskInPips).toFixed(2) : '0.00';
+
+        // Format duration as human-readable string
+        let durationFormatted: string;
+        if (durationHours < 24) {
+          durationFormatted = `${durationHours}h`;
+        } else {
+          const days = Math.floor(durationHours / 24);
+          const hours = durationHours % 24;
+          durationFormatted = hours > 0 ? `${days}d ${hours}h` : `${days}d`;
+        }
+
+        return {
+          ...parsed,
+          duration: durationFormatted,
+          durationHours,
+          achievedRR: parseFloat(achievedRR)
+        };
+      });
+
+      res.json({
+        trades,
+        count: trades.length
+      });
+
+    } catch (error: any) {
+      console.error("Error fetching winning trades:", error);
+      res.status(500).json({
+        message: "Failed to fetch winning trades",
+        error: error.message
+      });
+    }
+  });
+
+  /**
    * GET /api/signals/history
    * Get completed signals history with pagination and filters
    * Query params:

@@ -6,6 +6,7 @@ import { MACrossoverStrategy, Signal } from '@/lib/strategy';
 import { ComprehensiveSignalCard } from '@/components/ComprehensiveSignalCard';
 import { MarketAnalysisCard } from '@/components/MarketAnalysisCard';
 import { StrategyFooter } from '@/components/StrategyFooter';
+import WinningTradesCarousel from '@/components/WinningTradesCarousel';
 // Removed: import { useQuotaTracker } from '@/hooks/use-quota-tracker';
 import { generateCandlesFromQuote } from '@/lib/candle-generator';
 import { API_ENDPOINTS } from '@/config/api';
@@ -365,6 +366,11 @@ export default function Dashboard() {
                 : 0}%
             </div>
           </div>
+        </div>
+
+        {/* Winning Trades This Week */}
+        <div className="mb-6">
+          <WinningTradesCarousel />
         </div>
 
         {/* Pair Selector */}
