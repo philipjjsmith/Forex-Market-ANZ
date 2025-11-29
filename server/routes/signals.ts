@@ -19,6 +19,143 @@ function parseNumericFields(obj: any, fields: string[]): any {
   return parsed;
 }
 
+// Generate demo/example winning trades when no real trades are available
+function generateDemoWinningTrades(count: number = 3): any[] {
+  const now = new Date();
+  const demoTrades = [
+    {
+      signal_id: 'demo-eurusd-tp3',
+      symbol: 'EUR/USD',
+      type: 'LONG',
+      confidence: 92,
+      tier: 'HIGH',
+      entry_price: 1.08450,
+      stop_loss: 1.08150,
+      tp1: 1.08750,
+      tp2: 1.09050,
+      tp3: 1.09350,
+      outcome: 'TP3_HIT',
+      outcome_price: 1.09350,
+      profit_loss_pips: 90.0,
+      indicators: {
+        rsi: '58.2',
+        adx: '34.5',
+        macd: { value: 0.00045, signal: 0.00032, histogram: 0.00013 },
+        ema20: 1.08350,
+        ema50: 1.08100,
+        atr: 0.00089,
+        bb: { upper: 1.08950, middle: 1.08450, lower: 1.07950 }
+      },
+      candles: generateDemoCandles('EUR/USD', 1.08450, 1.09350, 48),
+      strategy_name: 'ICT 3-Timeframe Strategy',
+      strategy_version: 'v3.1.0',
+      created_at: new Date(now.getTime() - 48 * 60 * 60 * 1000).toISOString(),
+      outcome_time: new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString(),
+      duration: '2d',
+      durationHours: 48,
+      achievedRR: 3.0,
+      manually_closed_by_user: false
+    },
+    {
+      signal_id: 'demo-usdjpy-tp2',
+      symbol: 'USD/JPY',
+      type: 'SHORT',
+      confidence: 88,
+      tier: 'HIGH',
+      entry_price: 149.850,
+      stop_loss: 150.350,
+      tp1: 149.350,
+      tp2: 148.850,
+      tp3: 148.350,
+      outcome: 'TP2_HIT',
+      outcome_price: 148.850,
+      profit_loss_pips: 100.0,
+      indicators: {
+        rsi: '42.8',
+        adx: '31.2',
+        macd: { value: -0.085, signal: -0.062, histogram: -0.023 },
+        ema20: 150.050,
+        ema50: 150.450,
+        atr: 0.425,
+        bb: { upper: 150.650, middle: 149.850, lower: 149.050 }
+      },
+      candles: generateDemoCandles('USD/JPY', 149.850, 148.850, 36),
+      strategy_name: 'ICT 3-Timeframe Strategy',
+      strategy_version: 'v3.1.0',
+      created_at: new Date(now.getTime() - 36 * 60 * 60 * 1000).toISOString(),
+      outcome_time: new Date(now.getTime() - 12 * 60 * 60 * 1000).toISOString(),
+      duration: '1d 12h',
+      durationHours: 36,
+      achievedRR: 2.0,
+      manually_closed_by_user: false
+    },
+    {
+      signal_id: 'demo-eurusd-tp1',
+      symbol: 'EUR/USD',
+      type: 'SHORT',
+      confidence: 85,
+      tier: 'HIGH',
+      entry_price: 1.09200,
+      stop_loss: 1.09500,
+      tp1: 1.08900,
+      tp2: 1.08600,
+      tp3: 1.08300,
+      outcome: 'TP1_HIT',
+      outcome_price: 1.08900,
+      profit_loss_pips: 30.0,
+      indicators: {
+        rsi: '38.5',
+        adx: '28.9',
+        macd: { value: -0.00032, signal: -0.00015, histogram: -0.00017 },
+        ema20: 1.09350,
+        ema50: 1.09550,
+        atr: 0.00076,
+        bb: { upper: 1.09850, middle: 1.09200, lower: 1.08550 }
+      },
+      candles: generateDemoCandles('EUR/USD', 1.09200, 1.08900, 18),
+      strategy_name: 'ICT 3-Timeframe Strategy',
+      strategy_version: 'v3.1.0',
+      created_at: new Date(now.getTime() - 18 * 60 * 60 * 1000).toISOString(),
+      outcome_time: new Date(now.getTime() - 6 * 60 * 60 * 1000).toISOString(),
+      duration: '18h',
+      durationHours: 18,
+      achievedRR: 1.0,
+      manually_closed_by_user: false
+    }
+  ];
+
+  return demoTrades.slice(0, count);
+}
+
+// Generate realistic demo candles for charting
+function generateDemoCandles(symbol: string, startPrice: number, endPrice: number, hours: number): any[] {
+  const candles = [];
+  const priceStep = (endPrice - startPrice) / hours;
+  const volatility = symbol.includes('JPY') ? 0.15 : 0.00015;
+
+  for (let i = 0; i < Math.min(hours * 4, 200); i++) { // 15-min candles, max 200
+    const time = new Date(Date.now() - (hours * 60 - i * 15) * 60 * 1000);
+    const basePrice = startPrice + (priceStep * i / 4);
+    const noise = (Math.random() - 0.5) * volatility;
+
+    const open = basePrice + noise;
+    const close = basePrice + priceStep / 4 + (Math.random() - 0.5) * volatility;
+    const high = Math.max(open, close) + Math.random() * volatility * 0.5;
+    const low = Math.min(open, close) - Math.random() * volatility * 0.5;
+
+    candles.push({
+      date: time.toISOString(),
+      timestamp: time,
+      open: parseFloat(open.toFixed(symbol.includes('JPY') ? 3 : 5)),
+      high: parseFloat(high.toFixed(symbol.includes('JPY') ? 3 : 5)),
+      low: parseFloat(low.toFixed(symbol.includes('JPY') ? 3 : 5)),
+      close: parseFloat(close.toFixed(symbol.includes('JPY') ? 3 : 5))
+    });
+  }
+
+  return candles;
+}
+
 export function registerSignalRoutes(app: Express) {
 
   /**
@@ -344,18 +481,19 @@ export function registerSignalRoutes(app: Express) {
    * Includes full chart data (candles) and technical indicators for detailed analysis
    * Query params:
    * - limit: number of trades to return (default 5, max 10)
+   * - includeDemo: if true, shows demo trades when no real trades available (default true)
    */
   app.get("/api/signals/winning-trades-week", requireAuth, async (req, res) => {
     try {
       const userId = req.userId!;
       const limit = Math.min(parseInt(req.query.limit as string) || 5, 10);
+      const includeDemo = req.query.includeDemo !== 'false'; // Default to true
 
       if (!userId) {
         return res.status(401).json({ message: "Must be logged in" });
       }
 
-      // Fetch winning trades from past 7 days
-      // Include both user's trades AND global automated signals from ai@system.internal
+      // Fetch winning trades from past 30 days (extended from 7 to show more examples)
       const result = await db.execute(sql`
         SELECT
           signal_id,
@@ -381,19 +519,16 @@ export function registerSignalRoutes(app: Express) {
           created_at,
           manually_closed_by_user
         FROM signal_history
-        WHERE (
-          user_id = ${userId}
-          OR user_id = (SELECT id FROM users WHERE email = 'ai@system.internal')
-        )
+        WHERE user_id = ${userId}
           AND outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT')
-          AND outcome_time >= NOW() - INTERVAL '7 days'
+          AND outcome_time >= NOW() - INTERVAL '30 days'
           AND profit_loss_pips > 0
         ORDER BY profit_loss_pips DESC
         LIMIT ${limit}
       `);
 
       // Parse numeric fields and calculate additional metrics
-      const trades = (result as any[]).map((trade: any) => {
+      let trades = (result as any[]).map((trade: any) => {
         const parsed = parseNumericFields(trade, [
           'confidence',
           'entry_price',
@@ -435,9 +570,15 @@ export function registerSignalRoutes(app: Express) {
         };
       });
 
+      // If no real trades found and demo is enabled, return demo/example trades
+      if (trades.length === 0 && includeDemo) {
+        trades = generateDemoWinningTrades(limit);
+      }
+
       res.json({
         trades,
-        count: trades.length
+        count: trades.length,
+        isDemo: trades.length > 0 && result.length === 0 && includeDemo
       });
 
     } catch (error: any) {
