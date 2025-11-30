@@ -33,9 +33,10 @@ export default function WinningTradeChart(props: WinningTradeChartProps) {
   const tp1 = Number(props.tp1);
   const tp2 = Number(props.tp2);
   const tp3 = Number(props.tp3);
+  const height = Number(props.height) || 400;
 
   // Extract remaining props
-  const { candles, entryTime, exitTime, type, targetHit, height = 400 } = props;
+  const { candles, entryTime, exitTime, type, targetHit } = props;
 
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -69,6 +70,12 @@ export default function WinningTradeChart(props: WinningTradeChartProps) {
         secondsVisible: false,
       },
     });
+
+    // Safety check: ensure chart was created successfully
+    if (!chart || typeof chart.addCandlestickSeries !== 'function') {
+      console.error('Failed to create chart - lightweight-charts may not be loaded properly');
+      return;
+    }
 
     chartRef.current = chart;
 
@@ -119,10 +126,10 @@ export default function WinningTradeChart(props: WinningTradeChartProps) {
 
       return {
         time,
-        open: candle.open,
-        high: candle.high,
-        low: candle.low,
-        close: candle.close,
+        open: Number(candle.open),
+        high: Number(candle.high),
+        low: Number(candle.low),
+        close: Number(candle.close),
       };
     });
 
