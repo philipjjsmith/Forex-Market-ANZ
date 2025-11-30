@@ -258,12 +258,12 @@ export default function WinningTradeCard({ trade }: WinningTradeCardProps) {
                     <div className="bg-slate-50 p-3 rounded-lg">
                       <div className="text-xs text-muted-foreground">MACD</div>
                       <div className="font-semibold text-sm font-mono">
-                        {trade.indicators.macd.histogram.toFixed(4)}
+                        {trade.indicators.macd?.histogram?.toFixed(4) ?? 'N/A'}
                       </div>
                     </div>
                     <div className="bg-slate-50 p-3 rounded-lg">
                       <div className="text-xs text-muted-foreground">ATR</div>
-                      <div className="font-semibold text-sm font-mono">{trade.indicators.atr.toFixed(5)}</div>
+                      <div className="font-semibold text-sm font-mono">{trade.indicators.atr?.toFixed(5) ?? 'N/A'}</div>
                     </div>
                   </div>
                 </div>
@@ -310,8 +310,9 @@ function getWinningTradeExplanation(trade: WinningTrade) {
   // Determine trend strength
   const trendStrength = adxValue > 40 ? 'very strong' : adxValue > 30 ? 'strong' : 'moderate';
 
-  // Determine momentum quality
-  const momentumQuality = Math.abs(trade.indicators.macd.histogram) > 0.001 ? 'strong' : 'moderate';
+  // Determine momentum quality (safely handle missing MACD data)
+  const macdHistogram = trade.indicators.macd?.histogram ?? 0;
+  const momentumQuality = Math.abs(macdHistogram) > 0.001 ? 'strong' : 'moderate';
 
   return {
     summary: `This ${isLong ? 'buy' : 'sell'} signal on ${trade.symbol} captured +${trade.profit_loss_pips.toFixed(1)} pips over ${trade.duration} with a ${trendStrength} trend and ${momentumQuality} momentum. The trade reached TP${targetHit}, delivering ${trade.achievedRR.toFixed(2)}:1 risk/reward.`,
@@ -324,7 +325,7 @@ function getWinningTradeExplanation(trade: WinningTrade) {
       whyItWorked: [
         `${trendStrength.charAt(0).toUpperCase() + trendStrength.slice(1)} directional trend (ADX: ${adxValue.toFixed(1)}) provided sustained momentum`,
         `RSI at ${rsiValue.toFixed(1)} indicated optimal ${isLong ? 'buying' : 'selling'} conditions without exhaustion`,
-        `MACD histogram of ${trade.indicators.macd.histogram > 0 ? '+' : ''}${trade.indicators.macd.histogram.toFixed(4)} confirmed ${momentumQuality} ${isLong ? 'bullish' : 'bearish'} momentum`,
+        `MACD histogram of ${macdHistogram > 0 ? '+' : ''}${macdHistogram.toFixed(4)} confirmed ${momentumQuality} ${isLong ? 'bullish' : 'bearish'} momentum`,
         `Proper risk management with ${trade.confidence}% confidence enabled ${trade.tier === 'HIGH' ? 'live trading with 1.5% account risk' : 'practice signal execution'}`
       ],
 
@@ -334,7 +335,7 @@ function getWinningTradeExplanation(trade: WinningTrade) {
     advanced: {
       multiTimeframe: `This signal was generated using ICT 3-Timeframe Rule methodology (${trade.strategy_version}). Weekly, Daily, and 4H timeframes showed ${isLong ? 'bullish' : 'bearish'} alignment with EMA20/50 crossovers and MACD confirmation. The 1H timeframe provided optimal entry timing${trade.durationHours > 24 ? ', with patience rewarded as the multi-day trend developed' : ' for quick momentum capture'}.`,
 
-      riskManagement: `Initial risk was ${Math.abs(trade.entry_price - trade.stop_loss).toFixed(5)} (${(Math.abs(trade.entry_price - trade.stop_loss) / (trade.symbol.includes('JPY') ? 0.01 : 0.0001)).toFixed(1)} pips). ATR-based position sizing at ${trade.indicators.atr.toFixed(5)} enabled optimal stop placement. Achieved R:R of ${trade.achievedRR.toFixed(2)}:1 by reaching TP${targetHit} at ${trade.outcome_price.toFixed(5)}, ${targetHit === 1 ? 'capturing 33% of position' : targetHit === 2 ? 'capturing 67% of position' : 'full position closure at maximum target'}.`
+      riskManagement: `Initial risk was ${Math.abs(trade.entry_price - trade.stop_loss).toFixed(5)} (${(Math.abs(trade.entry_price - trade.stop_loss) / (trade.symbol.includes('JPY') ? 0.01 : 0.0001)).toFixed(1)} pips). ATR-based position sizing at ${trade.indicators.atr?.toFixed(5) ?? 'N/A'} enabled optimal stop placement. Achieved R:R of ${trade.achievedRR.toFixed(2)}:1 by reaching TP${targetHit} at ${trade.outcome_price.toFixed(5)}, ${targetHit === 1 ? 'capturing 33% of position' : targetHit === 2 ? 'capturing 67% of position' : 'full position closure at maximum target'}.`
     }
   };
 }
