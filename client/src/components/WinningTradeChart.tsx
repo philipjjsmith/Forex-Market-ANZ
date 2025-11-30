@@ -60,22 +60,57 @@ export default function WinningTradeChart(props: WinningTradeChartProps) {
         height: containerHeight,
         layout: {
           background: { color: "#ffffff" },
-          textColor: "#333",
+          textColor: "#191919",
+          fontSize: 12,
         },
         grid: {
-          vertLines: { color: "#e1e1e1" },
-          horzLines: { color: "#e1e1e1" },
+          vertLines: {
+            color: "#e0e3eb",
+            style: 1,
+          },
+          horzLines: {
+            color: "#e0e3eb",
+            style: 1,
+          },
         },
         crosshair: {
           mode: 1,
+          vertLine: {
+            color: '#758696',
+            width: 1,
+            style: 3,
+            labelBackgroundColor: '#4682B4',
+          },
+          horzLine: {
+            color: '#758696',
+            width: 1,
+            style: 3,
+            labelBackgroundColor: '#4682B4',
+          },
         },
         rightPriceScale: {
-          borderColor: "#cccccc",
+          borderColor: "#d1d4dc",
+          scaleMargins: {
+            top: 0.1,
+            bottom: 0.1,
+          },
+          autoScale: true,
         },
         timeScale: {
-          borderColor: "#cccccc",
+          borderColor: "#d1d4dc",
           timeVisible: true,
           secondsVisible: false,
+          rightOffset: 12,
+          barSpacing: 8,
+          minBarSpacing: 4,
+        },
+        handleScroll: {
+          mouseWheel: true,
+          pressedMouseMove: true,
+        },
+        handleScale: {
+          mouseWheel: true,
+          pinch: true,
         },
       });
 
@@ -174,69 +209,48 @@ export default function WinningTradeChart(props: WinningTradeChartProps) {
 
     const newPriceLines: IPriceLine[] = [];
 
-    // Entry line (blue, solid)
+    // Entry line (blue)
     const entryLine = candlestickSeriesRef.current.createPriceLine({
       price: entryPrice,
       color: '#2962FF',
       lineWidth: 2,
-      lineStyle: 0, // Solid
+      lineStyle: 0,
       axisLabelVisible: true,
-      title: `Entry: ${entryPrice.toFixed(5)}`,
+      title: `Entry`,
     });
     newPriceLines.push(entryLine);
 
     // Stop Loss line (red, dashed)
     const slLine = candlestickSeriesRef.current.createPriceLine({
       price: stopLoss,
-      color: '#ef5350',
+      color: '#FF5252',
       lineWidth: 2,
-      lineStyle: 2, // Dashed
+      lineStyle: 2,
       axisLabelVisible: true,
-      title: `SL: ${stopLoss.toFixed(5)}`,
+      title: `Stop Loss`,
     });
     newPriceLines.push(slLine);
 
-    // TP1 line (green, dashed)
-    const tp1Line = candlestickSeriesRef.current.createPriceLine({
-      price: tp1,
-      color: '#10b981',
-      lineWidth: targetHit >= 1 ? 3 : 2,
-      lineStyle: 2, // Dashed
+    // Only show the TP level that was actually hit (cleaner)
+    const hitTpPrice = targetHit === 1 ? tp1 : targetHit === 2 ? tp2 : tp3;
+    const tpLine = candlestickSeriesRef.current.createPriceLine({
+      price: hitTpPrice,
+      color: '#00C853',
+      lineWidth: 2,
+      lineStyle: 2,
       axisLabelVisible: true,
-      title: `TP1: ${tp1.toFixed(5)}${targetHit === 1 ? ' ✓' : ''}`,
+      title: `TP${targetHit} Target`,
     });
-    newPriceLines.push(tp1Line);
+    newPriceLines.push(tpLine);
 
-    // TP2 line (green, dashed)
-    const tp2Line = candlestickSeriesRef.current.createPriceLine({
-      price: tp2,
-      color: '#10b981',
-      lineWidth: targetHit >= 2 ? 3 : 2,
-      lineStyle: 2, // Dashed
-      axisLabelVisible: true,
-      title: `TP2: ${tp2.toFixed(5)}${targetHit === 2 ? ' ✓' : ''}`,
-    });
-    newPriceLines.push(tp2Line);
-
-    // TP3 line (green, dashed)
-    const tp3Line = candlestickSeriesRef.current.createPriceLine({
-      price: tp3,
-      color: '#10b981',
-      lineWidth: targetHit >= 3 ? 3 : 2,
-      lineStyle: 2, // Dashed
-      axisLabelVisible: true,
-      title: `TP3: ${tp3.toFixed(5)}${targetHit === 3 ? ' ✓' : ''}`,
-    });
-    newPriceLines.push(tp3Line);
-
-    // Exit marker (where trade actually closed)
+    // Exit/Close line (emerald, solid - most important)
     const exitLine = candlestickSeriesRef.current.createPriceLine({
       price: exitPrice,
-      color: '#059669',
+      color: '#10B981',
       lineWidth: 3,
-      lineStyle: 0, // Solid
+      lineStyle: 0,
       axisLabelVisible: true,
-      title: `Exit: ${exitPrice.toFixed(5)} ✓`,
+      title: `Exit`,
     });
     newPriceLines.push(exitLine);
 
@@ -251,29 +265,34 @@ export default function WinningTradeChart(props: WinningTradeChartProps) {
         style={{ width: "100%", height: `${height}px` }}
       />
 
-      {/* Legend */}
-      <div className="absolute top-2 left-2 bg-white/95 backdrop-blur-sm p-3 rounded-lg shadow-sm border border-gray-200 text-xs space-y-1">
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-0.5 bg-blue-600"></div>
-          <span className="text-gray-700">Entry: {entryPrice.toFixed(5)}</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-0.5 bg-red-500 border-t-2 border-dashed border-red-500"></div>
-          <span className="text-gray-700">Stop Loss: {stopLoss.toFixed(5)}</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-0.5 bg-emerald-500 border-t-2 border-dashed border-emerald-500"></div>
-          <span className="text-gray-700">Take Profits</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-0.5 bg-emerald-600"></div>
-          <span className="text-emerald-700 font-semibold">Exit ✓</span>
+      {/* Compact Legend */}
+      <div className="absolute top-3 left-3 bg-white/90 backdrop-blur-sm px-3 py-2 rounded-md shadow-md border border-gray-300 text-xs">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5">
+            <div className="w-3 h-0.5 bg-blue-600"></div>
+            <span className="text-gray-600 font-medium">Entry</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-3 h-0.5 bg-red-500 border-t border-dashed border-red-500"></div>
+            <span className="text-gray-600 font-medium">SL</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-3 h-0.5 bg-green-600 border-t border-dashed border-green-600"></div>
+            <span className="text-gray-600 font-medium">TP{targetHit}</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-3 h-0.5 bg-emerald-600"></div>
+            <span className="text-emerald-700 font-semibold">Exit ✓</span>
+          </div>
         </div>
       </div>
 
       {/* Trade Result Badge */}
-      <div className="absolute top-2 right-2 bg-emerald-600 text-white px-3 py-2 rounded-lg shadow-lg font-semibold text-sm">
-        TP{targetHit} Hit ✓
+      <div className="absolute top-3 right-3 bg-gradient-to-r from-emerald-500 to-green-600 text-white px-3 py-1.5 rounded-md shadow-lg font-semibold text-xs flex items-center gap-1.5">
+        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"/>
+        </svg>
+        TP{targetHit} Hit
       </div>
     </div>
   );
