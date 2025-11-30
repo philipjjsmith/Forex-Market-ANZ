@@ -51,53 +51,62 @@ export default function WinningTradeChart(props: WinningTradeChartProps) {
     const containerWidth = chartContainerRef.current.clientWidth || 600;
     const containerHeight = height || 400;
 
-    const chart = createChart(chartContainerRef.current, {
-      width: containerWidth,
-      height: containerHeight,
-      layout: {
-        background: { color: "#ffffff" },
-        textColor: "#333",
-      },
-      grid: {
-        vertLines: { color: "#e1e1e1" },
-        horzLines: { color: "#e1e1e1" },
-      },
-      crosshair: {
-        mode: 1,
-      },
-      rightPriceScale: {
-        borderColor: "#cccccc",
-      },
-      timeScale: {
-        borderColor: "#cccccc",
-        timeVisible: true,
-        secondsVisible: false,
-      },
-    });
+    let chart;
+    let candlestickSeries;
 
-    // Safety check: ensure chart was created successfully
-    if (!chart || typeof chart.addCandlestickSeries !== 'function') {
-      console.error('Failed to create chart', {
-        chartExists: !!chart,
-        hasCandlestickMethod: chart && typeof chart.addCandlestickSeries === 'function',
+    try {
+      chart = createChart(chartContainerRef.current, {
+        width: containerWidth,
+        height: containerHeight,
+        layout: {
+          background: { color: "#ffffff" },
+          textColor: "#333",
+        },
+        grid: {
+          vertLines: { color: "#e1e1e1" },
+          horzLines: { color: "#e1e1e1" },
+        },
+        crosshair: {
+          mode: 1,
+        },
+        rightPriceScale: {
+          borderColor: "#cccccc",
+        },
+        timeScale: {
+          borderColor: "#cccccc",
+          timeVisible: true,
+          secondsVisible: false,
+        },
+      });
+
+      if (!chart) {
+        throw new Error('createChart returned null/undefined');
+      }
+
+      chartRef.current = chart;
+
+      candlestickSeries = chart.addCandlestickSeries({
+        upColor: "#26a69a",
+        downColor: "#ef5350",
+        borderVisible: false,
+        wickUpColor: "#26a69a",
+        wickDownColor: "#ef5350",
+      });
+
+      if (!candlestickSeries) {
+        throw new Error('addCandlestickSeries returned null/undefined');
+      }
+
+      candlestickSeriesRef.current = candlestickSeries;
+    } catch (error) {
+      console.error('Chart initialization error:', error, {
         containerWidth,
         containerHeight,
-        chartObject: chart
+        chartExists: !!chart,
+        errorMessage: error instanceof Error ? error.message : String(error)
       });
       return;
     }
-
-    chartRef.current = chart;
-
-    const candlestickSeries = chart.addCandlestickSeries({
-      upColor: "#26a69a",
-      downColor: "#ef5350",
-      borderVisible: false,
-      wickUpColor: "#26a69a",
-      wickDownColor: "#ef5350",
-    });
-
-    candlestickSeriesRef.current = candlestickSeries;
 
     // Handle window resize
     const handleResize = () => {
