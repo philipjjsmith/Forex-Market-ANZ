@@ -258,12 +258,12 @@ export default function WinningTradeCard({ trade }: WinningTradeCardProps) {
                     <div className="bg-slate-50 p-3 rounded-lg">
                       <div className="text-xs text-muted-foreground">MACD</div>
                       <div className="font-semibold text-sm font-mono">
-                        {trade.indicators.macd?.histogram?.toFixed(4) ?? 'N/A'}
+                        {formatNumber(trade.indicators.macd?.histogram, 4)}
                       </div>
                     </div>
                     <div className="bg-slate-50 p-3 rounded-lg">
                       <div className="text-xs text-muted-foreground">ATR</div>
-                      <div className="font-semibold text-sm font-mono">{trade.indicators.atr?.toFixed(5) ?? 'N/A'}</div>
+                      <div className="font-semibold text-sm font-mono">{formatNumber(trade.indicators.atr, 5)}</div>
                     </div>
                   </div>
                 </div>
@@ -300,18 +300,30 @@ export default function WinningTradeCard({ trade }: WinningTradeCardProps) {
   );
 }
 
+// Safe number formatting helper
+function formatNumber(value: any, decimals: number): string {
+  const num = Number(value);
+  return isNaN(num) ? 'N/A' : num.toFixed(decimals);
+}
+
+// Safe number extraction helper
+function toNumber(value: any, defaultValue: number = 0): number {
+  const num = Number(value);
+  return isNaN(num) ? defaultValue : num;
+}
+
 // Explanation generator based on trade data
 function getWinningTradeExplanation(trade: WinningTrade) {
   const isLong = trade.type === 'LONG';
   const targetHit = trade.outcome === 'TP1_HIT' ? 1 : trade.outcome === 'TP2_HIT' ? 2 : 3;
-  const rsiValue = parseFloat(trade.indicators.rsi);
-  const adxValue = parseFloat(trade.indicators.adx);
+  const rsiValue = toNumber(trade.indicators.rsi);
+  const adxValue = toNumber(trade.indicators.adx);
 
   // Determine trend strength
   const trendStrength = adxValue > 40 ? 'very strong' : adxValue > 30 ? 'strong' : 'moderate';
 
   // Determine momentum quality (safely handle missing MACD data)
-  const macdHistogram = trade.indicators.macd?.histogram ?? 0;
+  const macdHistogram = toNumber(trade.indicators.macd?.histogram, 0);
   const momentumQuality = Math.abs(macdHistogram) > 0.001 ? 'strong' : 'moderate';
 
   return {
@@ -335,7 +347,7 @@ function getWinningTradeExplanation(trade: WinningTrade) {
     advanced: {
       multiTimeframe: `This signal was generated using ICT 3-Timeframe Rule methodology (${trade.strategy_version}). Weekly, Daily, and 4H timeframes showed ${isLong ? 'bullish' : 'bearish'} alignment with EMA20/50 crossovers and MACD confirmation. The 1H timeframe provided optimal entry timing${trade.durationHours > 24 ? ', with patience rewarded as the multi-day trend developed' : ' for quick momentum capture'}.`,
 
-      riskManagement: `Initial risk was ${Math.abs(trade.entry_price - trade.stop_loss).toFixed(5)} (${(Math.abs(trade.entry_price - trade.stop_loss) / (trade.symbol.includes('JPY') ? 0.01 : 0.0001)).toFixed(1)} pips). ATR-based position sizing at ${trade.indicators.atr?.toFixed(5) ?? 'N/A'} enabled optimal stop placement. Achieved R:R of ${trade.achievedRR.toFixed(2)}:1 by reaching TP${targetHit} at ${trade.outcome_price.toFixed(5)}, ${targetHit === 1 ? 'capturing 33% of position' : targetHit === 2 ? 'capturing 67% of position' : 'full position closure at maximum target'}.`
+      riskManagement: `Initial risk was ${Math.abs(trade.entry_price - trade.stop_loss).toFixed(5)} (${(Math.abs(trade.entry_price - trade.stop_loss) / (trade.symbol.includes('JPY') ? 0.01 : 0.0001)).toFixed(1)} pips). ATR-based position sizing at ${formatNumber(trade.indicators.atr, 5)} enabled optimal stop placement. Achieved R:R of ${trade.achievedRR.toFixed(2)}:1 by reaching TP${targetHit} at ${trade.outcome_price.toFixed(5)}, ${targetHit === 1 ? 'capturing 33% of position' : targetHit === 2 ? 'capturing 67% of position' : 'full position closure at maximum target'}.`
     }
   };
 }
