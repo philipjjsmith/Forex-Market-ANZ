@@ -25,20 +25,18 @@ interface WinningTradeChartProps {
   height?: number;
 }
 
-export default function WinningTradeChart({
-  candles,
-  entryPrice,
-  entryTime,
-  exitPrice,
-  exitTime,
-  stopLoss,
-  tp1,
-  tp2,
-  tp3,
-  type,
-  targetHit,
-  height = 400
-}: WinningTradeChartProps) {
+export default function WinningTradeChart(props: WinningTradeChartProps) {
+  // Convert all price props to numbers (PostgreSQL may return DECIMAL as strings)
+  const entryPrice = Number(props.entryPrice);
+  const exitPrice = Number(props.exitPrice);
+  const stopLoss = Number(props.stopLoss);
+  const tp1 = Number(props.tp1);
+  const tp2 = Number(props.tp2);
+  const tp3 = Number(props.tp3);
+
+  // Extract remaining props
+  const { candles, entryTime, exitTime, type, targetHit, height = 400 } = props;
+
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candlestickSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
