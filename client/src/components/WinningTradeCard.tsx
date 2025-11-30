@@ -60,9 +60,23 @@ interface WinningTradeCardProps {
   trade: WinningTrade;
 }
 
-export default function WinningTradeCard({ trade }: WinningTradeCardProps) {
+export default function WinningTradeCard({ trade: rawTrade }: WinningTradeCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [activeTab, setActiveTab] = useState<'simple' | 'advanced'>('simple');
+
+  // Convert all numeric fields to actual numbers (backend may send strings)
+  const trade = {
+    ...rawTrade,
+    entry_price: Number(rawTrade.entry_price),
+    stop_loss: Number(rawTrade.stop_loss),
+    tp1: Number(rawTrade.tp1),
+    tp2: Number(rawTrade.tp2),
+    tp3: Number(rawTrade.tp3),
+    outcome_price: Number(rawTrade.outcome_price),
+    profit_loss_pips: Number(rawTrade.profit_loss_pips),
+    achievedRR: Number(rawTrade.achievedRR),
+    confidence: Number(rawTrade.confidence),
+  };
 
   const isLong = trade.type === 'LONG';
   const targetHit = trade.outcome === 'TP1_HIT' ? 1 : trade.outcome === 'TP2_HIT' ? 2 : 3;
