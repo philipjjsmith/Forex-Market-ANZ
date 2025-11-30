@@ -16,7 +16,7 @@ export interface AuthResponse {
 }
 
 // Get API base URL
-const getApiBaseUrl = (): string => {
+export const getApiBaseUrl = (): string => {
   if (import.meta.env.PROD) {
     return 'https://forex-market-anz.onrender.com';
   }

@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import WinningTradeCard from "./WinningTradeCard";
 import { useQuery } from "@tanstack/react-query";
-import { getToken } from "@/lib/auth";
+import { getToken, getApiBaseUrl } from "@/lib/auth";
 
 interface Candle {
   date?: string;
@@ -58,7 +58,7 @@ interface WinningTrade {
 
 async function fetchWinningTrades(limit: number = 5): Promise<WinningTrade[]> {
   const token = getToken();
-  const response = await fetch(`/api/signals/winning-trades-week?limit=${limit}`, {
+  const response = await fetch(`${getApiBaseUrl()}/api/signals/winning-trades-week?limit=${limit}`, {
     headers: {
       ...(token && { 'Authorization': `Bearer ${token}` }),
     },
