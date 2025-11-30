@@ -136,7 +136,9 @@ export default function WinningTradeChart(props: WinningTradeChartProps) {
       let time: Time;
 
       if (candle.timestamp) {
-        time = Math.floor(candle.timestamp.getTime() / 1000) as Time;
+        // timestamp might be a Date object or a string - handle both
+        const date = candle.timestamp instanceof Date ? candle.timestamp : new Date(candle.timestamp);
+        time = Math.floor(date.getTime() / 1000) as Time;
       } else if (candle.date) {
         time = Math.floor(new Date(candle.date).getTime() / 1000) as Time;
       } else {
