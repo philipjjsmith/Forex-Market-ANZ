@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { createChart, IChartApi, ISeriesApi, CandlestickData, Time, IPriceLine } from "lightweight-charts";
+import { createChart, IChartApi, ISeriesApi, CandlestickData, CandlestickSeries, Time, IPriceLine } from "lightweight-charts";
 
 interface Candle {
   date?: string;
@@ -85,7 +85,7 @@ export default function WinningTradeChart(props: WinningTradeChartProps) {
 
       chartRef.current = chart;
 
-      candlestickSeries = chart.addCandlestickSeries({
+      candlestickSeries = chart.addSeries(CandlestickSeries, {
         upColor: "#26a69a",
         downColor: "#ef5350",
         borderVisible: false,
