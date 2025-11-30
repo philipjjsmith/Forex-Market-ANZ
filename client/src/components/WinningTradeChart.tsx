@@ -47,9 +47,13 @@ export default function WinningTradeChart(props: WinningTradeChartProps) {
   useEffect(() => {
     if (!chartContainerRef.current) return;
 
+    // Ensure we have valid dimensions (fallback if container not sized yet)
+    const containerWidth = chartContainerRef.current.clientWidth || 600;
+    const containerHeight = height || 400;
+
     const chart = createChart(chartContainerRef.current, {
-      width: chartContainerRef.current.clientWidth,
-      height: height,
+      width: containerWidth,
+      height: containerHeight,
       layout: {
         background: { color: "#ffffff" },
         textColor: "#333",
@@ -73,7 +77,13 @@ export default function WinningTradeChart(props: WinningTradeChartProps) {
 
     // Safety check: ensure chart was created successfully
     if (!chart || typeof chart.addCandlestickSeries !== 'function') {
-      console.error('Failed to create chart - lightweight-charts may not be loaded properly');
+      console.error('Failed to create chart', {
+        chartExists: !!chart,
+        hasCandlestickMethod: chart && typeof chart.addCandlestickSeries === 'function',
+        containerWidth,
+        containerHeight,
+        chartObject: chart
+      });
       return;
     }
 
