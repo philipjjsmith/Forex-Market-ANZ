@@ -131,17 +131,25 @@ function generateDemoWinningTrades(count: number = 3): any[] {
 function generateDemoCandles(symbol: string, startPrice: number, endPrice: number, hours: number): any[] {
   const candles = [];
   const priceStep = (endPrice - startPrice) / hours;
-  const volatility = symbol.includes('JPY') ? 0.15 : 0.00015;
+  // Realistic forex volatility: EUR/USD ~10-15 pips per 15min candle, JPY ~15-25 pips
+  const volatility = symbol.includes('JPY') ? 0.20 : 0.0012; // Increased for visible candles
+  const trendStrength = 0.7; // How much candles follow the trend vs random
 
   for (let i = 0; i < Math.min(hours * 4, 200); i++) { // 15-min candles, max 200
     const time = new Date(Date.now() - (hours * 60 - i * 15) * 60 * 1000);
     const basePrice = startPrice + (priceStep * i / 4);
-    const noise = (Math.random() - 0.5) * volatility;
 
-    const open = basePrice + noise;
-    const close = basePrice + priceStep / 4 + (Math.random() - 0.5) * volatility;
-    const high = Math.max(open, close) + Math.random() * volatility * 0.5;
-    const low = Math.min(open, close) - Math.random() * volatility * 0.5;
+    // Add realistic market noise and trend-following behavior
+    const trendMove = priceStep / 4 * trendStrength;
+    const randomMove = (Math.random() - 0.5) * volatility * (1 - trendStrength);
+
+    const open = basePrice + (Math.random() - 0.5) * volatility * 0.3;
+    const close = open + trendMove + randomMove;
+
+    // Create realistic wicks (shadows)
+    const wickSize = volatility * (0.3 + Math.random() * 0.4);
+    const high = Math.max(open, close) + wickSize * Math.random();
+    const low = Math.min(open, close) - wickSize * Math.random();
 
     candles.push({
       date: time.toISOString(),
