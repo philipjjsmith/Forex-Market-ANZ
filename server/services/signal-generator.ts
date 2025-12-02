@@ -796,11 +796,12 @@ export class SignalGenerator {
           console.log(`📊 Fetching multi-timeframe data for ${symbol}...`);
 
           // Fetch all 4 timeframes in parallel for speed
-          const [weeklyCandles, dailyCandles, fourHourCandles, oneHourCandles] = await Promise.all([
+          const [weeklyCandles, dailyCandles, fourHourCandles, oneHourCandles, fifteenMinCandles] = await Promise.all([
             twelveDataAPI.fetchHistoricalCandles(symbol, '1week', 52),   // 52 weeks = 1 year
             twelveDataAPI.fetchHistoricalCandles(symbol, '1day', 200),   // 200 days
             twelveDataAPI.fetchHistoricalCandles(symbol, '4h', 360),     // 360 4H candles = 60 days
-            twelveDataAPI.fetchHistoricalCandles(symbol, '1h', 1440),    // 1440 1H candles = 60 days (better 1D chart density)
+            twelveDataAPI.fetchHistoricalCandles(symbol, '1h', 1440),    // 1440 1H candles = 60 days (for analysis)
+            twelveDataAPI.fetchHistoricalCandles(symbol, '15min', 500),  // 500 15-min candles = 125 hours (~5 days for charts)
           ]);
 
           // Validate we have sufficient data on all timeframes
@@ -824,7 +825,7 @@ export class SignalGenerator {
             continue;
           }
 
-          console.log(`✅ ${symbol}: Weekly ${weeklyCandles.length}, Daily ${dailyCandles.length}, 4H ${fourHourCandles.length}, 1H ${oneHourCandles.length} candles`);
+          console.log(`✅ ${symbol}: Weekly ${weeklyCandles.length}, Daily ${dailyCandles.length}, 4H ${fourHourCandles.length}, 1H ${oneHourCandles.length}, 15min ${fifteenMinCandles.length} candles`);
 
           // Analyze with multi-timeframe strategy (🧠 AI-ENHANCED + 🎯 MILESTONE 3C)
           const signal = await strategy.analyze(weeklyCandles, dailyCandles, fourHourCandles, oneHourCandles, symbol);
@@ -837,8 +838,8 @@ export class SignalGenerator {
 
             // Track signal to database (both HIGH and MEDIUM tiers)
             try {
-              // Store 1H candles for AI learning (most granular data for analysis)
-              await this.trackSignal(signal, symbol, exchangeRate, oneHourCandles);
+              // Store 15-min candles for chart visualization (better granularity than 1H)
+              await this.trackSignal(signal, symbol, exchangeRate, fifteenMinCandles);
               signalsTracked++;
               const tierBadge = signal.tier === 'HIGH' ? '🟢 HIGH' : '🟡 MEDIUM';
               console.log(`✅ Tracked ${symbol} signal ${tierBadge} (${signal.confidence}/100 points)`);
