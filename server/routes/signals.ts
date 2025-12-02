@@ -132,7 +132,7 @@ function generateDemoCandles(symbol: string, startPrice: number, endPrice: numbe
   const candles = [];
   const priceStep = (endPrice - startPrice) / hours;
   // Realistic forex volatility: EUR/USD ~10-15 pips per 15min candle, JPY ~15-25 pips
-  const volatility = symbol.includes('JPY') ? 0.20 : 0.0012; // Increased for visible candles
+  const volatility = symbol.includes('JPY') ? 0.50 : 0.0030; // 2.5x increase for clear visibility on large Y-range charts
   const trendStrength = 0.7; // How much candles follow the trend vs random
 
   for (let i = 0; i < Math.min(hours * 4, 200); i++) { // 15-min candles, max 200
