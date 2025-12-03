@@ -131,9 +131,9 @@ function generateDemoWinningTrades(count: number = 3): any[] {
 function generateDemoCandles(symbol: string, startPrice: number, endPrice: number, hours: number): any[] {
   const candles = [];
   const priceStep = (endPrice - startPrice) / hours;
-  // Use 70% volatility for clearly visible candles that show market movement
-  // Matches TradingChartWidget approach with autoScale: true (default)
-  const volatility = Math.abs(endPrice - startPrice) * 0.70; // 70% of price movement
+  // Use 30% volatility to keep candles visible while ensuring price lines stay within autoScale range
+  // With 30%, candles are ~40 pips (24% of chart), and ALL price lines remain visible when scrolling
+  const volatility = Math.abs(endPrice - startPrice) * 0.30; // 30% of price movement
   const trendStrength = 0.7; // How much candles follow the trend vs random
 
   for (let i = 0; i < Math.min(hours * 4, 200); i++) { // 15-min candles, max 200
