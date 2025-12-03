@@ -131,8 +131,9 @@ function generateDemoWinningTrades(count: number = 3): any[] {
 function generateDemoCandles(symbol: string, startPrice: number, endPrice: number, hours: number): any[] {
   const candles = [];
   const priceStep = (endPrice - startPrice) / hours;
-  // Aggressive volatility for maximum chart visibility (60-87% of Y-range)
-  const volatility = symbol.includes('JPY') ? 1.0 : 0.0060; // 2x increase from previous attempt
+  // Calculate volatility as % of price range to keep candles proportional and contained
+  const priceRange = Math.abs(endPrice - startPrice);
+  const volatility = priceRange * 0.45; // 45% of trend range = visible but constrained
   const trendStrength = 0.7; // How much candles follow the trend vs random
 
   for (let i = 0; i < Math.min(hours * 4, 200); i++) { // 15-min candles, max 200
@@ -143,7 +144,7 @@ function generateDemoCandles(symbol: string, startPrice: number, endPrice: numbe
     const trendMove = priceStep / 4 * trendStrength;
     const randomMove = (Math.random() - 0.5) * volatility * (1 - trendStrength);
 
-    const open = basePrice + (Math.random() - 0.5) * volatility * 0.6; // 2x multiplier for larger candle bodies
+    const open = basePrice + (Math.random() - 0.5) * volatility * 0.5; // Balanced multiplier
     const close = open + trendMove + randomMove;
 
     // Create realistic wicks (shadows)
