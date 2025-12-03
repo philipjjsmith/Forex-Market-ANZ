@@ -212,11 +212,20 @@ export default function WinningTradeChart(props: WinningTradeChartProps) {
 
       // Add 10% padding to ensure candles fit comfortably
       const padding = range * 0.10;
+      const visibleMin = minPrice - padding;
+      const visibleMax = maxPrice + padding;
 
       // Set visible range on time axis (shows all candles)
       chartRef.current.timeScale().setVisibleLogicalRange({
         from: 0,
         to: Math.max(candles.length - 1, 0),
+      });
+
+      // ✅ CRITICAL: Set visible range on PRICE axis (this was missing!)
+      const priceScale = chartRef.current.priceScale('right');
+      priceScale.setVisibleRange({
+        from: visibleMin,
+        to: visibleMax,
       });
 
     } catch (error) {
