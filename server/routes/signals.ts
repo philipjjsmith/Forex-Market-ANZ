@@ -131,9 +131,13 @@ function generateDemoWinningTrades(count: number = 3): any[] {
 function generateDemoCandles(symbol: string, startPrice: number, endPrice: number, hours: number): any[] {
   const candles = [];
   const priceStep = (endPrice - startPrice) / hours;
-  // Calculate volatility as % of price range to keep candles proportional and contained
-  const priceRange = Math.abs(endPrice - startPrice);
-  const volatility = priceRange * 0.45; // 45% of trend range = visible but constrained
+  // Calculate volatility as small % of trade range for realistic market noise
+  // With autoScale disabled on chart, candles should be small (5-10% of visible range)
+  const tradeRange = Math.max(
+    Math.abs(endPrice - startPrice),
+    Math.abs(endPrice - startPrice) * 1.5  // Account for stop loss being further out
+  );
+  const volatility = tradeRange * 0.08; // 8% - realistic market noise (was 45%)
   const trendStrength = 0.7; // How much candles follow the trend vs random
 
   for (let i = 0; i < Math.min(hours * 4, 200); i++) { // 15-min candles, max 200

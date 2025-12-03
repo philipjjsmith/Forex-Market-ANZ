@@ -91,10 +91,10 @@ export default function WinningTradeChart(props: WinningTradeChartProps) {
         rightPriceScale: {
           borderColor: "#d1d4dc",
           scaleMargins: {
-            top: 0.1,
-            bottom: 0.1,
+            top: 0.05,    // Tighter view: 5% padding (was 10%)
+            bottom: 0.05,
           },
-          autoScale: true,
+          autoScale: false,  // Fixed range based on trade prices, not candle data
         },
         timeScale: {
           borderColor: "#d1d4dc",
@@ -196,6 +196,33 @@ export default function WinningTradeChart(props: WinningTradeChartProps) {
       chartRef.current.timeScale().fitContent();
     }
   }, [candles]);
+
+  // Set explicit price range based on trade levels (not candle data)
+  useEffect(() => {
+    if (!chartRef.current || !candlestickSeriesRef.current || !candles || candles.length === 0) return;
+
+    try {
+      // Calculate price range from trade levels
+      const pricePoints = [entryPrice, stopLoss, tp1, tp2, tp3, exitPrice].filter(p => p > 0);
+      if (pricePoints.length === 0) return;
+
+      const minPrice = Math.min(...pricePoints);
+      const maxPrice = Math.max(...pricePoints);
+      const range = maxPrice - minPrice;
+
+      // Add 10% padding to ensure candles fit comfortably
+      const padding = range * 0.10;
+
+      // Set visible range on time axis (shows all candles)
+      chartRef.current.timeScale().setVisibleLogicalRange({
+        from: 0,
+        to: Math.max(candles.length - 1, 0),
+      });
+
+    } catch (error) {
+      console.error('Error setting chart range:', error);
+    }
+  }, [entryPrice, stopLoss, tp1, tp2, tp3, exitPrice, candles]);
 
   // Draw price lines and zones
   useEffect(() => {
