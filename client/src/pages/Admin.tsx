@@ -523,7 +523,7 @@ export default function Admin() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-white">Admin Dashboard</h1>
-            <p className="text-blue-200 mt-1">
+            <p className="text-amber-200 mt-1">
               {activeTab === 'system'
                 ? 'Monitor system health and signal generation'
                 : activeTab === 'ai'
@@ -536,7 +536,7 @@ export default function Admin() {
               <Button
                 onClick={activeTab === 'system' ? handleTriggerGeneration : handleTriggerAI}
                 disabled={activeTab === 'system' && (triggeringGeneration || health?.signalGenerator.isRunning)}
-                className="bg-blue-600 hover:bg-blue-700"
+                className="bg-amber-600 hover:bg-amber-700"
               >
                 {activeTab === 'system' ? (
                   triggeringGeneration ? (
@@ -567,7 +567,7 @@ export default function Admin() {
             onClick={() => setActiveTab('system')}
             className={`px-6 py-3 font-semibold transition-all ${
               activeTab === 'system'
-                ? 'text-white border-b-2 border-blue-500'
+                ? 'text-white border-b-2 border-amber-500'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
@@ -580,7 +580,7 @@ export default function Admin() {
             onClick={() => setActiveTab('ai')}
             className={`px-6 py-3 font-semibold transition-all ${
               activeTab === 'ai'
-                ? 'text-white border-b-2 border-purple-500'
+                ? 'text-white border-b-2 border-amber-500'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
@@ -608,13 +608,13 @@ export default function Admin() {
         {activeTab === 'system' && (
           <>
             {/* Quick Stats Summary */}
-            <Card className="bg-gradient-to-r from-blue-900/50 to-purple-900/50 border-blue-500/50 backdrop-blur-md shadow-2xl">
+            <Card className="bg-gradient-to-r from-amber-900/50 to-orange-900/50 border-amber-500/50 backdrop-blur-md shadow-2xl">
         <CardContent className="p-6">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <div className="text-center">
               <div className="flex items-center justify-center gap-2 mb-2">
-                <Database className="w-5 h-5 text-blue-300" />
-                <p className="text-blue-200 text-sm font-medium">Total Signals Today</p>
+                <Database className="w-5 h-5 text-amber-300" />
+                <p className="text-amber-200 text-sm font-medium">Total Signals Today</p>
               </div>
               <p className="text-4xl font-black text-white">
                 {logs?.reduce((sum, log) => sum + log.signalsTracked, 0) || 0}
@@ -623,7 +623,7 @@ export default function Admin() {
             <div className="text-center">
               <div className="flex items-center justify-center gap-2 mb-2">
                 <CheckCircle className="w-5 h-5 text-green-300" />
-                <p className="text-blue-200 text-sm font-medium">Success Rate</p>
+                <p className="text-amber-200 text-sm font-medium">Success Rate</p>
               </div>
               <p className="text-4xl font-black text-green-400">
                 {logs?.filter(log => log.status === 'success').length === logs?.length ? '100' : '0'}%
@@ -632,7 +632,7 @@ export default function Admin() {
             <div className="text-center">
               <div className="flex items-center justify-center gap-2 mb-2">
                 <Clock className="w-5 h-5 text-yellow-300" />
-                <p className="text-blue-200 text-sm font-medium">Next Generation</p>
+                <p className="text-amber-200 text-sm font-medium">Next Generation</p>
               </div>
               <p className="text-3xl font-black text-yellow-400">
                 {countdown || 'Calculating...'}
@@ -641,7 +641,7 @@ export default function Admin() {
             <div className="text-center">
               <div className="flex items-center justify-center gap-2 mb-2">
                 <Activity className="w-5 h-5 text-emerald-300" />
-                <p className="text-blue-200 text-sm font-medium">System Status</p>
+                <p className="text-amber-200 text-sm font-medium">System Status</p>
               </div>
               <Badge className={`${getStatusColor(health?.status)} text-lg px-4 py-1 font-bold`}>
                 {health?.status?.toUpperCase() || 'UNKNOWN'}
@@ -653,9 +653,9 @@ export default function Admin() {
 
       {/* Section Divider */}
       <div className="flex items-center gap-3 mt-8 mb-4">
-        <Zap className="w-5 h-5 text-blue-400" />
+        <Zap className="w-5 h-5 text-amber-400" />
         <h2 className="text-xl font-bold text-white">System Health</h2>
-        <div className="flex-1 h-px bg-gradient-to-r from-blue-500/50 to-transparent"></div>
+        <div className="flex-1 h-px bg-gradient-to-r from-amber-500/50 to-transparent"></div>
       </div>
 
       {/* System Status */}
@@ -686,8 +686,8 @@ export default function Admin() {
           <CardContent className="space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Activity className="w-4 h-4 text-blue-400" />
-                <span className="text-blue-200 text-sm">Status:</span>
+                <Activity className="w-4 h-4 text-amber-400" />
+                <span className="text-amber-200 text-sm">Status:</span>
               </div>
               <Badge className={health?.signalGenerator.isRunning ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'}>
                 {health?.signalGenerator.isRunning ? 'Running' : 'Idle'}
@@ -695,8 +695,8 @@ export default function Admin() {
             </div>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-blue-400" />
-                <span className="text-blue-200 text-sm">Last Run:</span>
+                <Calendar className="w-4 h-4 text-amber-400" />
+                <span className="text-amber-200 text-sm">Last Run:</span>
               </div>
               <span className="text-white text-base font-bold">
                 {health?.signalGenerator.lastRun ? new Date(health.signalGenerator.lastRun).toLocaleTimeString() : 'Never'}
@@ -705,7 +705,7 @@ export default function Admin() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4 text-yellow-400" />
-                <span className="text-blue-200 text-sm">Next Run:</span>
+                <span className="text-amber-200 text-sm">Next Run:</span>
               </div>
               <div className="text-right">
                 <p className="text-white text-base font-bold">
@@ -731,7 +731,7 @@ export default function Admin() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Database className="w-4 h-4 text-yellow-400" />
-                <span className="text-blue-200 text-sm">Pending:</span>
+                <span className="text-amber-200 text-sm">Pending:</span>
               </div>
               <span className="text-white text-3xl font-black">
                 {health?.outcomeValidator.pendingSignals || 0}
@@ -740,7 +740,7 @@ export default function Admin() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <CheckCircle className="w-4 h-4 text-green-400" />
-                <span className="text-blue-200 text-sm">Validated Today:</span>
+                <span className="text-amber-200 text-sm">Validated Today:</span>
               </div>
               <span className="text-green-400 text-3xl font-black">
                 {health?.outcomeValidator.validatedToday || 0}
@@ -748,8 +748,8 @@ export default function Admin() {
             </div>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-blue-400" />
-                <span className="text-blue-200 text-sm">Last Run:</span>
+                <Calendar className="w-4 h-4 text-amber-400" />
+                <span className="text-amber-200 text-sm">Last Run:</span>
               </div>
               <span className="text-white text-base font-bold">
                 {health?.outcomeValidator.lastRun ? new Date(health.outcomeValidator.lastRun).toLocaleTimeString() : 'Never'}
@@ -772,14 +772,14 @@ export default function Admin() {
         <Card className="bg-slate-800/80 border-slate-600/50 backdrop-blur-md shadow-xl">
           <CardHeader>
             <CardTitle className="text-white">Frankfurter API</CardTitle>
-            <CardDescription className="text-blue-200">Real-time forex quotes (ECB data)</CardDescription>
+            <CardDescription className="text-amber-200">Real-time forex quotes (ECB data)</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <div>
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  <Database className="w-4 h-4 text-blue-400" />
-                  <span className="text-blue-200 text-sm">Daily Usage</span>
+                  <Database className="w-4 h-4 text-amber-400" />
+                  <span className="text-amber-200 text-sm">Daily Usage</span>
                 </div>
                 <span className="text-white text-lg font-black">
                   {health?.apiUsage.exchangeRateAPI.callsToday || 0} / {health?.apiUsage.exchangeRateAPI.limit || 1500}
@@ -787,7 +787,7 @@ export default function Admin() {
               </div>
               <div className="w-full bg-white/10 rounded-full h-3">
                 <div
-                  className="bg-blue-500 h-3 rounded-full transition-all"
+                  className="bg-amber-600 h-3 rounded-full transition-all"
                   style={{
                     width: `${Math.min(((health?.apiUsage.exchangeRateAPI.callsToday || 0) / (health?.apiUsage.exchangeRateAPI.limit || 1500)) * 100, 100)}%`
                   }}
@@ -797,7 +797,7 @@ export default function Admin() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Zap className="w-4 h-4 text-green-400" />
-                <span className="text-blue-200 text-sm">Cache Hit Rate:</span>
+                <span className="text-amber-200 text-sm">Cache Hit Rate:</span>
               </div>
               <span className="text-green-400 text-2xl font-black">
                 {health?.apiUsage.exchangeRateAPI.cacheHitRate || 0}%
@@ -810,14 +810,14 @@ export default function Admin() {
         <Card className="bg-slate-800/80 border-slate-600/50 backdrop-blur-md shadow-xl">
           <CardHeader>
             <CardTitle className="text-white">Twelve Data API</CardTitle>
-            <CardDescription className="text-blue-200">Historical candle data</CardDescription>
+            <CardDescription className="text-amber-200">Historical candle data</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <div>
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
                   <Database className="w-4 h-4 text-purple-400" />
-                  <span className="text-blue-200 text-sm">Daily Usage</span>
+                  <span className="text-amber-200 text-sm">Daily Usage</span>
                 </div>
                 <span className="text-white text-lg font-black">
                   {health?.apiUsage.twelveDataAPI.callsToday || 0} / {health?.apiUsage.twelveDataAPI.limit || 800}
@@ -835,7 +835,7 @@ export default function Admin() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Zap className="w-4 h-4 text-green-400" />
-                <span className="text-blue-200 text-sm">Cache Hit Rate:</span>
+                <span className="text-amber-200 text-sm">Cache Hit Rate:</span>
               </div>
               <span className="text-green-400 text-2xl font-black">
                 {health?.apiUsage.twelveDataAPI.cacheHitRate || 0}%
@@ -856,7 +856,7 @@ export default function Admin() {
       <Card className="bg-slate-800/80 border-slate-600/50 backdrop-blur-md shadow-xl">
         <CardHeader>
           <CardTitle className="text-white">Recent Generation Logs</CardTitle>
-          <CardDescription className="text-blue-200">Last 10 signal generation cycles</CardDescription>
+          <CardDescription className="text-amber-200">Last 10 signal generation cycles</CardDescription>
         </CardHeader>
         <CardContent>
           {logsLoading ? (
@@ -883,21 +883,21 @@ export default function Admin() {
                         {new Date(log.timestamp).toLocaleString()}
                       </span>
                     </div>
-                    <span className="text-blue-200 text-sm">
+                    <span className="text-amber-200 text-sm">
                       Duration: {log.duration}s
                     </span>
                   </div>
                   <div className="grid grid-cols-3 gap-4 mt-3">
                     <div>
-                      <span className="text-blue-200 text-xs">Pairs Processed</span>
+                      <span className="text-amber-200 text-xs">Pairs Processed</span>
                       <p className="text-white font-bold">{log.pairsProcessed}</p>
                     </div>
                     <div>
-                      <span className="text-blue-200 text-xs">Signals Generated</span>
+                      <span className="text-amber-200 text-xs">Signals Generated</span>
                       <p className="text-white font-bold">{log.signalsGenerated}</p>
                     </div>
                     <div>
-                      <span className="text-blue-200 text-xs">Signals Tracked</span>
+                      <span className="text-amber-200 text-xs">Signals Tracked</span>
                       <p className="text-white font-bold">{log.signalsTracked}</p>
                     </div>
                   </div>
@@ -915,7 +915,7 @@ export default function Admin() {
               ))}
             </div>
           ) : (
-            <p className="text-blue-200 text-center py-8">No generation logs yet</p>
+            <p className="text-amber-200 text-center py-8">No generation logs yet</p>
           )}
         </CardContent>
       </Card>
@@ -932,7 +932,7 @@ export default function Admin() {
             ) : (
               <>
                 {/* Learning Summary */}
-                <Card className="bg-gradient-to-r from-blue-900/50 to-purple-900/50 border-blue-500/50 backdrop-blur-md shadow-2xl">
+                <Card className="bg-gradient-to-r from-amber-900/50 to-orange-900/50 border-amber-500/50 backdrop-blur-md shadow-2xl">
                   <CardHeader>
                     <div className="flex items-center justify-between">
                       <div>
@@ -940,7 +940,7 @@ export default function Admin() {
                           <Zap className="w-5 h-5 text-yellow-400" />
                           Learning Summary
                         </CardTitle>
-                        <CardDescription className="text-blue-200">
+                        <CardDescription className="text-amber-200">
                           Overall AI learning status and performance metrics
                         </CardDescription>
                       </div>
@@ -967,11 +967,11 @@ export default function Admin() {
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                       <div className="text-center">
                         <div className="flex items-center justify-center gap-2 mb-2">
-                          <Database className="w-5 h-5 text-blue-300" />
-                          <p className="text-blue-200 text-sm font-medium">Total Signals</p>
+                          <Database className="w-5 h-5 text-amber-300" />
+                          <p className="text-amber-200 text-sm font-medium">Total Signals</p>
                         </div>
                         <p className="text-4xl font-black text-white">{aiInsights?.totalSignals || 0}</p>
-                        <p className="text-xs text-blue-300 mt-1">
+                        <p className="text-xs text-amber-300 mt-1">
                           {aiInsights?.completedSignals || 0} completed
                         </p>
                       </div>
@@ -979,7 +979,7 @@ export default function Admin() {
                       <div className="text-center">
                         <div className="flex items-center justify-center gap-2 mb-2">
                           <TrendingUp className="w-5 h-5 text-green-400" />
-                          <p className="text-blue-200 text-sm font-medium">Win Rate</p>
+                          <p className="text-amber-200 text-sm font-medium">Win Rate</p>
                         </div>
                         <p className={`text-4xl font-black ${
                           (aiInsights?.winRate || 0) >= 70 ? 'text-green-400' :
@@ -988,7 +988,7 @@ export default function Admin() {
                         }`}>
                           {aiInsights?.winRate?.toFixed(1) || '0'}%
                         </p>
-                        <p className="text-xs text-blue-300 mt-1">
+                        <p className="text-xs text-amber-300 mt-1">
                           {aiInsights?.wins || 0} wins, {aiInsights?.losses || 0} losses
                         </p>
                       </div>
@@ -996,10 +996,10 @@ export default function Admin() {
                       <div className="text-center">
                         <div className="flex items-center justify-center gap-2 mb-2">
                           <CheckCircle className="w-5 h-5 text-purple-400" />
-                          <p className="text-blue-200 text-sm font-medium">AI Active</p>
+                          <p className="text-amber-200 text-sm font-medium">AI Active</p>
                         </div>
                         <p className="text-4xl font-black text-white">{readySymbols.length}</p>
-                        <p className="text-xs text-blue-300 mt-1">
+                        <p className="text-xs text-amber-300 mt-1">
                           {learningSymbols.length} learning
                         </p>
                       </div>
@@ -1007,12 +1007,12 @@ export default function Admin() {
                       <div className="text-center">
                         <div className="flex items-center justify-center gap-2 mb-2">
                           <AlertCircle className="w-5 h-5 text-orange-400" />
-                          <p className="text-blue-200 text-sm font-medium">Recommendations</p>
+                          <p className="text-amber-200 text-sm font-medium">Recommendations</p>
                         </div>
                         <p className="text-4xl font-black text-white">
                           {aiInsights?.pendingRecommendations || 0}
                         </p>
-                        <p className="text-xs text-blue-300 mt-1">pending approval</p>
+                        <p className="text-xs text-amber-300 mt-1">pending approval</p>
                       </div>
                     </div>
                   </CardContent>
@@ -1022,10 +1022,10 @@ export default function Admin() {
                 <Card className="bg-slate-800/80 border-slate-600/50 shadow-xl">
                   <CardHeader>
                     <CardTitle className="text-white flex items-center gap-2">
-                      <Target className="w-5 h-5 text-blue-400" />
+                      <Target className="w-5 h-5 text-amber-400" />
                       Symbol Performance Matrix
                     </CardTitle>
-                    <CardDescription className="text-blue-200">
+                    <CardDescription className="text-amber-200">
                       AI learning status per currency pair
                     </CardDescription>
                   </CardHeader>
@@ -1035,10 +1035,10 @@ export default function Admin() {
                         <table className="w-full">
                           <thead>
                             <tr className="border-b border-slate-600">
-                              <th className="text-left p-3 text-blue-200 font-semibold">Symbol</th>
-                              <th className="text-center p-3 text-blue-200 font-semibold">Signals</th>
-                              <th className="text-center p-3 text-blue-200 font-semibold">Win Rate</th>
-                              <th className="text-left p-3 text-blue-200 font-semibold">AI Status</th>
+                              <th className="text-left p-3 text-amber-200 font-semibold">Symbol</th>
+                              <th className="text-center p-3 text-amber-200 font-semibold">Signals</th>
+                              <th className="text-center p-3 text-amber-200 font-semibold">Win Rate</th>
+                              <th className="text-left p-3 text-amber-200 font-semibold">AI Status</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -1058,7 +1058,7 @@ export default function Admin() {
                                   }`}>
                                     {symbol.totalSignals}
                                   </span>
-                                  <span className="text-blue-300 text-sm ml-1">/ 30</span>
+                                  <span className="text-amber-300 text-sm ml-1">/ 30</span>
                                 </td>
                                 <td className="p-3 text-center">
                                   {symbol.totalSignals > 0 ? (
@@ -1111,7 +1111,7 @@ export default function Admin() {
                       <Brain className="w-5 h-5 text-purple-400" />
                       AI Recommendations
                     </CardTitle>
-                    <CardDescription className="text-blue-200">
+                    <CardDescription className="text-amber-200">
                       Parameter optimization suggestions based on backtesting
                     </CardDescription>
                   </CardHeader>
@@ -1131,18 +1131,18 @@ export default function Admin() {
                             <div className="flex items-start justify-between mb-3">
                               <div>
                                 <h3 className="text-white font-bold text-lg flex items-center gap-2">
-                                  <span className="text-blue-400">{rec.symbol}</span>
-                                  <Badge className="bg-purple-900/50 text-purple-300 border-purple-500/50">
+                                  <span className="text-amber-400">{rec.symbol}</span>
+                                  <Badge className="bg-purple-900/50 text-purple-300 border-amber-500/50">
                                     +{parseFloat(rec.expected_win_rate_improvement).toFixed(1)}% Win Rate
                                   </Badge>
                                 </h3>
-                                <p className="text-blue-300 text-sm mt-1">{rec.recommendation_title}</p>
+                                <p className="text-amber-300 text-sm mt-1">{rec.recommendation_title}</p>
                               </div>
                             </div>
 
                             {/* Parameter Changes */}
                             <div className="bg-slate-800/50 rounded p-3 mb-3">
-                              <p className="text-blue-200 text-sm font-semibold mb-2">Suggested Changes:</p>
+                              <p className="text-amber-200 text-sm font-semibold mb-2">Suggested Changes:</p>
                               <div className="space-y-1 text-sm">
                                 {rec.suggested_changes.fastMA_period && (
                                   <p className="text-slate-300">
@@ -1173,7 +1173,7 @@ export default function Admin() {
 
                             {/* Reasoning */}
                             <div className="mb-3">
-                              <p className="text-blue-200 text-sm font-semibold mb-1">Reasoning:</p>
+                              <p className="text-amber-200 text-sm font-semibold mb-1">Reasoning:</p>
                               <p className="text-slate-300 text-sm leading-relaxed">{rec.reasoning}</p>
                             </div>
 
@@ -1219,13 +1219,13 @@ export default function Admin() {
                 </Card>
 
                 {/* Info Card */}
-                <Card className="bg-blue-900/30 border-blue-500/30">
+                <Card className="bg-blue-900/30 border-amber-500/30">
                   <CardContent className="p-4">
                     <div className="flex items-start gap-3">
-                      <AlertCircle className="w-5 h-5 text-blue-400 mt-0.5" />
-                      <div className="text-sm text-blue-200">
+                      <AlertCircle className="w-5 h-5 text-amber-400 mt-0.5" />
+                      <div className="text-sm text-amber-200">
                         <p className="font-semibold mb-1">How AI Learning Works:</p>
-                        <ul className="list-disc list-inside space-y-1 text-blue-300">
+                        <ul className="list-disc list-inside space-y-1 text-amber-300">
                           <li>AI analyzes every completed signal (TP1_HIT/STOP_HIT)</li>
                           <li>Identifies which indicator conditions lead to wins vs losses</li>
                           <li>Adjusts confidence weights based on historical performance</li>
@@ -1304,13 +1304,13 @@ export default function Admin() {
                 </div>
 
                 {/* System Upgrade Banner */}
-                <Card className="bg-blue-900/30 border-blue-500/50 mb-6">
+                <Card className="bg-blue-900/30 border-amber-500/50 mb-6">
                   <CardContent className="p-4">
                     <div className="flex items-start gap-3">
-                      <HelpCircle className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" />
+                      <HelpCircle className="w-5 h-5 text-amber-400 mt-0.5 flex-shrink-0" />
                       <div className="text-sm">
-                        <p className="font-semibold text-blue-200 mb-2">📢 Data Filter Explanation</p>
-                        <div className="text-blue-300 space-y-2">
+                        <p className="font-semibold text-amber-200 mb-2">📢 Data Filter Explanation</p>
+                        <div className="text-amber-300 space-y-2">
                           <div>
                             <p><strong className="text-green-400">✅ Nov 4+ (Fixed System) [DEFAULT]</strong></p>
                             <p className="pl-4 text-xs">• Shows only signals from November 4, 2025 forward</p>
@@ -1325,7 +1325,7 @@ export default function Admin() {
                             <p className="pl-4 text-xs">• <strong>For comparison/research only - not representative of current system</strong></p>
                           </div>
                         </div>
-                        <p className="text-blue-400 text-xs mt-3 italic">
+                        <p className="text-amber-400 text-xs mt-3 italic">
                           💡 Tip: Keep default "Nov 4+ (Fixed System)" for accurate profitability tracking. Historical data preserved for scientific comparison.
                         </p>
                       </div>
@@ -1382,16 +1382,16 @@ export default function Admin() {
 
                         {/* v2.2.0 System Status - Phase 2 & 3 Tracking */}
                         {diagnosticData.pendingV220 && diagnosticData.pendingV220.count > 0 ? (
-                          <div className="bg-blue-900/30 border border-blue-500/50 p-4 rounded-lg">
-                            <h3 className="text-blue-400 font-bold mb-2">✅ v2.2.0 SYSTEM ACTIVE (Phase 2 & 3 Deployed)</h3>
+                          <div className="bg-blue-900/30 border border-amber-500/50 p-4 rounded-lg">
+                            <h3 className="text-amber-400 font-bold mb-2">✅ v2.2.0 SYSTEM ACTIVE (Phase 2 & 3 Deployed)</h3>
                             <div className="space-y-2 text-sm">
-                              <p className="text-blue-200">
+                              <p className="text-amber-200">
                                 <span className="font-bold">{diagnosticData.pendingV220.count} pending v2.2.0 signals</span> awaiting resolution
                               </p>
-                              <p className="text-blue-300">
+                              <p className="text-amber-300">
                                 📅 First signal: {diagnosticData.pendingV220.firstSignal ? new Date(diagnosticData.pendingV220.firstSignal).toLocaleString() : 'N/A'}
                               </p>
-                              <p className="text-blue-300">
+                              <p className="text-amber-300">
                                 📅 Latest signal: {diagnosticData.pendingV220.latestSignal ? new Date(diagnosticData.pendingV220.latestSignal).toLocaleString() : 'N/A'}
                               </p>
                               <p className="text-white mt-2">
@@ -1439,11 +1439,11 @@ export default function Admin() {
 
                                 {/* Smart Status Analysis */}
                                 {diagnosticData.postNov4.signals < 50 ? (
-                                  <div className="bg-blue-900/20 border-l-4 border-blue-500 p-3 mt-3">
-                                    <p className="text-blue-300 text-sm font-semibold">
+                                  <div className="bg-blue-900/20 border-l-4 border-amber-500 p-3 mt-3">
+                                    <p className="text-amber-300 text-sm font-semibold">
                                       📊 INSUFFICIENT DATA ({diagnosticData.postNov4.signals}/50 signals)
                                     </p>
-                                    <p className="text-blue-200 text-sm mt-1">
+                                    <p className="text-amber-200 text-sm mt-1">
                                       Need 50-100 completed signals for statistical significance. Continue monitoring.
                                     </p>
                                   </div>
@@ -1611,7 +1611,7 @@ export default function Admin() {
                               document.body.removeChild(a);
                               URL.revokeObjectURL(url);
                             }}
-                            className="bg-blue-600 hover:bg-blue-700 text-white"
+                            className="bg-amber-600 hover:bg-amber-700 text-white"
                           >
                             💾 Export Full Report (JSON)
                           </Button>
@@ -1838,15 +1838,15 @@ export default function Admin() {
 
                               {/* Comparison Insight */}
                               {comp.signalCountDiff > 0 && (
-                                <div className="p-4 rounded-lg bg-blue-900/20 border border-blue-500/30">
-                                  <p className="font-semibold text-blue-300 mb-2">
+                                <div className="p-4 rounded-lg bg-blue-900/20 border border-amber-500/30">
+                                  <p className="font-semibold text-amber-300 mb-2">
                                     🧠 AI Learning Progress
                                   </p>
                                   <p className="text-sm text-slate-300">
                                     <span className="font-bold text-white">{comp.signalCountDiff}</span> paper trade signals (70-79% confidence) are being used to train the AI. These are NOT sent to FXIFY.
                                   </p>
                                   {comp.winRateDiff > 0 && (
-                                    <p className="text-xs text-blue-400 mt-2">
+                                    <p className="text-xs text-amber-400 mt-2">
                                       💡 FXIFY signals are {comp.winRateDiff.toFixed(1)}% more accurate
                                     </p>
                                   )}

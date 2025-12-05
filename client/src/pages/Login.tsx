@@ -106,14 +106,14 @@ export default function Login() {
         {/* Logo & Title */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center gap-3 mb-4">
-            <div className="p-3 bg-blue-500 rounded-lg">
+            <div className="p-3 bg-amber-600 rounded-lg">
               <Activity className="w-10 h-10 text-white" />
             </div>
           </div>
           <h1 className="text-3xl font-bold text-white mb-2">
             Forex Signal Engine
           </h1>
-          <p className="text-blue-300">
+          <p className="text-amber-300">
             {showForgotPassword
               ? 'Reset Your Password'
               : isLogin
@@ -194,7 +194,7 @@ export default function Login() {
                     type="text"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    className="pl-10 bg-slate-700 border-slate-600 text-white placeholder:text-slate-400 focus:border-blue-500"
+                    className="pl-10 bg-slate-700 border-slate-600 text-white placeholder:text-slate-400 focus:border-amber-500"
                     placeholder="Enter your username"
                     disabled={isLoading}
                   />
@@ -213,7 +213,7 @@ export default function Login() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="pl-10 bg-slate-700 border-slate-600 text-white placeholder:text-slate-400 focus:border-blue-500"
+                  className="pl-10 bg-slate-700 border-slate-600 text-white placeholder:text-slate-400 focus:border-amber-500"
                   placeholder="Enter your email"
                   disabled={isLoading}
                 />
@@ -232,7 +232,7 @@ export default function Login() {
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="pl-10 bg-slate-700 border-slate-600 text-white placeholder:text-slate-400 focus:border-blue-500"
+                    className="pl-10 bg-slate-700 border-slate-600 text-white placeholder:text-slate-400 focus:border-amber-500"
                     placeholder="Enter your password"
                     disabled={isLoading}
                   />
@@ -252,7 +252,7 @@ export default function Login() {
                     type="password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="pl-10 bg-slate-700 border-slate-600 text-white placeholder:text-slate-400 focus:border-blue-500"
+                    className="pl-10 bg-slate-700 border-slate-600 text-white placeholder:text-slate-400 focus:border-amber-500"
                     placeholder="Confirm your password"
                     disabled={isLoading}
                   />
@@ -266,7 +266,7 @@ export default function Login() {
                 <button
                   type="button"
                   onClick={() => setShowForgotPassword(true)}
-                  className="text-sm text-blue-400 hover:text-blue-300"
+                  className="text-sm text-amber-400 hover:text-amber-300"
                 >
                   Forgot password?
                 </button>
@@ -277,7 +277,7 @@ export default function Login() {
             <Button
               type="submit"
               disabled={isLoading}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-6 mt-6"
+              className="w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold py-6 mt-6"
             >
               {isLoading ? (
                 <Loader2 className="w-5 h-5 animate-spin" />
@@ -300,7 +300,7 @@ export default function Login() {
                   setError('');
                   setSuccessMessage('');
                 }}
-                className="text-sm text-slate-400 hover:text-blue-400"
+                className="text-sm text-slate-400 hover:text-amber-400"
               >
                 Back to login
               </button>
@@ -313,7 +313,7 @@ export default function Login() {
                     setError('');
                     setSuccessMessage('');
                   }}
-                  className="text-blue-400 hover:text-blue-300 font-semibold"
+                  className="text-amber-400 hover:text-amber-300 font-semibold"
                 >
                   {isLogin ? 'Sign up' : 'Sign in'}
                 </button>

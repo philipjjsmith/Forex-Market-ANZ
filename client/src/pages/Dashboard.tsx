@@ -258,12 +258,12 @@ export default function Dashboard() {
         <div className="mb-8">
           <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between mb-2 gap-4">
             <div className="flex items-center gap-3">
-              <div className="p-3 bg-blue-500 rounded-lg">
+              <div className="p-3 bg-amber-600 rounded-lg">
                 <Activity className="w-8 h-8" />
               </div>
               <div>
                 <h1 className="text-3xl font-bold">Forex Signal Engine</h1>
-                <p className="text-blue-300">Multi-Timeframe Analysis Platform</p>
+                <p className="text-amber-200">Multi-Timeframe Analysis Platform</p>
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2 lg:gap-4">
@@ -280,7 +280,7 @@ export default function Dashboard() {
               {/* Learn Button */}
               <button
                 onClick={() => setLocation('/learn')}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
+                className="flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 rounded-lg transition-colors"
                 title="Learn Forex Trading"
               >
                 <GraduationCap className="w-4 h-4" />
@@ -302,7 +302,7 @@ export default function Dashboard() {
               {/* User Info & Logout */}
               {user && (
                 <div className="flex items-center gap-3 px-4 py-2 bg-slate-800 rounded-lg border border-slate-700">
-                  <User className="w-4 h-4 text-blue-400" />
+                  <User className="w-4 h-4 text-amber-400" />
                   <span className="text-sm font-medium">{user.username}</span>
                   <button
                     onClick={handleLogout}
@@ -330,7 +330,7 @@ export default function Dashboard() {
           <div className="glass-card p-4 rounded-xl hover-lift hover-glow-blue transition-all duration-300">
             <div className="flex items-center justify-between mb-2">
               <span className="text-slate-400 text-sm">Active Signals</span>
-              <Activity className="w-4 h-4 text-blue-400" />
+              <Activity className="w-4 h-4 text-amber-400" />
             </div>
             <div className="text-2xl font-bold" data-testid="text-active-signals">{activeSignals.length}</div>
           </div>
@@ -382,7 +382,7 @@ export default function Dashboard() {
                 onClick={() => setSelectedPair(pair)}
                 className={`px-4 py-2 rounded-lg transition-all duration-300 ${
                   selectedPair === pair
-                    ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-lg shadow-blue-500/50'
+                    ? 'bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-lg shadow-amber-500/50'
                     : 'glass text-slate-300 hover:bg-slate-700/50'
                 }`}
                 data-testid={`button-pair-${pair.replace('/', '-')}`}
@@ -406,7 +406,7 @@ export default function Dashboard() {
               <select
                 value={confidenceFilter}
                 onChange={(e) => setConfidenceFilter(e.target.value)}
-                className="px-4 py-2 rounded-lg bg-slate-700 text-white border border-slate-600 hover:border-blue-500 focus:border-blue-500 focus:outline-none cursor-pointer transition-all"
+                className="px-4 py-2 rounded-lg bg-slate-700 text-white border border-slate-600 hover:border-amber-500 focus:border-amber-500 focus:outline-none cursor-pointer transition-all"
                 data-testid="select-confidence-filter"
               >
                 <option value="all">📊 All Signals</option>
@@ -420,7 +420,7 @@ export default function Dashboard() {
               <select
                 value={signalTypeFilter}
                 onChange={(e) => setSignalTypeFilter(e.target.value)}
-                className="px-4 py-2 rounded-lg bg-slate-700 text-white border border-slate-600 hover:border-blue-500 focus:border-blue-500 focus:outline-none cursor-pointer transition-all"
+                className="px-4 py-2 rounded-lg bg-slate-700 text-white border border-slate-600 hover:border-amber-500 focus:border-amber-500 focus:outline-none cursor-pointer transition-all"
                 data-testid="select-signal-type-filter"
               >
                 <option value="all">All Types</option>
@@ -433,7 +433,7 @@ export default function Dashboard() {
               <button
                 onClick={() => setActiveTab('signals')}
                 className={`px-4 py-2 rounded-lg transition-all ${
-                  activeTab === 'signals' ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                  activeTab === 'signals' ? 'bg-amber-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
                 }`}
                 data-testid="button-tab-signals"
               >
@@ -442,7 +442,7 @@ export default function Dashboard() {
               <button
                 onClick={() => setActiveTab('saved')}
                 className={`px-4 py-2 rounded-lg transition-all flex items-center gap-2 ${
-                  activeTab === 'saved' ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                  activeTab === 'saved' ? 'bg-amber-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
                 }`}
                 data-testid="button-tab-saved"
               >
@@ -476,7 +476,7 @@ export default function Dashboard() {
           {/* Signals List */}
           <div className="lg:col-span-2 space-y-4">
             <h2 className="text-xl font-bold flex items-center gap-2">
-              <Target className="w-5 h-5 text-blue-400" />
+              <Target className="w-5 h-5 text-amber-400" />
               {activeTab === 'saved' ? 'Saved Trading Signals' : 'Active Trading Signals'}
             </h2>
             

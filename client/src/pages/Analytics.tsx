@@ -278,10 +278,10 @@ export default function Analytics() {
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <Activity className="w-8 h-8 text-blue-400" />
+              <Activity className="w-8 h-8 text-amber-400" />
               <div>
                 <h1 className="text-2xl font-bold text-white">AI Analytics</h1>
-                <p className="text-sm text-blue-200">Performance Tracking & Insights</p>
+                <p className="text-sm text-amber-200">Performance Tracking & Insights</p>
               </div>
             </div>
 
@@ -295,7 +295,7 @@ export default function Analytics() {
                 Dashboard
               </Button>
               <div className="flex items-center gap-2 px-4 py-2 bg-white/10 rounded-lg">
-                <User className="w-4 h-4 text-blue-300" />
+                <User className="w-4 h-4 text-amber-300" />
                 <span className="text-white font-medium">{user?.username}</span>
               </div>
               <Button
@@ -322,7 +322,7 @@ export default function Analytics() {
         {/* Account Size Selector & Profit Summary */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Account Size Selector */}
-          <Card className="bg-gradient-to-br from-blue-900/40 to-indigo-900/40 border-blue-500/50 backdrop-blur-sm shadow-xl">
+          <Card className="bg-gradient-to-br from-amber-900/40 to-orange-900/40 border-amber-500/50 backdrop-blur-sm shadow-xl">
             <CardHeader className="pb-4">
               <div className="flex items-center gap-3 mb-2">
                 <div className="p-2 bg-cyan-500/20 rounded-lg">
@@ -415,7 +415,7 @@ export default function Analytics() {
           </Card>
 
           {/* Account Balance */}
-          <Card className="bg-gradient-to-br from-purple-900/40 to-pink-900/40 border-purple-500/50 backdrop-blur-sm shadow-xl border-2">
+          <Card className="bg-gradient-to-br from-amber-900/40 to-orange-800/40 border-amber-500/50 backdrop-blur-sm shadow-xl border-2">
             <CardHeader className="pb-3">
               <div className="flex items-center gap-3 mb-1">
                 <div className="p-2 bg-purple-500/20 rounded-lg">
@@ -454,7 +454,7 @@ export default function Analytics() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <Card className="bg-white/15 border-white/30 backdrop-blur-md shadow-lg hover:shadow-xl transition-all duration-300">
             <CardHeader className="pb-2">
-              <CardDescription className="text-blue-200 font-medium">Total Signals</CardDescription>
+              <CardDescription className="text-amber-200 font-medium">Total Signals</CardDescription>
               <CardTitle className="text-3xl text-white font-bold">
                 {performance?.overall.totalSignals || 0}
               </CardTitle>
@@ -471,7 +471,7 @@ export default function Analytics() {
 
           <Card className="bg-white/15 border-white/30 backdrop-blur-md shadow-lg hover:shadow-xl transition-all duration-300">
             <CardHeader className="pb-2">
-              <CardDescription className="text-blue-200 font-medium">Win Rate</CardDescription>
+              <CardDescription className="text-amber-200 font-medium">Win Rate</CardDescription>
               <CardTitle className="text-3xl text-white font-bold">
                 {performance?.overall.winRate.toFixed(1) || 0}%
               </CardTitle>
@@ -492,7 +492,7 @@ export default function Analytics() {
 
           <Card className="bg-white/15 border-white/30 backdrop-blur-md shadow-lg hover:shadow-xl transition-all duration-300">
             <CardHeader className="pb-2">
-              <CardDescription className="text-blue-200 font-medium">Avg Win</CardDescription>
+              <CardDescription className="text-amber-200 font-medium">Avg Win</CardDescription>
               <CardTitle className="text-3xl text-green-400 font-bold">
                 +{performance?.overall.avgWinPips.toFixed(1) || 0}
               </CardTitle>
@@ -504,7 +504,7 @@ export default function Analytics() {
 
           <Card className="bg-white/15 border-white/30 backdrop-blur-md shadow-lg hover:shadow-xl transition-all duration-300">
             <CardHeader className="pb-2">
-              <CardDescription className="text-blue-200 font-medium">Avg Loss</CardDescription>
+              <CardDescription className="text-amber-200 font-medium">Avg Loss</CardDescription>
               <CardTitle className="text-3xl text-red-400 font-bold">
                 -{performance?.overall.avgLossPips.toFixed(1) || 0}
               </CardTitle>
@@ -517,13 +517,13 @@ export default function Analytics() {
 
         {/* AI Unlock Progress */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <Card className="bg-gradient-to-br from-blue-500/20 to-purple-500/20 border-blue-500/40 backdrop-blur-md shadow-lg hover:shadow-xl transition-all duration-300">
+          <Card className="bg-gradient-to-br from-amber-500/20 to-orange-500/20 border-amber-500/40 backdrop-blur-md shadow-lg hover:shadow-xl transition-all duration-300">
             <CardHeader>
               <CardTitle className="text-white flex items-center gap-2 font-bold">
-                <BarChart3 className="w-5 h-5 text-blue-400" />
+                <BarChart3 className="w-5 h-5 text-amber-400" />
                 AI Insights
               </CardTitle>
-              <CardDescription className="text-blue-200 font-medium">
+              <CardDescription className="text-amber-200 font-medium">
                 {performance?.unlocks.insightsUnlocked
                   ? '✅ Unlocked - View performance patterns'
                   : `${performance?.unlocks.signalsNeededForInsights || 10} more signals needed`}
@@ -531,13 +531,13 @@ export default function Analytics() {
             </CardHeader>
             <CardContent>
               <Progress value={insightsProgress} className="h-2" />
-              <p className="text-sm text-blue-200 mt-2 font-medium">
+              <p className="text-sm text-amber-200 mt-2 font-medium">
                 {totalCompleted} / 10 completed signals
               </p>
             </CardContent>
           </Card>
 
-          <Card className="bg-gradient-to-br from-purple-500/20 to-pink-500/20 border-purple-500/40 backdrop-blur-md shadow-lg hover:shadow-xl transition-all duration-300">
+          <Card className="bg-gradient-to-br from-purple-500/20 to-pink-500/20 border-amber-500/40 backdrop-blur-md shadow-lg hover:shadow-xl transition-all duration-300">
             <CardHeader>
               <CardTitle className="text-white flex items-center gap-2 font-bold">
                 <Target className="w-5 h-5 text-purple-400" />
@@ -562,7 +562,7 @@ export default function Analytics() {
         <Card className="bg-white/15 border-white/30 backdrop-blur-md shadow-lg">
           <CardHeader>
             <CardTitle className="text-white font-bold">Active Signals ({activeSignals.length})</CardTitle>
-            <CardDescription className="text-blue-200 font-medium">
+            <CardDescription className="text-amber-200 font-medium">
               Real-time monitoring • Updates every 30s
             </CardDescription>
           </CardHeader>
@@ -586,7 +586,7 @@ export default function Analytics() {
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle className="text-white font-bold">Signal History</CardTitle>
-                <CardDescription className="text-blue-200 font-medium">
+                <CardDescription className="text-amber-200 font-medium">
                   Showing {historySignals.length} of {historyTotal} completed signals
                 </CardDescription>
               </div>
@@ -618,7 +618,7 @@ export default function Analytics() {
                 <Button
                   onClick={loadMoreHistory}
                   disabled={isLoadingMore}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 text-lg font-semibold shadow-lg"
+                  className="bg-amber-600 hover:bg-amber-700 text-white px-8 py-3 text-lg font-semibold shadow-lg"
                 >
                   {isLoadingMore ? 'Loading...' : `Load More (${historyTotal - historySignals.length} remaining)`}
                 </Button>
