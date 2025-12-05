@@ -458,4 +458,27 @@
   .hover-lift:hover {
     transform: translateY(-4px);
   }
+
+  /* Fade + Zoom Animation for Featured Trade Transitions */
+  @keyframes fadeZoom {
+    0% {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  .animate-fadeZoom {
+    animation: fadeZoom 600ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* Smooth transitions with hardware acceleration */
+  .gpu-accelerated {
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    perspective: 1000px;
+  }
 }
