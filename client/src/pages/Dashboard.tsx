@@ -252,7 +252,7 @@ export default function Dashboard() {
   const currentData = marketData[selectedPair];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-indigo-950 animate-gradient-slow text-white p-3 md:p-6">
+    <div className="min-h-screen text-white p-3 md:p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">

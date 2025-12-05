@@ -254,7 +254,7 @@ export default function Analytics() {
 
   if (isCheckingAuth || isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="text-white text-xl">Loading analytics...</div>
       </div>
     );
@@ -272,7 +272,7 @@ export default function Analytics() {
   const accountBalance = accountSize + profitData.totalProfit;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900">
+    <div className="min-h-screen">
       {/* Header */}
       <header className="border-b border-white/10 bg-black/20 backdrop-blur-sm sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4">

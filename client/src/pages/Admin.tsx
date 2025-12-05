@@ -517,7 +517,7 @@ export default function Admin() {
   const learningSymbols = aiInsights?.symbolInsights.filter(s => !s.hasEnoughData && s.totalSignals > 0) || [];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900">
+    <div className="min-h-screen">
       <div className="container mx-auto p-6 space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
