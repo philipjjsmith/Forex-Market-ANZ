@@ -94,6 +94,13 @@ function useInterval(callback: () => void, delay: number | null) {
   }, [delay]);
 }
 
+// Helper function to safely format numeric values
+function safeToFixed(value: any, decimals: number): string {
+  if (value === null || value === undefined) return 'N/A';
+  const num = typeof value === 'string' ? parseFloat(value) : value;
+  return !isNaN(num) ? num.toFixed(decimals) : 'N/A';
+}
+
 export default function WinningTradesHero() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isAutoPlaying, setIsAutoPlaying] = useState(true);
@@ -411,27 +418,27 @@ export default function WinningTradesHero() {
                   </div>
                   <div className="bg-muted/30 rounded-lg p-3 border border-border">
                     <div className="text-xs text-muted-foreground mb-1">EMA 20</div>
-                    <div className="font-semibold text-foreground font-mono">{featuredTrade.indicators?.ema20?.toFixed(5) || 'N/A'}</div>
+                    <div className="font-semibold text-foreground font-mono">{safeToFixed(featuredTrade.indicators?.ema20, 5)}</div>
                   </div>
                   <div className="bg-muted/30 rounded-lg p-3 border border-border">
                     <div className="text-xs text-muted-foreground mb-1">EMA 50</div>
-                    <div className="font-semibold text-foreground font-mono">{featuredTrade.indicators?.ema50?.toFixed(5) || 'N/A'}</div>
+                    <div className="font-semibold text-foreground font-mono">{safeToFixed(featuredTrade.indicators?.ema50, 5)}</div>
                   </div>
                   <div className="bg-muted/30 rounded-lg p-3 border border-border">
                     <div className="text-xs text-muted-foreground mb-1">ATR</div>
-                    <div className="font-semibold text-foreground font-mono">{featuredTrade.indicators?.atr?.toFixed(5) || 'N/A'}</div>
+                    <div className="font-semibold text-foreground font-mono">{safeToFixed(featuredTrade.indicators?.atr, 5)}</div>
                   </div>
                   <div className="bg-muted/30 rounded-lg p-3 border border-border">
                     <div className="text-xs text-muted-foreground mb-1">MACD</div>
-                    <div className="font-semibold text-foreground">{featuredTrade.indicators?.macd?.histogram?.toFixed(4) || 'N/A'}</div>
+                    <div className="font-semibold text-foreground">{safeToFixed(featuredTrade.indicators?.macd?.histogram, 4)}</div>
                   </div>
                   <div className="bg-muted/30 rounded-lg p-3 border border-border">
                     <div className="text-xs text-muted-foreground mb-1">BB Upper</div>
-                    <div className="font-semibold text-foreground font-mono">{featuredTrade.indicators?.bb?.upper?.toFixed(5) || 'N/A'}</div>
+                    <div className="font-semibold text-foreground font-mono">{safeToFixed(featuredTrade.indicators?.bb?.upper, 5)}</div>
                   </div>
                   <div className="bg-muted/30 rounded-lg p-3 border border-border">
                     <div className="text-xs text-muted-foreground mb-1">BB Lower</div>
-                    <div className="font-semibold text-foreground font-mono">{featuredTrade.indicators?.bb?.lower?.toFixed(5) || 'N/A'}</div>
+                    <div className="font-semibold text-foreground font-mono">{safeToFixed(featuredTrade.indicators?.bb?.lower, 5)}</div>
                   </div>
                 </div>
               </div>
