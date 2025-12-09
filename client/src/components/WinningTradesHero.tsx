@@ -403,35 +403,35 @@ export default function WinningTradesHero() {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="bg-muted/30 rounded-lg p-3 border border-border">
                     <div className="text-xs text-muted-foreground mb-1">RSI</div>
-                    <div className="font-semibold text-foreground">{featuredTrade.indicators.rsi}</div>
+                    <div className="font-semibold text-foreground">{featuredTrade.indicators?.rsi || 'N/A'}</div>
                   </div>
                   <div className="bg-muted/30 rounded-lg p-3 border border-border">
                     <div className="text-xs text-muted-foreground mb-1">ADX</div>
-                    <div className="font-semibold text-foreground">{featuredTrade.indicators.adx}</div>
+                    <div className="font-semibold text-foreground">{featuredTrade.indicators?.adx || 'N/A'}</div>
                   </div>
                   <div className="bg-muted/30 rounded-lg p-3 border border-border">
                     <div className="text-xs text-muted-foreground mb-1">EMA 20</div>
-                    <div className="font-semibold text-foreground font-mono">{featuredTrade.indicators.ema20.toFixed(5)}</div>
+                    <div className="font-semibold text-foreground font-mono">{featuredTrade.indicators?.ema20?.toFixed(5) || 'N/A'}</div>
                   </div>
                   <div className="bg-muted/30 rounded-lg p-3 border border-border">
                     <div className="text-xs text-muted-foreground mb-1">EMA 50</div>
-                    <div className="font-semibold text-foreground font-mono">{featuredTrade.indicators.ema50.toFixed(5)}</div>
+                    <div className="font-semibold text-foreground font-mono">{featuredTrade.indicators?.ema50?.toFixed(5) || 'N/A'}</div>
                   </div>
                   <div className="bg-muted/30 rounded-lg p-3 border border-border">
                     <div className="text-xs text-muted-foreground mb-1">ATR</div>
-                    <div className="font-semibold text-foreground font-mono">{featuredTrade.indicators.atr.toFixed(5)}</div>
+                    <div className="font-semibold text-foreground font-mono">{featuredTrade.indicators?.atr?.toFixed(5) || 'N/A'}</div>
                   </div>
                   <div className="bg-muted/30 rounded-lg p-3 border border-border">
                     <div className="text-xs text-muted-foreground mb-1">MACD</div>
-                    <div className="font-semibold text-foreground">{featuredTrade.indicators.macd.histogram.toFixed(4)}</div>
+                    <div className="font-semibold text-foreground">{featuredTrade.indicators?.macd?.histogram?.toFixed(4) || 'N/A'}</div>
                   </div>
                   <div className="bg-muted/30 rounded-lg p-3 border border-border">
                     <div className="text-xs text-muted-foreground mb-1">BB Upper</div>
-                    <div className="font-semibold text-foreground font-mono">{featuredTrade.indicators.bb.upper.toFixed(5)}</div>
+                    <div className="font-semibold text-foreground font-mono">{featuredTrade.indicators?.bb?.upper?.toFixed(5) || 'N/A'}</div>
                   </div>
                   <div className="bg-muted/30 rounded-lg p-3 border border-border">
                     <div className="text-xs text-muted-foreground mb-1">BB Lower</div>
-                    <div className="font-semibold text-foreground font-mono">{featuredTrade.indicators.bb.lower.toFixed(5)}</div>
+                    <div className="font-semibold text-foreground font-mono">{featuredTrade.indicators?.bb?.lower?.toFixed(5) || 'N/A'}</div>
                   </div>
                 </div>
               </div>
