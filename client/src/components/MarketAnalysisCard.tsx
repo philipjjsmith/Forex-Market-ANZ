@@ -116,15 +116,15 @@ export function MarketAnalysisCard({ symbol, candles, currentPrice, analysis }: 
   const TimeframeBadge = ({ trend, points }: { trend: 'UP' | 'DOWN'; points?: number }) => (
     <div className="flex items-center gap-2">
       {trend === 'UP' ? (
-        <TrendingUp className="w-4 h-4 text-green-500" />
+        <TrendingUp className="w-4 h-4 text-chart-2" />
       ) : (
-        <TrendingDown className="w-4 h-4 text-red-500" />
+        <TrendingDown className="w-4 h-4 text-destructive" />
       )}
-      <span className={trend === 'UP' ? 'text-green-400' : 'text-red-400'}>
+      <span className={trend === 'UP' ? 'text-chart-2' : 'text-destructive'}>
         {trend}
       </span>
       {points !== undefined && (
-        <span className="text-slate-500 text-xs">+{points}pts</span>
+        <span className="text-muted-foreground text-xs">+{points}pts</span>
       )}
     </div>
   );
@@ -145,31 +145,31 @@ export function MarketAnalysisCard({ symbol, candles, currentPrice, analysis }: 
       {analysis && (
         <div className="glass-card p-6 rounded-xl hover-lift transition-all duration-300">
           <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <BarChart3 className="w-5 h-5 text-amber-400" />
+            <BarChart3 className="w-5 h-5 text-primary" />
             Current Timeframe States
           </h3>
 
           <div className="space-y-3">
-            <div className="flex items-center justify-between p-3 bg-slate-900/50 rounded">
-              <span className="text-slate-400 font-medium w-20">Weekly:</span>
+            <div className="flex items-center justify-between p-3 bg-card/50 rounded">
+              <span className="text-muted-foreground font-medium w-20">Weekly:</span>
               <TimeframeBadge trend={analysis.weeklyTrend} points={analysis.weeklyTrend === 'UP' || analysis.weeklyTrend === 'DOWN' ? 25 : 0} />
             </div>
 
-            <div className="flex items-center justify-between p-3 bg-slate-900/50 rounded">
-              <span className="text-slate-400 font-medium w-20">Daily:</span>
+            <div className="flex items-center justify-between p-3 bg-card/50 rounded">
+              <span className="text-muted-foreground font-medium w-20">Daily:</span>
               <TimeframeBadge trend={analysis.dailyTrend} points={analysis.dailyTrend === 'UP' || analysis.dailyTrend === 'DOWN' ? 25 : 0} />
             </div>
 
-            <div className="flex items-center justify-between p-3 bg-slate-900/50 rounded">
-              <span className="text-slate-400 font-medium w-20">4-Hour:</span>
+            <div className="flex items-center justify-between p-3 bg-card/50 rounded">
+              <span className="text-muted-foreground font-medium w-20">4-Hour:</span>
               <TimeframeBadge trend={analysis.fourHourTrend} points={analysis.fourHourTrend === 'UP' || analysis.fourHourTrend === 'DOWN' ? 25 : 0} />
             </div>
 
-            <div className="flex items-center justify-between p-3 bg-slate-900/50 rounded border border-slate-600">
-              <span className="text-slate-400 font-medium w-20">1-Hour:</span>
+            <div className="flex items-center justify-between p-3 bg-card/50 rounded border border-card-border">
+              <span className="text-muted-foreground font-medium w-20">1-Hour:</span>
               <div className="flex items-center gap-2">
                 <TimeframeBadge trend={analysis.oneHourTrend} />
-                <span className="text-xs text-slate-500">(Entry timing only)</span>
+                <span className="text-xs text-muted-foreground">(Entry timing only)</span>
               </div>
             </div>
           </div>
@@ -184,7 +184,7 @@ export function MarketAnalysisCard({ symbol, candles, currentPrice, analysis }: 
                   This strategy uses ICT (Inner Circle Trader) 3-Timeframe methodology.
                   A signal is generated when Weekly, Daily, and 4-Hour timeframes ALL align in the same direction.
                 </p>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-muted-foreground">
                   💡 The 1-Hour timeframe is used for entry timing. If 1H is opposite to W+D+4H,
                   that's a <strong>pullback</strong> - actually the BEST entry opportunity!
                 </p>
@@ -195,10 +195,10 @@ export function MarketAnalysisCard({ symbol, candles, currentPrice, analysis }: 
       )}
 
       {/* Trading Chart */}
-      <div className="glass-card p-6 rounded-xl hover-lift hover-glow-blue transition-all duration-300">
+      <div className="glass-card p-6 rounded-xl hover-lift transition-all duration-300">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold flex items-center gap-2">
-            <BarChart3 className="w-5 h-5 text-purple-400" />
+            <BarChart3 className="w-5 h-5 text-primary" />
             {symbol} Chart with Strategy EMAs
           </h3>
           {/* Timeframe Selector */}
@@ -207,8 +207,8 @@ export function MarketAnalysisCard({ symbol, candles, currentPrice, analysis }: 
               onClick={() => setTimeframe('1H')}
               className={`px-3 py-1.5 text-xs rounded-lg transition-all duration-300 ${
                 timeframe === '1H'
-                  ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-lg shadow-blue-500/50'
-                  : 'bg-slate-700/50 text-slate-300 hover:bg-slate-600/50'
+                  ? 'bg-gradient-to-r from-primary to-primary/80 text-white shadow-lg shadow-primary/50'
+                  : 'bg-card/50 text-muted-foreground hover:bg-card/80'
               }`}
             >
               1H
@@ -217,8 +217,8 @@ export function MarketAnalysisCard({ symbol, candles, currentPrice, analysis }: 
               onClick={() => setTimeframe('4H')}
               className={`px-3 py-1.5 text-xs rounded-lg transition-all duration-300 ${
                 timeframe === '4H'
-                  ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-lg shadow-blue-500/50'
-                  : 'bg-slate-700/50 text-slate-300 hover:bg-slate-600/50'
+                  ? 'bg-gradient-to-r from-primary to-primary/80 text-white shadow-lg shadow-primary/50'
+                  : 'bg-card/50 text-muted-foreground hover:bg-card/80'
               }`}
             >
               4H
@@ -227,8 +227,8 @@ export function MarketAnalysisCard({ symbol, candles, currentPrice, analysis }: 
               onClick={() => setTimeframe('1D')}
               className={`px-3 py-1.5 text-xs rounded-lg transition-all duration-300 ${
                 timeframe === '1D'
-                  ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-lg shadow-blue-500/50'
-                  : 'bg-slate-700/50 text-slate-300 hover:bg-slate-600/50'
+                  ? 'bg-gradient-to-r from-primary to-primary/80 text-white shadow-lg shadow-primary/50'
+                  : 'bg-card/50 text-muted-foreground hover:bg-card/80'
               }`}
             >
               1D
@@ -248,18 +248,18 @@ export function MarketAnalysisCard({ symbol, candles, currentPrice, analysis }: 
             />
           </div>
         ) : (
-          <p className="text-slate-500 text-center py-8">No chart data available</p>
+          <p className="text-muted-foreground text-center py-8">No chart data available</p>
         )}
 
         {/* EMA Legend */}
         <div className="flex items-center justify-center gap-6 mt-3 text-xs">
           <div className="flex items-center gap-2">
-            <div className="w-4 h-0.5 bg-amber-500"></div>
-            <span className="text-slate-400">EMA 20 (Fast)</span>
+            <div className="w-4 h-0.5 bg-primary"></div>
+            <span className="text-muted-foreground">EMA 20 (Fast)</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-4 h-0.5 bg-blue-500"></div>
-            <span className="text-slate-400">EMA 50 (Slow)</span>
+            <div className="w-4 h-0.5 bg-primary/70"></div>
+            <span className="text-muted-foreground">EMA 50 (Slow)</span>
           </div>
         </div>
       </div>
@@ -268,16 +268,16 @@ export function MarketAnalysisCard({ symbol, candles, currentPrice, analysis }: 
       {candles.length > 0 && (
         <div className="glass-card p-6 rounded-xl hover-lift transition-all duration-300">
           <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <BarChart3 className="w-5 h-5 text-blue-400" />
+            <BarChart3 className="w-5 h-5 text-primary" />
             Market Indicators
           </h3>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {rsi !== null && (
-              <div className="text-center p-3 bg-slate-900/50 rounded">
-                <div className="text-xs text-slate-500 mb-1">RSI (14)</div>
+              <div className="text-center p-3 bg-card/50 rounded">
+                <div className="text-xs text-muted-foreground mb-1">RSI (14)</div>
                 <div className={`text-xl font-mono ${
-                  rsi > 70 ? 'text-red-400' : rsi < 30 ? 'text-green-400' : 'text-slate-300'
+                  rsi > 70 ? 'text-destructive' : rsi < 30 ? 'text-chart-2' : 'text-foreground'
                 }`}>
                   {rsi.toFixed(1)}
                 </div>
@@ -285,19 +285,19 @@ export function MarketAnalysisCard({ symbol, candles, currentPrice, analysis }: 
             )}
 
             {atr !== null && (
-              <div className="text-center p-3 bg-slate-900/50 rounded">
-                <div className="text-xs text-slate-500 mb-1">ATR (14)</div>
-                <div className="text-xl font-mono text-slate-300">
+              <div className="text-center p-3 bg-card/50 rounded">
+                <div className="text-xs text-muted-foreground mb-1">ATR (14)</div>
+                <div className="text-xl font-mono text-foreground">
                   {atr.toFixed(5)}
                 </div>
               </div>
             )}
 
             {adx && (
-              <div className="text-center p-3 bg-slate-900/50 rounded">
-                <div className="text-xs text-slate-500 mb-1">ADX (14)</div>
+              <div className="text-center p-3 bg-card/50 rounded">
+                <div className="text-xs text-muted-foreground mb-1">ADX (14)</div>
                 <div className={`text-xl font-mono ${
-                  adx.adx > 25 ? 'text-green-400' : 'text-amber-400'
+                  adx.adx > 25 ? 'text-chart-2' : 'text-primary'
                 }`}>
                   {adx.adx.toFixed(1)}
                 </div>
@@ -305,9 +305,9 @@ export function MarketAnalysisCard({ symbol, candles, currentPrice, analysis }: 
             )}
 
             {bb && (
-              <div className="text-center p-3 bg-slate-900/50 rounded">
-                <div className="text-xs text-slate-500 mb-1">BB Width</div>
-                <div className="text-xl font-mono text-slate-300">
+              <div className="text-center p-3 bg-card/50 rounded">
+                <div className="text-xs text-muted-foreground mb-1">BB Width</div>
+                <div className="text-xl font-mono text-foreground">
                   {((bb.upper - bb.lower) / bb.middle * 100).toFixed(1)}%
                 </div>
               </div>

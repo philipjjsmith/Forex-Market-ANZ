@@ -144,7 +144,7 @@ export function ActiveSignalsTable({ signals, accountSize, performanceData, onSi
 
   if (signals.length === 0) {
     return (
-      <div className="text-center py-12 text-gray-400">
+      <div className="text-center py-12 text-muted-foreground">
         <Clock className="w-16 h-16 mx-auto mb-4 opacity-20" />
         <p>No active signals being tracked</p>
         <p className="text-sm mt-2">Generate signals with 70%+ confidence on the Dashboard</p>
@@ -154,20 +154,20 @@ export function ActiveSignalsTable({ signals, accountSize, performanceData, onSi
 
   return (
     <>
-      <div className="rounded-lg border border-white/10 overflow-hidden">
+      <div className="rounded-lg border border-card-border overflow-hidden">
         <Table>
           <TableHeader>
-            <TableRow className="border-white/10 hover:bg-white/5">
-              <TableHead className="text-blue-200">Symbol</TableHead>
-              <TableHead className="text-blue-200">Type</TableHead>
-              <TableHead className="text-blue-200">Confidence</TableHead>
-              <TableHead className="text-blue-200">Entry</TableHead>
-              <TableHead className="text-blue-200">TP1</TableHead>
-              <TableHead className="text-blue-200">Stop Loss</TableHead>
-              <TableHead className="text-blue-200">Current P/L</TableHead>
-              <TableHead className="text-blue-200">Potential Profit</TableHead>
-              <TableHead className="text-blue-200">Time Left</TableHead>
-              <TableHead className="text-blue-200">Action</TableHead>
+            <TableRow className="border-card-border hover:bg-card/20">
+              <TableHead className="text-primary">Symbol</TableHead>
+              <TableHead className="text-primary">Type</TableHead>
+              <TableHead className="text-primary">Confidence</TableHead>
+              <TableHead className="text-primary">Entry</TableHead>
+              <TableHead className="text-primary">TP1</TableHead>
+              <TableHead className="text-primary">Stop Loss</TableHead>
+              <TableHead className="text-primary">Current P/L</TableHead>
+              <TableHead className="text-primary">Potential Profit</TableHead>
+              <TableHead className="text-primary">Time Left</TableHead>
+              <TableHead className="text-primary">Action</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -177,8 +177,8 @@ export function ActiveSignalsTable({ signals, accountSize, performanceData, onSi
               const potentialProfit = calculatePotentialProfit(accountSize, signal, performanceData);
 
               return (
-                <TableRow key={signal.signal_id} className="border-white/10 hover:bg-white/5">
-                  <TableCell className="font-medium text-white">
+                <TableRow key={signal.signal_id} className="border-card-border hover:bg-card/20">
+                  <TableCell className="font-medium text-foreground">
                     {signal.symbol}
                   </TableCell>
                   <TableCell>
@@ -186,8 +186,8 @@ export function ActiveSignalsTable({ signals, accountSize, performanceData, onSi
                       variant="outline"
                       className={
                         signal.type === 'LONG'
-                          ? 'border-green-500/50 text-green-300 bg-green-500/10'
-                          : 'border-red-500/50 text-red-300 bg-red-500/10'
+                          ? 'border-chart-2/50 text-chart-2 bg-chart-2/10'
+                          : 'border-destructive/50 text-destructive bg-destructive/10'
                       }
                     >
                       {signal.type === 'LONG' ? (
@@ -203,32 +203,32 @@ export function ActiveSignalsTable({ signals, accountSize, performanceData, onSi
                       variant="outline"
                       className={
                         signal.confidence >= 90
-                          ? 'border-purple-500/50 text-purple-300 bg-purple-500/10'
+                          ? 'border-chart-2/50 text-chart-2 bg-chart-2/10'
                           : signal.confidence >= 80
-                          ? 'border-blue-500/50 text-blue-300 bg-blue-500/10'
-                          : 'border-yellow-500/50 text-yellow-300 bg-yellow-500/10'
+                          ? 'border-primary/50 text-primary bg-primary/10'
+                          : 'border-primary/40 text-primary bg-primary/10'
                       }
                     >
                       {signal.confidence}%
                     </Badge>
                   </TableCell>
-                  <TableCell className="font-mono text-white">
+                  <TableCell className="font-mono text-foreground">
                     {signal.entry_price.toFixed(5)}
                   </TableCell>
-                  <TableCell className="font-mono text-green-300">
+                  <TableCell className="font-mono text-chart-2">
                     {signal.tp1.toFixed(5)}
                   </TableCell>
-                  <TableCell className="font-mono text-red-300">
+                  <TableCell className="font-mono text-destructive">
                     {signal.stop_loss.toFixed(5)}
                   </TableCell>
                   <TableCell>
                     <span
                       className={`font-mono font-semibold ${
                         currentPL > 0
-                          ? 'text-green-400'
+                          ? 'text-chart-2'
                           : currentPL < 0
-                          ? 'text-red-400'
-                          : 'text-gray-400'
+                          ? 'text-destructive'
+                          : 'text-muted-foreground'
                       }`}
                     >
                       {currentPL > 0 ? '+' : ''}
@@ -237,16 +237,16 @@ export function ActiveSignalsTable({ signals, accountSize, performanceData, onSi
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">
-                      <DollarSign className="w-3 h-3 text-green-400" />
-                      <span className="font-mono font-semibold text-green-400">
+                      <DollarSign className="w-3 h-3 text-chart-2" />
+                      <span className="font-mono font-semibold text-chart-2">
                         ${potentialProfit.profitUSD.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </span>
                     </div>
-                    <div className="text-xs text-gray-400 mt-1">
+                    <div className="text-xs text-muted-foreground mt-1">
                       {potentialProfit.riskPercent.toFixed(1)}% risk
                     </div>
                   </TableCell>
-                  <TableCell className="text-yellow-300">
+                  <TableCell className="text-primary">
                     <div className="flex items-center gap-1">
                       <Clock className="w-3 h-3" />
                       {timeLeft}
@@ -257,7 +257,7 @@ export function ActiveSignalsTable({ signals, accountSize, performanceData, onSi
                       size="sm"
                       variant="outline"
                       onClick={() => handleCloseClick(signal)}
-                      className="border-blue-500/50 text-blue-300 hover:bg-blue-500/20"
+                      className="border-primary/50 text-primary hover:bg-primary/20"
                     >
                       <X className="w-3 h-3 mr-1" />
                       Close
@@ -272,10 +272,10 @@ export function ActiveSignalsTable({ signals, accountSize, performanceData, onSi
 
       {/* Close Signal Dialog */}
       <Dialog open={isCloseDialogOpen} onOpenChange={setIsCloseDialogOpen}>
-        <DialogContent className="bg-slate-900 border-white/20 text-white">
+        <DialogContent className="bg-card border-card-border text-foreground">
           <DialogHeader>
             <DialogTitle>Close Signal Manually</DialogTitle>
-            <DialogDescription className="text-blue-200">
+            <DialogDescription className="text-muted-foreground">
               Enter the current price to close this signal and calculate P/L
             </DialogDescription>
           </DialogHeader>
@@ -284,19 +284,19 @@ export function ActiveSignalsTable({ signals, accountSize, performanceData, onSi
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
-                  <p className="text-gray-400">Symbol</p>
+                  <p className="text-muted-foreground">Symbol</p>
                   <p className="font-semibold">{selectedSignal.symbol}</p>
                 </div>
                 <div>
-                  <p className="text-gray-400">Type</p>
+                  <p className="text-muted-foreground">Type</p>
                   <p className="font-semibold">{selectedSignal.type}</p>
                 </div>
                 <div>
-                  <p className="text-gray-400">Entry Price</p>
+                  <p className="text-muted-foreground">Entry Price</p>
                   <p className="font-mono">{selectedSignal.entry_price.toFixed(5)}</p>
                 </div>
                 <div>
-                  <p className="text-gray-400">Current Price</p>
+                  <p className="text-muted-foreground">Current Price</p>
                   <p className="font-mono">{selectedSignal.current_price.toFixed(5)}</p>
                 </div>
               </div>
@@ -310,12 +310,12 @@ export function ActiveSignalsTable({ signals, accountSize, performanceData, onSi
                   value={closePrice}
                   onChange={(e) => setClosePrice(e.target.value)}
                   placeholder="Enter close price"
-                  className="bg-slate-800 border-white/20 text-white"
+                  className="bg-card/50 border-card-border text-foreground"
                 />
               </div>
 
               {closeError && (
-                <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded p-2">
+                <div className="text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded p-2">
                   {closeError}
                 </div>
               )}
@@ -327,14 +327,14 @@ export function ActiveSignalsTable({ signals, accountSize, performanceData, onSi
               variant="outline"
               onClick={() => setIsCloseDialogOpen(false)}
               disabled={isClosing}
-              className="border-white/20 hover:bg-white/10"
+              className="border-card-border hover:bg-card/80"
             >
               Cancel
             </Button>
             <Button
               onClick={handleCloseSignal}
               disabled={isClosing || !closePrice}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
+              className="bg-primary hover:bg-primary/80 text-white"
             >
               {isClosing ? 'Closing...' : 'Close Signal'}
             </Button>
