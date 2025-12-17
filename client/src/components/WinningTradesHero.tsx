@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from "react";
-import { Trophy, Loader2, TrendingUp, TrendingDown, Target, Clock, ChevronLeft, ChevronRight, Play, Pause, ChevronDown } from "lucide-react";
+import { Trophy, Loader2, TrendingUp, TrendingDown, Target, Clock, ChevronLeft, ChevronRight, Play, Pause, ChevronDown, BookOpen } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import WinningTradeChart from "./WinningTradeChart";
 import { useQuery } from "@tanstack/react-query";
 import { getToken, getApiBaseUrl } from "@/lib/auth";
@@ -76,6 +77,38 @@ async function fetchWinningTrades(limit: number = 5): Promise<WinningTrade[]> {
   return data.trades || [];
 }
 
+async function fetchPerformance(): Promise<any> {
+  const token = getToken();
+  const response = await fetch(`${getApiBaseUrl()}/api/signals/performance`, {
+    headers: {
+      ...(token && { 'Authorization': `Bearer ${token}` }),
+    },
+    credentials: 'include',
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch performance data');
+  }
+
+  return response.json();
+}
+
+// Trading terms glossary (from ComprehensiveSignalCard)
+const TRADING_GLOSSARY = [
+  { term: 'Entry Price', definition: 'The price at which you open your trade.' },
+  { term: 'Stop Loss', definition: 'A predetermined exit point to limit losses if the trade moves against you.' },
+  { term: 'Take Profit (TP)', definition: 'Target prices where you plan to close the trade and secure profits.' },
+  { term: 'Risk:Reward (R:R)', definition: 'The ratio of potential loss to potential gain. 1:2.5 means you risk $1 to potentially make $2.50.' },
+  { term: 'ATR', definition: 'Average True Range - measures market volatility to set appropriate stops and targets.' },
+  { term: 'RSI', definition: 'Relative Strength Index - momentum indicator showing if market is overbought (>70) or oversold (<30).' },
+  { term: 'ADX', definition: 'Average Directional Index - measures trend strength. Above 25 = strong trend.' },
+  { term: 'EMA', definition: 'Exponential Moving Average - shows average price over time, giving more weight to recent prices.' },
+  { term: 'MACD', definition: 'Moving Average Convergence Divergence - shows momentum and trend changes through crossovers.' },
+  { term: 'Bollinger Bands (BB)', definition: 'Volatility bands around a moving average. Price near upper = overbought, near lower = oversold.' },
+  { term: 'Pips', definition: 'Percentage in point - smallest price move in forex. For EUR/USD, 0.0001 = 1 pip.' },
+  { term: 'Confidence %', definition: 'Calculated score (0-100) based on multi-timeframe alignment and indicator strength.' },
+];
+
 // Custom useInterval hook (Dan Abramov pattern)
 function useInterval(callback: () => void, delay: number | null) {
   const savedCallback = useRef(callback);
@@ -112,6 +145,12 @@ export default function WinningTradesHero() {
     queryFn: () => fetchWinningTrades(5),
     staleTime: 5 * 60 * 1000, // 5 minutes
     refetchInterval: 15 * 60 * 1000, // Refetch every 15 minutes
+  });
+
+  const { data: performance } = useQuery({
+    queryKey: ['performance'],
+    queryFn: fetchPerformance,
+    staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
   // Auto-advance carousel (15-second interval)
@@ -281,9 +320,26 @@ export default function WinningTradesHero() {
           {/* Glassmorphic Overlays - Top Right: Confidence Badge */}
           <div className="absolute top-6 right-6 z-10 backdrop-blur-md bg-card/80 rounded-xl border border-card-border p-4 shadow-xl">
             <div className="text-center">
-              <div className="text-3xl font-bold text-primary mb-1">
-                {featuredTrade.confidence}%
-              </div>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="text-3xl font-bold text-primary mb-1 cursor-help">
+                      {featuredTrade.confidence}%
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-xs">
+                    {performance?.overall ? (
+                      <div className="text-sm">
+                        <p className="font-semibold mb-1">Win Rate by Confidence</p>
+                        <p>Signals at {featuredTrade.confidence >= 85 ? '85-100' : '70-84'}% confidence win <span className="font-bold text-chart-2">{performance.overall.winRate.toFixed(1)}%</span> of the time</p>
+                        <p className="text-xs text-muted-foreground mt-1">Based on {performance.overall.wins + performance.overall.losses} completed trades</p>
+                      </div>
+                    ) : (
+                      <p className="text-sm">Loading performance data...</p>
+                    )}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
               <div className="text-xs text-muted-foreground mb-2">Confidence</div>
               <Badge className={`${featuredTrade.tier === 'HIGH' ? 'bg-chart-2/20 text-chart-2 border border-chart-2/30' : 'bg-muted text-muted-foreground border border-border'}`}>
                 {featuredTrade.tier === 'HIGH' ? 'LIVE TRADING' : 'PRACTICE'}
@@ -445,7 +501,7 @@ export default function WinningTradesHero() {
 
               {/* Trade Timeline */}
               <div>
-                <h4 className="font-semibold text-foreground mb-3">Trade Timeline</h4>
+                <h4 className="font-semibold text-foreground mb-3">Trade Timeline & Risk</h4>
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between items-center p-2 bg-muted/20 rounded border border-border">
                     <span className="text-muted-foreground">Entry Time:</span>
@@ -459,6 +515,29 @@ export default function WinningTradesHero() {
                     <span className="text-muted-foreground">Total Duration:</span>
                     <span className="font-semibold text-chart-2">{featuredTrade.duration} ({featuredTrade.durationHours.toFixed(1)}h)</span>
                   </div>
+                  {/* Risk in Dollars - NEW */}
+                  {featuredTrade.tier === 'HIGH' && (
+                    <div className="flex justify-between items-center p-2 bg-destructive/10 rounded border border-destructive/30">
+                      <span className="text-muted-foreground">Risk (1.5%):</span>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="font-semibold text-foreground cursor-help">
+                              {Math.abs(featuredTrade.entry_price - featuredTrade.stop_loss).toFixed(5)} ({featuredTrade.symbol.includes('JPY') ? Math.abs(featuredTrade.entry_price - featuredTrade.stop_loss) * 100 : Math.abs(featuredTrade.entry_price - featuredTrade.stop_loss) * 10000} pips)
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent className="max-w-xs">
+                            <div className="text-sm">
+                              <p className="font-semibold mb-1">Risk Per Trade</p>
+                              <p>On a $10,000 account: <span className="font-bold text-destructive">$150 max loss</span></p>
+                              <p>On a $100,000 account: <span className="font-bold text-destructive">$1,500 max loss</span></p>
+                              <p className="text-xs text-muted-foreground mt-1">HIGH tier signals risk 1.5% of account balance</p>
+                            </div>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -500,6 +579,32 @@ export default function WinningTradesHero() {
                   </div>
                 </div>
               </div>
+
+              {/* Trading Terms Glossary - NEW */}
+              <Collapsible>
+                <CollapsibleTrigger className="w-full group">
+                  <div className="flex items-center gap-2 p-3 bg-primary/5 hover:bg-primary/10 rounded-lg border border-primary/20 transition-colors">
+                    <BookOpen className="h-4 w-4 text-primary" />
+                    <span className="font-semibold text-foreground">Trading Terms Glossary</span>
+                    <ChevronDown className="h-4 w-4 text-muted-foreground ml-auto group-data-[state=open]:rotate-180 transition-transform" />
+                  </div>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="mt-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {TRADING_GLOSSARY.map((item, index) => (
+                      <div key={index} className="bg-muted/30 rounded-lg p-3 border border-border">
+                        <div className="font-semibold text-sm text-foreground mb-1">{item.term}</div>
+                        <div className="text-xs text-muted-foreground">{item.definition}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-3 p-3 bg-primary/10 rounded-lg border border-primary/30">
+                    <p className="text-xs text-muted-foreground">
+                      <strong className="text-foreground">💡 Beginner Tip:</strong> Understanding these terms is essential for successful trading. Take time to learn each indicator's purpose before risking real money.
+                    </p>
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
             </CardContent>
           </CollapsibleContent>
         </Card>
