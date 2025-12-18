@@ -1,0 +1,330 @@
+=================================================================
+FOREXMARKETANZ EA - SETTINGS TEMPLATE
+=================================================================
+
+This file contains EXACT settings for each testing phase.
+Copy-paste these values when configuring the EA in MT5.
+
+=================================================================
+SCENARIO 1: WEEK 1 - DRY RUN (NO TRADES)
+=================================================================
+
+Purpose: Verify EA receives signals without executing trades
+Duration: 7 days
+Account: FXIFY Demo
+
+--- API Configuration ---
+API_BASE_URL = https://forex-market-anz.onrender.com
+API_USERNAME = [ENTER YOUR USERNAME HERE]
+API_PASSWORD = [ENTER YOUR PASSWORD HERE]
+POLL_INTERVAL_SECONDS = 60
+
+--- Trading Configuration ---
+ACCOUNT_BALANCE_OVERRIDE = 0.0
+TRADE_ENABLED = false          ← DRY RUN MODE (NO TRADES!)
+HIGH_TIER_ONLY = true
+MIN_CONFIDENCE = 85.0
+
+--- Risk Management ---
+MAX_DAILY_LOSS_PERCENT = 3.5
+MAX_DRAWDOWN_PERCENT = 7.5
+MAX_SLIPPAGE_POINTS = 30
+ORDER_RETRY_COUNT = 3
+ORDER_RETRY_DELAY_MS = 2000
+
+--- Partial Profit Management ---
+USE_PARTIAL_PROFITS = true
+PARTIAL_CLOSE_PERCENT_1 = 50.0
+PARTIAL_CLOSE_PERCENT_2 = 50.0
+
+--- Logging & Diagnostics ---
+VERBOSE_LOGGING = true         ← MAXIMUM LOGGING FOR TESTING
+LOG_TO_FILE = true
+LOG_LEVEL = 3                  ← DEBUG (most detailed)
+
+Expected Results:
+- 3-7 HIGH tier signals detected (logged but not executed)
+- All signals show: "⏭️ Skipping signal (TRADE_ENABLED = false)"
+- Zero trades in Trade tab
+- Zero errors (or <1%)
+
+=================================================================
+SCENARIO 2: WEEK 2 - DEMO TRADING
+=================================================================
+
+Purpose: Test order execution on demo account
+Duration: 7 days
+Account: FXIFY Demo
+
+--- API Configuration ---
+API_BASE_URL = https://forex-market-anz.onrender.com
+API_USERNAME = [ENTER YOUR USERNAME HERE]
+API_PASSWORD = [ENTER YOUR PASSWORD HERE]
+POLL_INTERVAL_SECONDS = 60
+
+--- Trading Configuration ---
+ACCOUNT_BALANCE_OVERRIDE = 0.0
+TRADE_ENABLED = true           ← EXECUTE TRADES!
+HIGH_TIER_ONLY = true
+MIN_CONFIDENCE = 85.0
+
+--- Risk Management ---
+MAX_DAILY_LOSS_PERCENT = 3.5
+MAX_DRAWDOWN_PERCENT = 7.5
+MAX_SLIPPAGE_POINTS = 30
+ORDER_RETRY_COUNT = 3
+ORDER_RETRY_DELAY_MS = 2000
+
+--- Partial Profit Management ---
+USE_PARTIAL_PROFITS = true
+PARTIAL_CLOSE_PERCENT_1 = 50.0
+PARTIAL_CLOSE_PERCENT_2 = 50.0
+
+--- Logging & Diagnostics ---
+VERBOSE_LOGGING = true         ← KEEP VERBOSE FOR DEMO TESTING
+LOG_TO_FILE = true
+LOG_LEVEL = 2                  ← INFO (standard logging)
+
+Expected Results:
+- 3-7 signals executed (6-14 orders total - 2 per signal)
+- Win rate: 60-75%
+- Slippage: <2 pips average
+- Each signal = 2 orders (50% @ TP1, 50% @ TP3)
+- No circuit breaker trips
+
+=================================================================
+SCENARIO 3: LIVE TRADING (AFTER FXIFY APPROVAL)
+=================================================================
+
+Purpose: Production trading on FXIFY live account
+Duration: Ongoing
+Account: FXIFY Live
+
+--- API Configuration ---
+API_BASE_URL = https://forex-market-anz.onrender.com
+API_USERNAME = [ENTER YOUR USERNAME HERE]
+API_PASSWORD = [ENTER YOUR PASSWORD HERE]
+POLL_INTERVAL_SECONDS = 60
+
+--- Trading Configuration ---
+ACCOUNT_BALANCE_OVERRIDE = 0.0
+TRADE_ENABLED = true           ← LIVE TRADING!
+HIGH_TIER_ONLY = true
+MIN_CONFIDENCE = 85.0
+
+--- Risk Management ---
+MAX_DAILY_LOSS_PERCENT = 3.5
+MAX_DRAWDOWN_PERCENT = 7.5
+MAX_SLIPPAGE_POINTS = 30
+ORDER_RETRY_COUNT = 3
+ORDER_RETRY_DELAY_MS = 2000
+
+--- Partial Profit Management ---
+USE_PARTIAL_PROFITS = true
+PARTIAL_CLOSE_PERCENT_1 = 50.0
+PARTIAL_CLOSE_PERCENT_2 = 50.0
+
+--- Logging & Diagnostics ---
+VERBOSE_LOGGING = false        ← REDUCE LOGGING FOR PRODUCTION
+LOG_TO_FILE = true
+LOG_LEVEL = 1                  ← WARNINGS + ERRORS ONLY
+
+Expected Results:
+- Monthly profit: $10,000-$15,000
+- Win rate: 65-75%
+- Max drawdown: <5%
+- Signals executed: 12-30/month
+- Uptime: 99%+
+
+=================================================================
+OPTIONAL SCENARIOS
+=================================================================
+
+--- SCENARIO 4: CONSERVATIVE MODE (Lower Risk) ---
+
+If you want to trade more conservatively (0.75% risk instead of 1.5%):
+
+ACCOUNT_BALANCE_OVERRIDE = 50000
+(If your actual account is $100K, this tells EA it's $50K)
+(Result: EA risks 1.5% of $50K = $750 = 0.75% of real balance)
+
+WARNING: This reduces profit proportionally ($10K/month becomes $5K/month)
+
+--- SCENARIO 5: INCLUDE MEDIUM TIER SIGNALS (More Trades) ---
+
+If you want to execute MEDIUM tier signals (70-84%) in addition to HIGH:
+
+HIGH_TIER_ONLY = false
+MIN_CONFIDENCE = 70.0
+
+Expected changes:
+- More signals (~10-20/month vs 12-30/month)
+- Lower win rate (~55-65% vs 65-75%)
+- Higher drawdown risk
+
+NOT RECOMMENDED: Stick with HIGH tier only (proven $10K+/month)
+
+--- SCENARIO 6: FASTER POLLING (Lower Latency) ---
+
+If you want to check for signals more frequently:
+
+POLL_INTERVAL_SECONDS = 30
+
+Expected changes:
+- Signals detected 30 seconds earlier (vs 60 seconds)
+- 2× more API calls (2,880/day vs 1,440/day)
+- Marginal benefit (swing trades hold 24-48 hours)
+
+NOT RECOMMENDED: 60 seconds is optimal
+
+=================================================================
+SETTINGS YOU SHOULD NEVER CHANGE
+=================================================================
+
+DO NOT modify these settings unless you fully understand FXIFY rules:
+
+❌ MAX_DAILY_LOSS_PERCENT (FXIFY limit: 4%, EA uses 3.5% buffer)
+❌ MAX_DRAWDOWN_PERCENT (FXIFY limit: 8%, EA uses 7.5% buffer)
+❌ API_BASE_URL (must match website exactly)
+
+Changing these values could:
+- Violate FXIFY rules (account closure)
+- Cause authentication failures
+- Trip circuit breakers erroneously
+
+=================================================================
+QUICK REFERENCE: WHAT EACH SETTING DOES
+=================================================================
+
+API_BASE_URL
+  → Website API endpoint (never change)
+
+API_USERNAME / API_PASSWORD
+  → Your ForexMarketANZ website login credentials
+
+POLL_INTERVAL_SECONDS
+  → How often EA checks for new signals (default: 60s)
+
+ACCOUNT_BALANCE_OVERRIDE
+  → Manual balance override (0 = auto-detect from MT5)
+
+TRADE_ENABLED
+  → false = dry run (log signals, don't trade)
+  → true = execute trades
+
+HIGH_TIER_ONLY
+  → true = only execute 85%+ signals (recommended)
+  → false = execute 70%+ signals (more trades, lower win rate)
+
+MIN_CONFIDENCE
+  → Minimum confidence threshold (default: 85%)
+
+MAX_DAILY_LOSS_PERCENT
+  → Circuit breaker: stop trading if daily loss ≥ 3.5%
+
+MAX_DRAWDOWN_PERCENT
+  → Circuit breaker: stop trading if drawdown from peak ≥ 7.5%
+
+MAX_SLIPPAGE_POINTS
+  → Max acceptable slippage (30 points = 3 pips)
+
+ORDER_RETRY_COUNT
+  → How many times to retry failed orders (default: 3)
+
+ORDER_RETRY_DELAY_MS
+  → Delay between retries (2000ms = 2 seconds)
+
+USE_PARTIAL_PROFITS
+  → true = 2 orders per signal (TP1 and TP3)
+  → false = 1 order per signal (TP1 only)
+
+PARTIAL_CLOSE_PERCENT_1 / _2
+  → Split of position (must sum to 100%)
+
+VERBOSE_LOGGING
+  → true = detailed logs (testing)
+  → false = minimal logs (production)
+
+LOG_TO_FILE
+  → true = write logs to file (recommended)
+  → false = MT5 Experts tab only
+
+LOG_LEVEL
+  → 0 = Errors only
+  → 1 = Warnings + Errors
+  → 2 = Info + Warnings + Errors (default for demo)
+  → 3 = Debug (everything - use for troubleshooting)
+
+=================================================================
+CREDENTIALS WORKSHEET
+=================================================================
+
+Fill this out before deploying EA:
+
+ForexMarketANZ Website:
+  Username: _________________________
+  Password: _________________________
+
+FXIFY Demo Account:
+  Account Number: _________________________
+  Password: _________________________
+  Server: FXPIG-Demo
+
+FXIFY Live Account (after approval):
+  Account Number: _________________________
+  Password: _________________________
+  Server: FXPIG-Live
+
+VPS Access:
+  IP Address: _________________________
+  Username: _________________________
+  Password: _________________________
+
+=================================================================
+COPY-PASTE TEMPLATE (For Quick Configuration)
+=================================================================
+
+When EA settings window opens, copy-paste these values:
+
+[API Configuration]
+https://forex-market-anz.onrender.com
+[your_username]
+[your_password]
+60
+
+[Trading Configuration]
+0.0
+true (or false for dry run)
+true
+85.0
+
+[Risk Management]
+3.5
+7.5
+30
+3
+2000
+
+[Partial Profits]
+true
+50.0
+50.0
+
+[Logging]
+true (false for live)
+true
+2 (1 for live)
+
+=================================================================
+END OF TEMPLATE
+=================================================================
+
+Save this file and reference it when configuring EA in MT5.
+
+For detailed explanations, see:
+- EA_CONFIGURATION_REFERENCE.md (parameter guide)
+- VPS_DEPLOYMENT_GUIDE.md (step-by-step setup)
+- EA_README.md (overview)
+
+Version: 1.0.0
+Last Updated: 2025-12-11

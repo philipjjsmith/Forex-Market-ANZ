@@ -685,4 +685,222 @@ export function registerSignalRoutes(app: Express) {
       });
     }
   });
+
+  // ===================================================================
+  // WINNING TRADES ENHANCEMENT - New Endpoints
+  // ===================================================================
+
+  /**
+   * GET /api/signals/winning-trade-details/:signalId
+   * Get comprehensive details for a specific winning trade
+   * Includes: MAE/MFE, execution quality, news events, session info
+   */
+  app.get("/api/signals/winning-trade-details/:signalId", requireAuth, async (req, res) => {
+    const { signalId } = req.params;
+    const userId = req.user!.id;
+
+    try {
+      // Import services (lazy load)
+      const { economicCalendarService } = await import('../services/economic-calendar.js');
+      const { maeMfeCalculator } = await import('../services/mae-mfe-calculator.js');
+      const { executionQualityService } = await import('../services/execution-quality.js');
+      const { sessionAnalyzer } = await import('../services/session-analyzer.js');
+      const { strategyAnalyzer } = await import('../services/strategy-analyzer.js');
+
+      // Fetch base trade data
+      const result = await db.execute(sql`
+        SELECT * FROM signal_history
+        WHERE signal_id = ${signalId}
+          AND user_id = ${userId}
+          AND outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT')
+      `);
+
+      if (result.length === 0) {
+        return res.status(404).json({ error: "Trade not found or not a winning trade" });
+      }
+
+      const trade = parseNumericFields(result[0], [
+        'confidence', 'entry_price', 'stop_loss', 'tp1', 'tp2', 'tp3',
+        'outcome_price', 'profit_loss_pips', 'entry_slippage', 'exit_slippage',
+        'fill_latency', 'max_adverse_excursion', 'max_favorable_excursion'
+      ]);
+
+      // Calculate MAE/MFE if not already in database
+      let maeMfe;
+      if (!trade.max_adverse_excursion || !trade.max_favorable_excursion) {
+        maeMfe = maeMfeCalculator.calculateMAEMFE({
+          type: trade.type,
+          entry_price: trade.entry_price,
+          stop_loss: trade.stop_loss,
+          symbol: trade.symbol,
+          candles: trade.candles
+        });
+      } else {
+        maeMfe = {
+          mae: trade.max_adverse_excursion,
+          mfe: trade.max_favorable_excursion,
+          maePercent: (trade.max_adverse_excursion / Math.abs(trade.entry_price - trade.stop_loss) * 10000) * 100,
+          mfeRatio: trade.max_adverse_excursion > 0 ? trade.max_favorable_excursion / trade.max_adverse_excursion : 0
+        };
+      }
+
+      // Calculate execution quality grade
+      const executionGrade = executionQualityService.calculateGrade({
+        entry_slippage: trade.entry_slippage || 0,
+        exit_slippage: trade.exit_slippage || 0,
+        fill_latency: trade.fill_latency || 0,
+        max_adverse_excursion: maeMfe.mae,
+        stop_loss_distance: Math.abs(trade.entry_price - trade.stop_loss) * (trade.symbol.includes('JPY') ? 100 : 10000)
+      });
+
+      // Get economic events ±2 hours of entry
+      const newsEvents = await economicCalendarService.getEventsForTrade(
+        new Date(trade.created_at),
+        trade.symbol.replace('/', '')
+      );
+
+      // Detect trading session
+      const session = sessionAnalyzer.detectSession(new Date(trade.created_at));
+
+      // Get strategy comparison
+      const strategyComparison = await strategyAnalyzer.compareToStrategyAverage(
+        trade.profit_loss_pips,
+        trade.strategy_name,
+        userId
+      );
+
+      // Build enhanced trade response
+      const enhancedTrade = {
+        ...trade,
+        mae: maeMfe.mae,
+        mfe: maeMfe.mfe,
+        maePercent: maeMfe.maePercent,
+        mfeRatio: maeMfe.mfeRatio,
+        executionGrade: executionGrade.grade,
+        executionScore: executionGrade.score,
+        executionBreakdown: executionGrade.breakdown,
+        executionRecommendations: executionGrade.recommendations,
+        newsEvents,
+        session,
+        sessionName: sessionAnalyzer.getSessionCharacteristics(session).name,
+        strategyComparison: strategyComparison ? {
+          avgProfit: strategyComparison.average.avgProfit,
+          winRate: strategyComparison.average.winRate,
+          avgDuration: strategyComparison.average.avgDuration,
+          percentile: strategyComparison.percentile,
+          rank: strategyComparison.rank
+        } : null
+      };
+
+      res.json(enhancedTrade);
+
+    } catch (error: any) {
+      console.error("Error fetching winning trade details:", error);
+      res.status(500).json({
+        message: "Failed to fetch trade details",
+        error: error.message
+      });
+    }
+  });
+
+  /**
+   * GET /api/signals/session-performance
+   * Get win rate and performance breakdown by trading session
+   */
+  app.get("/api/signals/session-performance", requireAuth, async (req, res) => {
+    const userId = req.user!.id;
+
+    try {
+      const { sessionAnalyzer } = await import('../services/session-analyzer.js');
+
+      // Fetch all closed trades
+      const result = await db.execute(sql`
+        SELECT created_at, profit_loss_pips, symbol
+        FROM signal_history
+        WHERE user_id = ${userId}
+          AND outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'STOP_HIT', 'MANUALLY_CLOSED')
+          AND outcome_time IS NOT NULL
+        ORDER BY created_at DESC
+      `);
+
+      const trades = (result as any[]).map(t => ({
+        created_at: t.created_at,
+        profit_loss_pips: parseFloat(t.profit_loss_pips),
+        symbol: t.symbol
+      }));
+
+      // Analyze by session
+      const sessionPerformance = sessionAnalyzer.analyzeBySession(trades);
+
+      res.json(sessionPerformance);
+
+    } catch (error: any) {
+      console.error("Error analyzing session performance:", error);
+      res.status(500).json({
+        message: "Failed to analyze session performance",
+        error: error.message
+      });
+    }
+  });
+
+  /**
+   * GET /api/signals/strategy-stats/:strategyName
+   * Get comprehensive statistics for a specific strategy
+   */
+  app.get("/api/signals/strategy-stats/:strategyName", requireAuth, async (req, res) => {
+    const { strategyName } = req.params;
+    const userId = req.user!.id;
+
+    try {
+      const { strategyAnalyzer } = await import('../services/strategy-analyzer.js');
+      const { tradeStatisticsService } = await import('../services/trade-statistics.js');
+
+      // Get strategy stats
+      const strategyStats = await strategyAnalyzer.getStrategyStats(strategyName, userId);
+
+      if (!strategyStats) {
+        return res.status(404).json({ error: "Strategy not found or no trades" });
+      }
+
+      // Get all trades for this strategy to calculate advanced statistics
+      const result = await db.execute(sql`
+        SELECT profit_loss_pips, outcome, created_at, outcome_time
+        FROM signal_history
+        WHERE user_id = ${userId}
+          AND strategy_name = ${strategyName}
+          AND outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'STOP_HIT', 'MANUALLY_CLOSED')
+        ORDER BY outcome_time DESC
+      `);
+
+      const trades = (result as any[]).map(t => ({
+        profit_loss_pips: parseFloat(t.profit_loss_pips),
+        outcome: t.outcome,
+        created_at: t.created_at,
+        outcome_time: t.outcome_time
+      }));
+
+      // Calculate advanced statistics
+      const advancedStats = tradeStatisticsService.calculateStatistics(trades);
+      const streaks = tradeStatisticsService.calculateStreaks(trades);
+
+      // Check for performance decline
+      const declineAnalysis = await strategyAnalyzer.detectPerformanceDecline(strategyName, userId);
+
+      res.json({
+        ...strategyStats,
+        sharpeRatio: advancedStats.sharpeRatio,
+        sortinoRatio: advancedStats.sortinoRatio,
+        interpretation: advancedStats.interpretation,
+        streaks,
+        declineAnalysis
+      });
+
+    } catch (error: any) {
+      console.error("Error fetching strategy stats:", error);
+      res.status(500).json({
+        message: "Failed to fetch strategy statistics",
+        error: error.message
+      });
+    }
+  });
 }
