@@ -224,7 +224,7 @@ export function ExecutionQualityIndicator({
             <p className="text-sm">
               <strong>MAE</strong> (Maximum Adverse Excursion): Largest drawdown during trade.<br />
               <strong>MFE</strong> (Maximum Favorable Excursion): Peak profit reached.<br />
-              High MFE/MAE ratio (>3.0) indicates good profit capture.
+              High MFE/MAE ratio (&gt;3.0) indicates good profit capture.
             </p>
           </TooltipContent>
         </Tooltip>
