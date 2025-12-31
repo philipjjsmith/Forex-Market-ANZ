@@ -137,7 +137,7 @@ export function StatisticsPanel({ technicalIndicators, executionMetrics, advance
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <StatCard
             label="Entry Slippage"
-            value={executionMetrics.entrySlippage > 0 ? '+' : ''}{executionMetrics.entrySlippage.toFixed(1)}
+            value={`${executionMetrics.entrySlippage > 0 ? '+' : ''}${executionMetrics.entrySlippage.toFixed(1)}`}
             unit="pips"
             rating={Math.abs(executionMetrics.entrySlippage) < 0.5 ? 'Excellent' : 'Fair'}
             color={executionMetrics.entrySlippage === 0 ? 'text-gray-300' : executionMetrics.entrySlippage > 0 ? 'text-red-400' : 'text-green-400'}
@@ -225,7 +225,7 @@ export function StatisticsPanel({ technicalIndicators, executionMetrics, advance
           />
           <StatCard
             label="Expectancy"
-            value={advancedStats.expectancy > 0 ? '+' : ''}{advancedStats.expectancy.toFixed(1)}
+            value={`${advancedStats.expectancy > 0 ? '+' : ''}${advancedStats.expectancy.toFixed(1)}`}
             unit="pips"
             rating="Per Trade"
             color={advancedStats.expectancy > 10 ? 'text-green-400' : advancedStats.expectancy > 5 ? 'text-lime-400' : advancedStats.expectancy > 1 ? 'text-yellow-400' : 'text-red-400'}
