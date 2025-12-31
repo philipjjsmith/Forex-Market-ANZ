@@ -136,7 +136,7 @@ export default function EnhancedWinningTradesHero() {
       <Card className="w-full bg-slate-900 border-slate-700">
         <CardContent className="flex items-center justify-center py-24">
           <div className="text-center space-y-3">
-            <Loader2 className="h-8 w-8 animate-spin text-blue-500 mx-auto" />
+            <Loader2 className="h-8 w-8 animate-spin text-cyan-400 mx-auto" />
             <p className="text-slate-300">Loading winning trades...</p>
           </div>
         </CardContent>
@@ -161,8 +161,8 @@ export default function EnhancedWinningTradesHero() {
       <Card className="w-full bg-slate-900 border-slate-700">
         <CardContent className="py-16 text-center">
           <div className="space-y-4">
-            <div className="mx-auto w-16 h-16 bg-blue-500/20 rounded-full flex items-center justify-center">
-              <Trophy className="h-8 w-8 text-blue-500" />
+            <div className="mx-auto w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center">
+              <Trophy className="h-8 w-8 text-emerald-400" />
             </div>
             <div>
               <h3 className="text-xl font-semibold text-white mb-2">No Winning Trades Yet This Week</h3>
@@ -183,8 +183,8 @@ export default function EnhancedWinningTradesHero() {
       {/* Header with Mode Toggle */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-gradient-to-br from-green-500/20 to-green-600/30 border border-green-500/30">
-            <Trophy className="h-6 w-6 text-green-500" />
+          <div className="p-2 rounded-lg bg-gradient-to-br from-emerald-500/20 to-emerald-600/30 border border-emerald-500/30">
+            <Trophy className="h-6 w-6 text-emerald-400" />
           </div>
           <div>
             <h2 className="text-2xl font-bold text-white">Winning Trades This Week</h2>
@@ -251,15 +251,21 @@ export default function EnhancedWinningTradesHero() {
                 {/* Chart */}
                 <div className="bg-slate-800/50 rounded-lg border border-slate-700 p-4">
                   <WinningTradeChart
-                    symbol={currentTrade.symbol}
-                    type={currentTrade.type}
-                    entry_price={currentTrade.entry_price}
-                    stop_loss={currentTrade.stop_loss}
-                    tp1={0}
-                    tp2={0}
-                    tp3={0}
-                    outcome_price={currentTrade.outcome_price}
-                    candles={[]} // Will be populated from enhanced data
+                    candles={enhancedTrade?.candles || currentTrade.candles || []}
+                    entryPrice={currentTrade.entry_price}
+                    entryTime={new Date(currentTrade.created_at).getTime() / 1000}
+                    exitPrice={currentTrade.outcome_price}
+                    exitTime={new Date(currentTrade.outcome_time || Date.now()).getTime() / 1000}
+                    stopLoss={currentTrade.stop_loss}
+                    tp1={enhancedTrade?.tp1 || currentTrade.tp1 || 0}
+                    tp2={enhancedTrade?.tp2 || currentTrade.tp2 || 0}
+                    tp3={enhancedTrade?.tp3 || currentTrade.tp3 || 0}
+                    type={currentTrade.type.toLowerCase() as 'long' | 'short'}
+                    targetHit={
+                      currentTrade.outcome === 'TP1_HIT' ? 1 :
+                      currentTrade.outcome === 'TP2_HIT' ? 2 : 3
+                    }
+                    height={400}
                   />
                 </div>
 
