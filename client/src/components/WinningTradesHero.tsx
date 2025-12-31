@@ -27,6 +27,9 @@ import { TradeNarrative } from "./trades/TradeNarrative";
 import { EducationalSidebar } from "./trades/EducationalSidebar";
 import { StatisticsPanel } from "./trades/StatisticsPanel";
 import { MAEMFEChart } from "./trades/MAEMFEChart";
+import { TradeSummaryCard } from "./trades/TradeSummaryCard";
+import { IntermediateSidebar } from "./trades/IntermediateSidebar";
+import { ProfessionalSidebar } from "./trades/ProfessionalSidebar";
 
 // Import types
 import type { ViewMode } from "@/types/enhanced-trade";
@@ -290,33 +293,91 @@ export default function EnhancedWinningTradesHero() {
                 )}
               </div>
 
-              {/* Right Column: Educational Sidebar (Beginner only) */}
+              {/* Right Column: Beginner Mode */}
               {viewMode === 'beginner' && (
-                <div className="lg:col-span-1">
+                <div className="lg:col-span-1 space-y-4">
+                  {/* Trade Summary - Always visible */}
+                  <TradeSummaryCard
+                    entry={currentTrade.entry_price}
+                    stopLoss={currentTrade.stop_loss}
+                    tp1={enhancedTrade?.tp1 || currentTrade.tp1 || 0}
+                    tp2={enhancedTrade?.tp2 || currentTrade.tp2 || 0}
+                    tp3={enhancedTrade?.tp3 || currentTrade.tp3 || 0}
+                    targetHit={
+                      currentTrade.outcome === 'TP1_HIT' ? 1 :
+                      currentTrade.outcome === 'TP2_HIT' ? 2 : 3
+                    }
+                    profitPips={currentTrade.profit_loss_pips}
+                    session={enhancedTrade?.sessionName || 'N/A'}
+                    confidence={currentTrade.confidence}
+                    symbol={currentTrade.symbol}
+                  />
                   <EducationalSidebar mode={viewMode} />
                 </div>
               )}
 
-              {/* Right Column: Advanced Stats (Professional only) */}
-              {viewMode === 'professional' && enhancedTrade && strategyStats && (
+              {/* Right Column: Intermediate Mode */}
+              {viewMode === 'intermediate' && (
                 <div className="lg:col-span-1 space-y-4">
-                  <ComparisonChart
-                    data={{
-                      currentTrade: {
-                        profit: enhancedTrade.profit_loss_pips,
-                        duration: enhancedTrade.durationHours,
-                        rr: enhancedTrade.achievedRR
-                      },
-                      strategyAverage: {
-                        avgProfit: strategyStats.avgProfit,
-                        avgDuration: strategyStats.avgDuration,
-                        winRate: strategyStats.winRate
-                      },
-                      percentile: enhancedTrade.strategyComparison?.percentile || 50,
-                      rank: enhancedTrade.strategyComparison?.rank || 'Average'
-                    }}
-                    symbol={enhancedTrade.symbol}
+                  {/* Trade Summary - Always visible */}
+                  <TradeSummaryCard
+                    entry={currentTrade.entry_price}
+                    stopLoss={currentTrade.stop_loss}
+                    tp1={enhancedTrade?.tp1 || currentTrade.tp1 || 0}
+                    tp2={enhancedTrade?.tp2 || currentTrade.tp2 || 0}
+                    tp3={enhancedTrade?.tp3 || currentTrade.tp3 || 0}
+                    targetHit={
+                      currentTrade.outcome === 'TP1_HIT' ? 1 :
+                      currentTrade.outcome === 'TP2_HIT' ? 2 : 3
+                    }
+                    profitPips={currentTrade.profit_loss_pips}
+                    session={enhancedTrade?.sessionName || 'N/A'}
+                    confidence={currentTrade.confidence}
+                    symbol={currentTrade.symbol}
                   />
+                  <IntermediateSidebar />
+                </div>
+              )}
+
+              {/* Right Column: Professional Mode */}
+              {viewMode === 'professional' && (
+                <div className="lg:col-span-1 space-y-4">
+                  {/* Trade Summary - Always visible */}
+                  <TradeSummaryCard
+                    entry={currentTrade.entry_price}
+                    stopLoss={currentTrade.stop_loss}
+                    tp1={enhancedTrade?.tp1 || currentTrade.tp1 || 0}
+                    tp2={enhancedTrade?.tp2 || currentTrade.tp2 || 0}
+                    tp3={enhancedTrade?.tp3 || currentTrade.tp3 || 0}
+                    targetHit={
+                      currentTrade.outcome === 'TP1_HIT' ? 1 :
+                      currentTrade.outcome === 'TP2_HIT' ? 2 : 3
+                    }
+                    profitPips={currentTrade.profit_loss_pips}
+                    session={enhancedTrade?.sessionName || 'N/A'}
+                    confidence={currentTrade.confidence}
+                    symbol={currentTrade.symbol}
+                  />
+                  {enhancedTrade && strategyStats && (
+                    <ComparisonChart
+                      data={{
+                        currentTrade: {
+                          profit: enhancedTrade.profit_loss_pips,
+                          duration: enhancedTrade.durationHours,
+                          rr: enhancedTrade.achievedRR
+                        },
+                        strategyAverage: {
+                          avgProfit: strategyStats.avgProfit,
+                          avgDuration: strategyStats.avgDuration,
+                          winRate: strategyStats.winRate
+                        },
+                        percentile: enhancedTrade.strategyComparison?.percentile || 50,
+                        rank: enhancedTrade.strategyComparison?.rank || 'Average'
+                      }}
+                      symbol={enhancedTrade.symbol}
+                    />
+                  )}
+                  <ProfessionalSidebar />
                 </div>
               )}
             </div>
