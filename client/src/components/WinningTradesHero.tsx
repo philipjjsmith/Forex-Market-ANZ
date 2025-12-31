@@ -274,6 +274,17 @@ export default function EnhancedWinningTradesHero() {
                   />
                 </div>
 
+                {/* Profit Calculator - All Modes */}
+                <ProfitCalculator
+                  profitPips={currentTrade.profit_loss_pips}
+                  riskRewardRatio={
+                    currentTrade.outcome === 'TP1_HIT' ? Math.abs(((enhancedTrade?.tp1 || currentTrade.tp1 || 0) - currentTrade.entry_price) / (currentTrade.stop_loss - currentTrade.entry_price)) :
+                    currentTrade.outcome === 'TP2_HIT' ? Math.abs(((enhancedTrade?.tp2 || currentTrade.tp2 || 0) - currentTrade.entry_price) / (currentTrade.stop_loss - currentTrade.entry_price)) :
+                    Math.abs(((enhancedTrade?.tp3 || currentTrade.tp3 || 0) - currentTrade.entry_price) / (currentTrade.stop_loss - currentTrade.entry_price))
+                  }
+                  stopLossPips={Math.abs((currentTrade.stop_loss - currentTrade.entry_price) * 10000)}
+                />
+
                 {/* News Impact Section - All Modes */}
                 <NewsImpactSection
                   newsEvents={enhancedTrade?.newsEvents || []}
@@ -321,16 +332,6 @@ export default function EnhancedWinningTradesHero() {
                     confidence={currentTrade.confidence}
                     symbol={currentTrade.symbol}
                   />
-                  {/* Profit Calculator */}
-                  <ProfitCalculator
-                    profitPips={currentTrade.profit_loss_pips}
-                    riskRewardRatio={
-                      currentTrade.outcome === 'TP1_HIT' ? Math.abs(((enhancedTrade?.tp1 || currentTrade.tp1 || 0) - currentTrade.entry_price) / (currentTrade.stop_loss - currentTrade.entry_price)) :
-                      currentTrade.outcome === 'TP2_HIT' ? Math.abs(((enhancedTrade?.tp2 || currentTrade.tp2 || 0) - currentTrade.entry_price) / (currentTrade.stop_loss - currentTrade.entry_price)) :
-                      Math.abs(((enhancedTrade?.tp3 || currentTrade.tp3 || 0) - currentTrade.entry_price) / (currentTrade.stop_loss - currentTrade.entry_price))
-                    }
-                    stopLossPips={Math.abs((currentTrade.stop_loss - currentTrade.entry_price) * 10000)}
-                  />
                   <EducationalSidebar mode={viewMode} />
                 </div>
               )}
@@ -354,16 +355,6 @@ export default function EnhancedWinningTradesHero() {
                     confidence={currentTrade.confidence}
                     symbol={currentTrade.symbol}
                   />
-                  {/* Profit Calculator */}
-                  <ProfitCalculator
-                    profitPips={currentTrade.profit_loss_pips}
-                    riskRewardRatio={
-                      currentTrade.outcome === 'TP1_HIT' ? Math.abs(((enhancedTrade?.tp1 || currentTrade.tp1 || 0) - currentTrade.entry_price) / (currentTrade.stop_loss - currentTrade.entry_price)) :
-                      currentTrade.outcome === 'TP2_HIT' ? Math.abs(((enhancedTrade?.tp2 || currentTrade.tp2 || 0) - currentTrade.entry_price) / (currentTrade.stop_loss - currentTrade.entry_price)) :
-                      Math.abs(((enhancedTrade?.tp3 || currentTrade.tp3 || 0) - currentTrade.entry_price) / (currentTrade.stop_loss - currentTrade.entry_price))
-                    }
-                    stopLossPips={Math.abs((currentTrade.stop_loss - currentTrade.entry_price) * 10000)}
-                  />
                   <IntermediateSidebar />
                 </div>
               )}
@@ -386,16 +377,6 @@ export default function EnhancedWinningTradesHero() {
                     session={enhancedTrade?.sessionName || 'N/A'}
                     confidence={currentTrade.confidence}
                     symbol={currentTrade.symbol}
-                  />
-                  {/* Profit Calculator */}
-                  <ProfitCalculator
-                    profitPips={currentTrade.profit_loss_pips}
-                    riskRewardRatio={
-                      currentTrade.outcome === 'TP1_HIT' ? Math.abs(((enhancedTrade?.tp1 || currentTrade.tp1 || 0) - currentTrade.entry_price) / (currentTrade.stop_loss - currentTrade.entry_price)) :
-                      currentTrade.outcome === 'TP2_HIT' ? Math.abs(((enhancedTrade?.tp2 || currentTrade.tp2 || 0) - currentTrade.entry_price) / (currentTrade.stop_loss - currentTrade.entry_price)) :
-                      Math.abs(((enhancedTrade?.tp3 || currentTrade.tp3 || 0) - currentTrade.entry_price) / (currentTrade.stop_loss - currentTrade.entry_price))
-                    }
-                    stopLossPips={Math.abs((currentTrade.stop_loss - currentTrade.entry_price) * 10000)}
                   />
                   {enhancedTrade && strategyStats && (
                     <ComparisonChart
