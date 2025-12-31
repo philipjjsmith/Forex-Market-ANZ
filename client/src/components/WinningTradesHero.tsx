@@ -133,11 +133,11 @@ export default function EnhancedWinningTradesHero() {
   // Loading state
   if (isLoading) {
     return (
-      <Card className="w-full bg-card border-card-border">
+      <Card className="w-full bg-slate-900 border-slate-700">
         <CardContent className="flex items-center justify-center py-24">
           <div className="text-center space-y-3">
-            <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" />
-            <p className="text-muted-foreground">Loading winning trades...</p>
+            <Loader2 className="h-8 w-8 animate-spin text-blue-500 mx-auto" />
+            <p className="text-slate-300">Loading winning trades...</p>
           </div>
         </CardContent>
       </Card>
@@ -147,9 +147,9 @@ export default function EnhancedWinningTradesHero() {
   // Error state
   if (error) {
     return (
-      <Card className="w-full border-destructive bg-destructive/10">
+      <Card className="w-full border-red-500 bg-red-950/50">
         <CardContent className="py-8 text-center">
-          <p className="text-destructive">Failed to load winning trades. Please try again later.</p>
+          <p className="text-red-400">Failed to load winning trades. Please try again later.</p>
         </CardContent>
       </Card>
     );
@@ -158,15 +158,15 @@ export default function EnhancedWinningTradesHero() {
   // Empty state
   if (!trades || trades.length === 0) {
     return (
-      <Card className="w-full bg-card border-card-border">
+      <Card className="w-full bg-slate-900 border-slate-700">
         <CardContent className="py-16 text-center">
           <div className="space-y-4">
-            <div className="mx-auto w-16 h-16 bg-primary/20 rounded-full flex items-center justify-center">
-              <Trophy className="h-8 w-8 text-primary" />
+            <div className="mx-auto w-16 h-16 bg-blue-500/20 rounded-full flex items-center justify-center">
+              <Trophy className="h-8 w-8 text-blue-500" />
             </div>
             <div>
-              <h3 className="text-xl font-semibold text-foreground mb-2">No Winning Trades Yet This Week</h3>
-              <p className="text-muted-foreground max-w-md mx-auto">
+              <h3 className="text-xl font-semibold text-white mb-2">No Winning Trades Yet This Week</h3>
+              <p className="text-slate-300 max-w-md mx-auto">
                 Check back soon! Our signal generator runs every 15 minutes to identify high-probability trading opportunities.
               </p>
             </div>
