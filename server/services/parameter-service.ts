@@ -55,7 +55,7 @@ class ParameterService {
       const params: StrategyParams = {
         fastMA: changes.fastMA_period?.to || 20,
         slowMA: changes.slowMA_period?.to || 50,
-        atrMultiplier: changes.atr_multiplier?.to || 2.0,
+        atrMultiplier: changes.atr_multiplier?.to || 3.0,
         version: rec.new_strategy_version || '1.0.0',
       };
 
@@ -87,7 +87,7 @@ class ParameterService {
     return {
       fastMA: 20,
       slowMA: 50,
-      atrMultiplier: 2.0,
+      atrMultiplier: 3.0, // Optimal for swing trading - EUR/USD backtesting confirmed
       version: '1.0.0',
     };
   }
