@@ -455,6 +455,30 @@ class MACrossoverStrategy {
       rationale.push(`AI-Enhanced (${aiInsights.totalSignals} signals analyzed, ${aiInsights.winRate.toFixed(1)}% win rate)`);
     }
 
+    // 🚨 CRITICAL FIX #1: REVERSAL DETECTION (Prevents December 2025 disaster)
+    // Block LONG signals when Daily MACD shows bearish divergence
+    // Block SHORT signals when Daily MACD shows bullish divergence
+    // This prevents generating signals when trend is about to reverse
+    if (dailyMACD) {
+      // For potential LONG signals: check if Daily MACD is bearish
+      if ((bullishCross || bullishPullback) && dailyMACD.histogram < 0) {
+        if (diagnosticMode) {
+          console.log(`└─ ❌ REJECTED LONG: Daily MACD bearish (histogram: ${dailyMACD.histogram.toFixed(4)})`);
+          console.log(`   Trend may be reversing - avoiding entry\n`);
+        }
+        return null; // Block LONG - trend reversing downward
+      }
+
+      // For potential SHORT signals: check if Daily MACD is bullish
+      if ((bearishCross || bearishPullback) && dailyMACD.histogram > 0) {
+        if (diagnosticMode) {
+          console.log(`└─ ❌ REJECTED SHORT: Daily MACD bullish (histogram: ${dailyMACD.histogram.toFixed(4)})`);
+          console.log(`   Trend may be reversing - avoiding entry\n`);
+        }
+        return null; // Block SHORT - trend reversing upward
+      }
+    }
+
     // 📊 STEP 3: ICT 3-TIMEFRAME RULE - Check for LONG signals
     // REQUIREMENT: Weekly + Daily + 4H must ALL be UP
     // 1H can be DOWN (that's a pullback = BEST entry!)
@@ -541,12 +565,27 @@ class MACrossoverStrategy {
         rationale.push('✅ Price in lower BB (good entry) (+3)');
       }
 
-    } else if ((bearishCross || bearishPullback) && weeklyTrend === 'DOWN' && dailyTrend === 'DOWN' && fourHourTrend === 'DOWN') {
-      signalType = 'SHORT';
-      entryType = bearishCross ? 'CROSSOVER' : 'PULLBACK';
+    // 🚨 CRITICAL FIX #2: BALANCE LONG/SHORT SIGNAL GENERATION
+    // Allow 2-of-3 timeframe alignment for SHORT signals (instead of requiring all 3)
+    // LONG requires all 3 UP (conservative), SHORT requires 2-of-3 DOWN (balanced)
+    // This prevents December disaster: 93 LONG, 0 SHORT (missed entire down-move)
+    } else if ((bearishCross || bearishPullback)) {
+      // Count how many of (Weekly, Daily, 4H) are DOWN
+      const downTrends = [weeklyTrend === 'DOWN', dailyTrend === 'DOWN', fourHourTrend === 'DOWN'].filter(Boolean).length;
+
+      // Require at least 2 of 3 timeframes DOWN for SHORT signal
+      if (downTrends >= 2) {
+        signalType = 'SHORT';
+        entryType = bearishCross ? 'CROSSOVER' : 'PULLBACK';
 
       // 🆕 v3.1.0 ICT CONFIDENCE SCORING (Max: 100 points)
       // 3 Higher Timeframes (75 points) + 1H Entry Timing (25 points)
+      // Note: SHORT signals allow 2-of-3 alignment (more balanced detection)
+      if (downTrends === 3) {
+        rationale.push('🎯 Perfect 3-TF alignment (W+D+4H all DOWN)');
+      } else {
+        rationale.push(`⚡ 2-of-3 TF alignment (${downTrends}/3 DOWN - balanced detection)`);
+      }
 
       // 1. Weekly timeframe BEARISH (25 points max)
       if (weeklyTrend === 'DOWN' && weeklyMACD && weeklyMACD.macd < weeklyMACD.signal) {
@@ -622,6 +661,14 @@ class MACrossoverStrategy {
       if (currentPrice < bb.upper && currentPrice > bb.middle) {
         confidence += 3;
         rationale.push('✅ Price in upper BB (good entry) (+3)');
+      }
+      } else {
+        // SHORT rejected - insufficient timeframe alignment
+        if (diagnosticMode) {
+          console.log(`└─ ❌ REJECTED SHORT: Only ${downTrends} of 3 timeframes DOWN (need 2+)`);
+          console.log(`   W:${weeklyTrend}, D:${dailyTrend}, 4H:${fourHourTrend}\n`);
+        }
+        return null;
       }
     }
 
