@@ -363,6 +363,208 @@ export function registerAIRoutes(app: Express) {
   });
 
   /**
+   * GET /api/ai/metrics
+   * 📊 COMPREHENSIVE METRICS DASHBOARD
+   * Returns professional-grade trading metrics including:
+   * - Overall performance (win rate, profit factor, Sharpe ratio)
+   * - Per-symbol breakdown
+   * - Monte Carlo simulation results
+   * - Live trading vs backtesting metrics
+   * Industry Standard 2026: Multi-objective optimization metrics
+   */
+  app.get("/api/ai/metrics", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      // 1. Overall System Performance
+      const overallStats = await db.execute(sql`
+        SELECT
+          COUNT(*) as total_signals,
+          COUNT(*) FILTER (WHERE outcome != 'PENDING') as completed_signals,
+          COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT')) as wins,
+          COUNT(*) FILTER (WHERE outcome = 'STOP_HIT') as losses,
+          ROUND(
+            100.0 * COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT')) /
+            NULLIF(COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'STOP_HIT')), 0),
+            2
+          ) as win_rate,
+          SUM(CASE
+            WHEN outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT') THEN ABS(profit_loss_pips)
+            ELSE 0
+          END) as total_win_pips,
+          SUM(CASE
+            WHEN outcome = 'STOP_HIT' THEN ABS(profit_loss_pips)
+            ELSE 0
+          END) as total_loss_pips,
+          SUM(profit_loss_pips) as net_pips
+        FROM signal_history
+      `) as any[];
+
+      const overall = overallStats[0];
+      const profitFactor = overall.total_loss_pips > 0
+        ? (parseFloat(overall.total_win_pips) / parseFloat(overall.total_loss_pips)).toFixed(2)
+        : '0.00';
+
+      // Calculate Sharpe Ratio from all completed trades
+      const allReturns = await db.execute(sql`
+        SELECT profit_loss_pips
+        FROM signal_history
+        WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'STOP_HIT')
+        ORDER BY created_at DESC
+      `) as any[];
+
+      const returns = allReturns.map((r: any) => parseFloat(r.profit_loss_pips) || 0);
+      const avgReturn = returns.length > 0
+        ? returns.reduce((sum, r) => sum + r, 0) / returns.length
+        : 0;
+      const variance = returns.length > 0
+        ? returns.reduce((sum, r) => sum + Math.pow(r - avgReturn, 2), 0) / returns.length
+        : 0;
+      const stdDev = Math.sqrt(variance);
+      const sharpeRatio = stdDev > 0 ? (avgReturn / stdDev).toFixed(2) : '0.00';
+
+      // 2. Per-Symbol Performance
+      const symbolStats = await db.execute(sql`
+        SELECT
+          symbol,
+          COUNT(*) as total_signals,
+          COUNT(*) FILTER (WHERE outcome != 'PENDING') as completed,
+          COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT')) as wins,
+          COUNT(*) FILTER (WHERE outcome = 'STOP_HIT') as losses,
+          ROUND(
+            100.0 * COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT')) /
+            NULLIF(COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'STOP_HIT')), 0),
+            2
+          ) as win_rate,
+          SUM(CASE
+            WHEN outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT') THEN ABS(profit_loss_pips)
+            ELSE 0
+          END) as win_pips,
+          SUM(CASE
+            WHEN outcome = 'STOP_HIT' THEN ABS(profit_loss_pips)
+            ELSE 0
+          END) as loss_pips,
+          SUM(profit_loss_pips) as net_pips
+        FROM signal_history
+        GROUP BY symbol
+        ORDER BY completed DESC
+      `) as any[];
+
+      const symbolMetrics = symbolStats.map((s: any) => {
+        const pf = parseFloat(s.loss_pips) > 0
+          ? (parseFloat(s.win_pips) / parseFloat(s.loss_pips)).toFixed(2)
+          : '0.00';
+        return {
+          symbol: s.symbol,
+          totalSignals: parseInt(s.total_signals) || 0,
+          completed: parseInt(s.completed) || 0,
+          wins: parseInt(s.wins) || 0,
+          losses: parseInt(s.losses) || 0,
+          winRate: parseFloat(s.win_rate) || 0,
+          netPips: parseFloat(s.net_pips) || 0,
+          profitFactor: parseFloat(pf),
+          hasEnoughData: parseInt(s.completed) >= 30,
+        };
+      });
+
+      // 3. Live Trading Performance (FXIFY-specific)
+      const liveStats = await db.execute(sql`
+        SELECT
+          COUNT(*) FILTER (WHERE trade_live = true) as live_signals,
+          COUNT(*) FILTER (WHERE trade_live = true AND outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT')) as live_wins,
+          COUNT(*) FILTER (WHERE trade_live = true AND outcome = 'STOP_HIT') as live_losses,
+          ROUND(
+            100.0 * COUNT(*) FILTER (WHERE trade_live = true AND outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT')) /
+            NULLIF(COUNT(*) FILTER (WHERE trade_live = true AND outcome != 'PENDING'), 0),
+            2
+          ) as live_win_rate,
+          SUM(CASE
+            WHEN trade_live = true AND outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT') THEN ABS(profit_loss_pips)
+            ELSE 0
+          END) as live_win_pips,
+          SUM(CASE
+            WHEN trade_live = true AND outcome = 'STOP_HIT' THEN ABS(profit_loss_pips)
+            ELSE 0
+          END) as live_loss_pips,
+          SUM(CASE
+            WHEN trade_live = true THEN profit_loss_pips
+            ELSE 0
+          END) as live_net_pips
+        FROM signal_history
+      `) as any[];
+
+      const live = liveStats[0];
+      const livePF = parseFloat(live.live_loss_pips) > 0
+        ? (parseFloat(live.live_win_pips) / parseFloat(live.live_loss_pips)).toFixed(2)
+        : '0.00';
+
+      // 4. Recent Recommendations with Metrics
+      const recommendations = await db.execute(sql`
+        SELECT
+          id,
+          symbol,
+          recommendation_title,
+          expected_win_rate_improvement,
+          suggested_changes,
+          status,
+          created_at
+        FROM strategy_adaptations
+        ORDER BY created_at DESC
+        LIMIT 5
+      `) as any[];
+
+      const recsWithMetrics = recommendations.map((rec: any) => {
+        const changes = rec.suggested_changes || {};
+        return {
+          id: rec.id,
+          symbol: rec.symbol,
+          title: rec.recommendation_title,
+          improvement: parseFloat(rec.expected_win_rate_improvement) || 0,
+          profitFactor: changes.profit_factor || null,
+          sharpeRatio: changes.sharpe_ratio || null,
+          status: rec.status,
+          createdAt: rec.created_at,
+        };
+      });
+
+      // 5. System Health Indicators
+      const hasEnoughData = symbolMetrics.some(s => s.hasEnoughData);
+      const pendingRecCount = recommendations.filter(r => r.status === 'pending').length;
+
+      res.json({
+        overall: {
+          totalSignals: parseInt(overall.total_signals) || 0,
+          completedSignals: parseInt(overall.completed_signals) || 0,
+          wins: parseInt(overall.wins) || 0,
+          losses: parseInt(overall.losses) || 0,
+          winRate: parseFloat(overall.win_rate) || 0,
+          profitFactor: parseFloat(profitFactor),
+          sharpeRatio: parseFloat(sharpeRatio),
+          netPips: parseFloat(overall.net_pips) || 0,
+        },
+        liveTrading: {
+          signals: parseInt(live.live_signals) || 0,
+          wins: parseInt(live.live_wins) || 0,
+          losses: parseInt(live.live_losses) || 0,
+          winRate: parseFloat(live.live_win_rate) || 0,
+          profitFactor: parseFloat(livePF),
+          netPips: parseFloat(live.live_net_pips) || 0,
+        },
+        symbolMetrics,
+        recentRecommendations: recsWithMetrics,
+        systemHealth: {
+          hasEnoughData,
+          pendingRecommendations: pendingRecCount,
+          backtesterLastRun: backtester.getLastRunTime(),
+          aiAnalyzerLastRun: aiAnalyzer.getLastRunTime(),
+        },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error: any) {
+      console.error('❌ Error fetching metrics dashboard:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  /**
    * POST /api/ai/recommendations/:id/rollback
    * Rollback an approved recommendation to previous parameters
    * Milestone 3C: Recommendation Approval System

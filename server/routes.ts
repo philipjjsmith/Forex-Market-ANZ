@@ -137,6 +137,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   /**
+   * 🚀 AUTOMATED BACKTESTING CRON (Weekly - Every Sunday)
+   * Triggered by: UptimeRobot every Sunday at 00:00 UTC
+   * Purpose: Continuously optimize parameters based on latest data
+   * Industry Standard: Walk-forward optimization every 6 months (we do weekly for faster adaptation)
+   */
+  app.get("/api/cron/backtest", async (req, res) => {
+    try {
+      const lastRun = backtester.getLastRunTime();
+      const now = Date.now();
+      const oneWeek = 7 * 24 * 60 * 60 * 1000;
+
+      // Only run if 7+ days since last run (weekly schedule)
+      if (lastRun > 0 && now - lastRun < oneWeek) {
+        const daysAgo = ((now - lastRun) / (24 * 60 * 60 * 1000)).toFixed(1);
+        const nextRunIn = ((oneWeek - (now - lastRun)) / (24 * 60 * 60 * 1000)).toFixed(1);
+
+        return res.json({
+          skipped: true,
+          message: `Last run was ${daysAgo} day(s) ago`,
+          nextRunIn: `${nextRunIn} day(s)`,
+          lastRun: new Date(lastRun).toISOString()
+        });
+      }
+
+      console.log('🔬 [CRON] Automated backtesting triggered');
+      console.log(`   Last run: ${lastRun > 0 ? new Date(lastRun).toISOString() : 'Never'}`);
+      console.log(`   This will test 9 parameter combinations per symbol (EMA: 15/45, 20/50, 25/55 × ATR: 1.5x, 2.0x, 2.5x)`);
+      console.log(`   Creating recommendations for improvements > 5%`);
+
+      // Trigger backtesting (non-blocking)
+      backtester.backtestAllSymbols().catch(error => {
+        console.error('Error in automated backtesting:', error);
+      });
+
+      res.json({
+        success: true,
+        message: 'Automated backtesting triggered - AI will optimize parameters based on latest data',
+        timestamp: new Date().toISOString(),
+        nextScheduledRun: new Date(now + oneWeek).toISOString()
+      });
+    } catch (error: any) {
+      console.error('❌ Cron error (backtest):', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  /**
    * Backtesting Cron (every 24 hours)
    * Triggered by: UptimeRobot every 24 hours
    * Analyzes historical signals and generates optimization recommendations
