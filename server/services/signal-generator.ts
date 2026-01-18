@@ -4,6 +4,7 @@ import { exchangeRateAPI } from './exchangerate-api';
 import { twelveDataAPI } from './twelve-data';
 import { aiAnalyzer } from './ai-analyzer';
 import { parameterService } from './parameter-service';
+import { propFirmService } from './prop-firm-config';
 
 /**
  * Automated Signal Generator Service
@@ -711,19 +712,25 @@ class MACrossoverStrategy {
     }
 
     // Determine tier and trading mode
+    // 🎯 FXIFY TWO-PHASE: Use prop firm configuration for position sizing
     let tier: 'HIGH' | 'MEDIUM';
     let tradeLive: boolean;
     let positionSizePercent: number;
 
+    // Get prop firm configuration
+    const propConfig = propFirmService.getConfig();
+
     if (confidence >= 85) {  // HIGH tier: 85-100 points (85%+) - Strong ICT alignment
       tier = 'HIGH';
       tradeLive = true;
-      positionSizePercent = 1.50; // 1.5% risk (optimal for FXIFY)
-      rationale.push(`🟢 HIGH CONFIDENCE (${confidence}/100) - LIVE TRADE`);
+      // Use prop firm configured risk (1.0% for Phase 1, 1.5% for Phase 2)
+      positionSizePercent = propFirmService.getPositionSize('HIGH');
+      rationale.push(`🟢 HIGH CONFIDENCE (${confidence}/100) - LIVE TRADE @ ${positionSizePercent}% risk`);
+      rationale.push(`📊 ${propConfig.name} ${propConfig.challengeType}`);
     } else {
       tier = 'MEDIUM';
       tradeLive = false;
-      positionSizePercent = 0.00; // Paper trade only
+      positionSizePercent = propFirmService.getPositionSize('MEDIUM');
       rationale.push(`🟡 MEDIUM CONFIDENCE (${confidence}/100) - PRACTICE SIGNAL`);
     }
 
@@ -809,7 +816,19 @@ export class SignalGenerator {
 
     this.isRunning = true;
     this.lastRunTime = Date.now();
+
+    // 🎯 FXIFY TWO-PHASE: Log prop firm configuration
+    const propConfig = propFirmService.getConfig();
     console.log('🤖 [Signal Generator] Starting automated analysis...');
+    console.log(`📊 [PropFirm] Active: ${propConfig.name} - ${propConfig.challengeType}`);
+    console.log(`📊 [PropFirm] Risk per trade: ${propConfig.highTierRisk}% | Daily limit: ${propConfig.maxDailyLoss}% | Buffer: ${propConfig.dailyLossBuffer}%`);
+
+    // 🛡️ FXIFY PROTECTION: Check if max trades reached for today
+    if (propFirmService.maxTradesReached()) {
+      console.log(`⚠️ [PropFirm] Max trades per day (${propConfig.maxTradesPerDay}) reached. Skipping signal generation.`);
+      this.isRunning = false;
+      return;
+    }
 
     try {
       // 1. Fetch forex quotes from API

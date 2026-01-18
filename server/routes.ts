@@ -13,6 +13,7 @@ import { signalGenerator } from "./services/signal-generator";
 import { outcomeValidator } from "./services/outcome-validator";
 import { aiAnalyzer } from "./services/ai-analyzer";
 import { backtester } from "./services/backtester";
+import { propFirmService, FXIFY_TWO_PHASE_STANDARD, FXIFY_TWO_PHASE_STANDARD_PHASE2, FXIFY_FUNDED_ACCOUNT } from "./services/prop-firm-config";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // ========== CRON/SCHEDULED JOB ENDPOINTS ==========
@@ -219,6 +220,147 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error: any) {
       console.error('❌ Cron error (run-backtesting):', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ========== PROP FIRM CONFIGURATION ENDPOINTS ==========
+  // FXIFY Two-Phase Standard Challenge Configuration
+
+  /**
+   * Get current prop firm configuration
+   */
+  app.get("/api/prop-firm/config", async (req, res) => {
+    try {
+      const config = propFirmService.getConfig();
+      const summary = propFirmService.getRiskSummary();
+      const dailyStatus = propFirmService.getDailyStatus();
+
+      res.json({
+        success: true,
+        config: summary,
+        dailyStatus,
+        message: `Active: ${config.name} - ${config.challengeType}`
+      });
+    } catch (error: any) {
+      console.error('❌ Error getting prop firm config:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  /**
+   * Set prop firm configuration (Phase 1, Phase 2, or Funded)
+   */
+  app.post("/api/prop-firm/config", async (req, res) => {
+    try {
+      const { phase } = req.body;
+
+      let config;
+      switch (phase) {
+        case 'phase1':
+          config = FXIFY_TWO_PHASE_STANDARD;
+          break;
+        case 'phase2':
+          config = FXIFY_TWO_PHASE_STANDARD_PHASE2;
+          break;
+        case 'funded':
+          config = FXIFY_FUNDED_ACCOUNT;
+          break;
+        default:
+          return res.status(400).json({
+            error: 'Invalid phase. Use: phase1, phase2, or funded'
+          });
+      }
+
+      propFirmService.setConfig(config);
+
+      res.json({
+        success: true,
+        message: `Configuration set to: ${config.name} - ${config.challengeType}`,
+        config: propFirmService.getRiskSummary()
+      });
+    } catch (error: any) {
+      console.error('❌ Error setting prop firm config:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  /**
+   * Initialize daily tracker with starting balance
+   */
+  app.post("/api/prop-firm/init-daily", async (req, res) => {
+    try {
+      const { startingBalance } = req.body;
+
+      if (!startingBalance || typeof startingBalance !== 'number') {
+        return res.status(400).json({
+          error: 'startingBalance is required (number)'
+        });
+      }
+
+      propFirmService.initDailyTracker(startingBalance);
+
+      res.json({
+        success: true,
+        message: `Daily tracker initialized with $${startingBalance}`,
+        dailyStatus: propFirmService.getDailyStatus()
+      });
+    } catch (error: any) {
+      console.error('❌ Error initializing daily tracker:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  /**
+   * Update daily tracker with trade result
+   */
+  app.post("/api/prop-firm/update-trade", async (req, res) => {
+    try {
+      const { pnl, currentBalance } = req.body;
+
+      if (typeof pnl !== 'number' || typeof currentBalance !== 'number') {
+        return res.status(400).json({
+          error: 'pnl and currentBalance are required (numbers)'
+        });
+      }
+
+      propFirmService.updateDailyTracker(pnl, currentBalance);
+
+      const dailyStatus = propFirmService.getDailyStatus();
+      const canTrade = propFirmService.canTrade(Math.abs(dailyStatus?.dailyPnLPercent || 0));
+
+      res.json({
+        success: true,
+        dailyStatus,
+        canTrade,
+        message: canTrade.allowed ? 'Trading allowed' : canTrade.reason
+      });
+    } catch (error: any) {
+      console.error('❌ Error updating trade:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  /**
+   * Check if trading is allowed
+   */
+  app.get("/api/prop-firm/can-trade", async (req, res) => {
+    try {
+      const dailyStatus = propFirmService.getDailyStatus();
+      const dailyLossPercent = Math.abs(dailyStatus?.dailyPnLPercent || 0);
+      const canTrade = propFirmService.canTrade(dailyLossPercent);
+      const maxTradesReached = propFirmService.maxTradesReached();
+
+      res.json({
+        success: true,
+        canTrade: canTrade.allowed && !maxTradesReached,
+        reason: !canTrade.allowed ? canTrade.reason :
+                maxTradesReached ? 'Max trades per day reached' : 'Trading allowed',
+        dailyStatus,
+        config: propFirmService.getRiskSummary()
+      });
+    } catch (error: any) {
+      console.error('❌ Error checking trading status:', error);
       res.status(500).json({ error: error.message });
     }
   });
