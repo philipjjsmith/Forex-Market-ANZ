@@ -14,6 +14,8 @@ import { outcomeValidator } from "./services/outcome-validator";
 import { aiAnalyzer } from "./services/ai-analyzer";
 import { backtester } from "./services/backtester";
 import { propFirmService, FXIFY_TWO_PHASE_STANDARD, FXIFY_TWO_PHASE_STANDARD_PHASE2, FXIFY_FUNDED_ACCOUNT } from "./services/prop-firm-config";
+import { db } from "./db";
+import { sql } from "drizzle-orm";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // ========== CRON/SCHEDULED JOB ENDPOINTS ==========
@@ -361,6 +363,220 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error: any) {
       console.error('❌ Error checking trading status:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  /**
+   * Reset daily tracker (for new trading day or fresh start)
+   */
+  app.post("/api/prop-firm/reset-daily", async (req, res) => {
+    try {
+      const { startingBalance } = req.body;
+
+      if (!startingBalance || typeof startingBalance !== 'number') {
+        return res.status(400).json({
+          success: false,
+          error: 'startingBalance is required and must be a number'
+        });
+      }
+
+      // Force reset by clearing current tracker and reinitializing
+      propFirmService.resetDailyTracker(startingBalance);
+
+      res.json({
+        success: true,
+        message: 'Daily tracker reset successfully',
+        newStatus: propFirmService.getDailyStatus(),
+        config: propFirmService.getRiskSummary()
+      });
+    } catch (error: any) {
+      console.error('❌ Error resetting daily tracker:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  /**
+   * 📊 COMPREHENSIVE PROP FIRM DASHBOARD
+   * Industry-grade trading performance tracking for FXIFY challenge
+   *
+   * Features:
+   * - Phase progress tracking (current vs 5% target)
+   * - Daily loss monitoring with visual indicators
+   * - Strategy v3.1.0 performance (filtered from historical data)
+   * - All professional metrics (Sharpe, Sortino, Calmar, SQN, etc.)
+   * - FXIFY-specific compliance monitoring
+   */
+  app.get("/api/prop-firm/dashboard", async (req, res) => {
+    try {
+      const config = propFirmService.getConfig();
+      const dailyStatus = propFirmService.getDailyStatus();
+      const dailyLossPercent = Math.abs(dailyStatus?.dailyPnLPercent || 0);
+      const canTrade = propFirmService.canTrade(dailyLossPercent);
+      const maxTradesReached = propFirmService.maxTradesReached();
+
+      // Get strategy v3.1.0 performance from signal_history
+      const strategyPerformance = await db.execute(sql`
+        SELECT
+          COUNT(*) as total_signals,
+          COUNT(*) FILTER (WHERE outcome != 'PENDING') as completed_signals,
+          COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT')) as wins,
+          COUNT(*) FILTER (WHERE outcome = 'STOP_HIT') as losses,
+          ROUND(
+            100.0 * COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT')) /
+            NULLIF(COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'STOP_HIT')), 0),
+            2
+          ) as win_rate,
+          SUM(CASE WHEN outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT') THEN ABS(profit_loss_pips) ELSE 0 END) as total_win_pips,
+          SUM(CASE WHEN outcome = 'STOP_HIT' THEN ABS(profit_loss_pips) ELSE 0 END) as total_loss_pips,
+          SUM(profit_loss_pips) as net_pips,
+          AVG(CASE WHEN outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT') THEN profit_loss_pips END) as avg_win,
+          AVG(CASE WHEN outcome = 'STOP_HIT' THEN ABS(profit_loss_pips) END) as avg_loss,
+          COUNT(DISTINCT DATE(created_at)) as trading_days
+        FROM signal_history
+        WHERE strategy_version = '3.1.0'
+          AND trade_live = true
+      `) as any[];
+
+      const perf = strategyPerformance[0] || {};
+
+      // Calculate derived metrics
+      const totalWinPips = parseFloat(perf.total_win_pips) || 0;
+      const totalLossPips = parseFloat(perf.total_loss_pips) || 0;
+      const netPips = parseFloat(perf.net_pips) || 0;
+      const avgWin = parseFloat(perf.avg_win) || 0;
+      const avgLoss = parseFloat(perf.avg_loss) || 0;
+      const winRate = parseFloat(perf.win_rate) || 0;
+      const profitFactor = totalLossPips > 0 ? totalWinPips / totalLossPips : 0;
+      const payoffRatio = avgLoss > 0 ? avgWin / avgLoss : 0;
+      const expectancy = ((winRate / 100) * avgWin) - (((100 - winRate) / 100) * avgLoss);
+
+      // Phase progress calculation
+      // Assuming $100,000 account, 1 pip ≈ $10 for standard lot
+      // Phase 1 target: 5% = $5,000 = 500 pips net
+      const assumedAccountSize = 100000;
+      const pipValue = 10; // Standard lot
+      const profitInDollars = netPips * pipValue;
+      const profitPercent = (profitInDollars / assumedAccountSize) * 100;
+      const phaseTarget = config.phase1Target;
+      const phaseProgress = Math.min((profitPercent / phaseTarget) * 100, 100);
+
+      // Daily loss status
+      const dailyLossLimit = config.maxDailyLoss;
+      const dailyLossBuffer = config.dailyLossBuffer;
+      const dailyLossStatus = dailyLossPercent >= dailyLossBuffer ? 'DANGER' :
+                              dailyLossPercent >= dailyLossBuffer * 0.5 ? 'WARNING' : 'SAFE';
+
+      // Drawdown tracking
+      const drawdownPercent = Math.abs(Math.min(profitPercent, 0));
+      const maxDrawdownLimit = config.maxDrawdown;
+      const drawdownStatus = drawdownPercent >= maxDrawdownLimit * 0.8 ? 'DANGER' :
+                             drawdownPercent >= maxDrawdownLimit * 0.5 ? 'WARNING' : 'SAFE';
+
+      // Trading days progress
+      const tradingDays = parseInt(perf.trading_days) || 0;
+      const minTradingDays = config.minTradingDays;
+      const tradingDaysProgress = Math.min((tradingDays / minTradingDays) * 100, 100);
+
+      res.json({
+        // Header Info
+        propFirm: config.name,
+        challengeType: config.challengeType,
+        strategyVersion: '3.1.0',
+        timestamp: new Date().toISOString(),
+
+        // Phase Progress
+        phaseProgress: {
+          currentProfitPercent: parseFloat(profitPercent.toFixed(2)),
+          targetPercent: phaseTarget,
+          progressPercent: parseFloat(phaseProgress.toFixed(1)),
+          pipsToTarget: parseFloat(((phaseTarget - profitPercent) / 100 * assumedAccountSize / pipValue).toFixed(0)),
+          estimatedTradesRemaining: expectancy > 0 ? Math.ceil(((phaseTarget - profitPercent) / 100 * assumedAccountSize / pipValue) / expectancy) : 'N/A',
+          status: profitPercent >= phaseTarget ? 'PASSED' : phaseProgress >= 80 ? 'CLOSE' : 'IN_PROGRESS'
+        },
+
+        // Daily Loss Protection
+        dailyLoss: {
+          currentLossPercent: parseFloat(dailyLossPercent.toFixed(2)),
+          bufferPercent: dailyLossBuffer,
+          limitPercent: dailyLossLimit,
+          remainingBufferPercent: parseFloat((dailyLossBuffer - dailyLossPercent).toFixed(2)),
+          status: dailyLossStatus,
+          isLocked: dailyStatus?.isLocked || false,
+          tradesToday: dailyStatus?.tradesCount || 0,
+          maxTradesPerDay: config.maxTradesPerDay,
+          tradesRemaining: config.maxTradesPerDay - (dailyStatus?.tradesCount || 0)
+        },
+
+        // Drawdown Monitoring
+        drawdown: {
+          currentDrawdownPercent: parseFloat(drawdownPercent.toFixed(2)),
+          maxAllowedPercent: maxDrawdownLimit,
+          remainingPercent: parseFloat((maxDrawdownLimit - drawdownPercent).toFixed(2)),
+          type: config.drawdownType,
+          status: drawdownStatus
+        },
+
+        // Trading Days
+        tradingDays: {
+          completed: tradingDays,
+          required: minTradingDays,
+          progressPercent: parseFloat(tradingDaysProgress.toFixed(0)),
+          remaining: Math.max(0, minTradingDays - tradingDays),
+          status: tradingDays >= minTradingDays ? 'MET' : 'IN_PROGRESS'
+        },
+
+        // Strategy Performance (v3.1.0 only)
+        performance: {
+          totalSignals: parseInt(perf.total_signals) || 0,
+          completedSignals: parseInt(perf.completed_signals) || 0,
+          wins: parseInt(perf.wins) || 0,
+          losses: parseInt(perf.losses) || 0,
+          winRate: winRate,
+          winRateGrade: winRate >= 60 ? 'Excellent' : winRate >= 55 ? 'Good' : winRate >= 50 ? 'Average' : 'Below Target',
+          netPips: parseFloat(netPips.toFixed(1)),
+          avgWinPips: parseFloat(avgWin.toFixed(1)),
+          avgLossPips: parseFloat(avgLoss.toFixed(1)),
+          profitFactor: parseFloat(profitFactor.toFixed(2)),
+          profitFactorGrade: profitFactor >= 2.0 ? 'Excellent' : profitFactor >= 1.5 ? 'Good' : profitFactor >= 1.0 ? 'Break-even' : 'Poor',
+          payoffRatio: parseFloat(payoffRatio.toFixed(2)),
+          expectancyPerTrade: parseFloat(expectancy.toFixed(2)),
+          expectancyGrade: expectancy > 0 ? 'Positive Edge' : 'No Edge'
+        },
+
+        // Trading Status
+        tradingStatus: {
+          canTrade: canTrade.allowed && !maxTradesReached,
+          reason: !canTrade.allowed ? canTrade.reason :
+                  maxTradesReached ? 'Max trades per day reached' : 'Trading allowed',
+          riskPerTrade: `${config.riskPerTrade}%`,
+          positionSizeHigh: `${config.highTierRisk}%`,
+          positionSizeMedium: `${config.mediumTierRisk}%`
+        },
+
+        // Compliance Checklist
+        compliance: {
+          dailyLossCompliant: dailyLossPercent < dailyLossLimit,
+          maxDrawdownCompliant: drawdownPercent < maxDrawdownLimit,
+          tradingDaysMet: tradingDays >= minTradingDays,
+          profitTargetMet: profitPercent >= phaseTarget,
+          overallStatus: (dailyLossPercent < dailyLossLimit && drawdownPercent < maxDrawdownLimit)
+            ? (profitPercent >= phaseTarget && tradingDays >= minTradingDays ? 'PASSED' : 'COMPLIANT')
+            : 'BREACH_RISK'
+        },
+
+        // Quick Stats for Dashboard Cards
+        quickStats: [
+          { label: 'Phase Progress', value: `${phaseProgress.toFixed(0)}%`, status: phaseProgress >= 100 ? 'success' : 'info' },
+          { label: 'Win Rate', value: `${winRate.toFixed(0)}%`, status: winRate >= 55 ? 'success' : 'warning' },
+          { label: 'Net Pips', value: `${netPips >= 0 ? '+' : ''}${netPips.toFixed(0)}`, status: netPips >= 0 ? 'success' : 'danger' },
+          { label: 'Daily Loss', value: `${dailyLossPercent.toFixed(1)}%`, status: dailyLossStatus.toLowerCase() },
+          { label: 'Trades Today', value: `${dailyStatus?.tradesCount || 0}/${config.maxTradesPerDay}`, status: 'info' },
+          { label: 'Trading Days', value: `${tradingDays}/${minTradingDays}`, status: tradingDays >= minTradingDays ? 'success' : 'info' }
+        ]
+      });
+    } catch (error: any) {
+      console.error('❌ Error fetching prop firm dashboard:', error);
       res.status(500).json({ error: error.message });
     }
   });

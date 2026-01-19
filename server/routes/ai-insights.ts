@@ -364,23 +364,56 @@ export function registerAIRoutes(app: Express) {
 
   /**
    * GET /api/ai/metrics
-   * 📊 COMPREHENSIVE METRICS DASHBOARD
+   * 📊 COMPREHENSIVE METRICS DASHBOARD - INDUSTRY GRADE 2026
+   *
+   * Query Parameters:
+   * - version: Filter by strategy version (e.g., "3.1.0")
+   * - since: Filter by date (e.g., "2026-01-17")
+   * - tier: Filter by tier ("HIGH" or "MEDIUM")
+   *
    * Returns professional-grade trading metrics including:
    * - Overall performance (win rate, profit factor, Sharpe ratio)
+   * - Risk-adjusted metrics (Sortino, Calmar, SQN)
+   * - R-Multiple analysis
    * - Per-symbol breakdown
-   * - Monte Carlo simulation results
-   * - Live trading vs backtesting metrics
-   * Industry Standard 2026: Multi-objective optimization metrics
+   * - Live trading vs practice metrics
+   * - Drawdown analysis
+   *
+   * Based on Van Tharp methodology and hedge fund standards
    */
   app.get("/api/ai/metrics", requireAuth, requireAdmin, async (req, res) => {
     try {
-      // 1. Overall System Performance
-      const overallStats = await db.execute(sql`
+      // Extract filter parameters
+      const { version, since, tier } = req.query;
+
+      // Build WHERE clause dynamically
+      let whereConditions: string[] = [];
+      if (version) {
+        whereConditions.push(`strategy_version = '${version}'`);
+      }
+      if (since) {
+        whereConditions.push(`created_at >= '${since}'`);
+      }
+      if (tier) {
+        whereConditions.push(`tier = '${tier}'`);
+      }
+
+      const whereClause = whereConditions.length > 0
+        ? `WHERE ${whereConditions.join(' AND ')}`
+        : '';
+
+      const completedWhereClause = whereConditions.length > 0
+        ? `WHERE ${whereConditions.join(' AND ')} AND outcome != 'PENDING'`
+        : `WHERE outcome != 'PENDING'`;
+
+      // 1. Overall System Performance with filters
+      const overallStats = await db.execute(sql.raw(`
         SELECT
           COUNT(*) as total_signals,
           COUNT(*) FILTER (WHERE outcome != 'PENDING') as completed_signals,
           COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT')) as wins,
           COUNT(*) FILTER (WHERE outcome = 'STOP_HIT') as losses,
+          COUNT(*) FILTER (WHERE outcome = 'EXPIRED') as expired,
           ROUND(
             100.0 * COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT')) /
             NULLIF(COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'STOP_HIT')), 0),
@@ -394,35 +427,163 @@ export function registerAIRoutes(app: Express) {
             WHEN outcome = 'STOP_HIT' THEN ABS(profit_loss_pips)
             ELSE 0
           END) as total_loss_pips,
-          SUM(profit_loss_pips) as net_pips
+          SUM(profit_loss_pips) as net_pips,
+          AVG(CASE WHEN outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT') THEN profit_loss_pips END) as avg_win_pips,
+          AVG(CASE WHEN outcome = 'STOP_HIT' THEN ABS(profit_loss_pips) END) as avg_loss_pips,
+          MIN(created_at) as first_signal_date,
+          MAX(created_at) as last_signal_date
         FROM signal_history
-      `) as any[];
+        ${whereClause}
+      `)) as any[];
 
       const overall = overallStats[0];
-      const profitFactor = overall.total_loss_pips > 0
-        ? (parseFloat(overall.total_win_pips) / parseFloat(overall.total_loss_pips)).toFixed(2)
-        : '0.00';
 
-      // Calculate Sharpe Ratio from all completed trades
-      const allReturns = await db.execute(sql`
-        SELECT profit_loss_pips
+      // ============================================================
+      // PROFIT FACTOR (Gross Profits / Gross Losses)
+      // Good: >1.5, Excellent: >2.0
+      // ============================================================
+      const profitFactor = parseFloat(overall.total_loss_pips) > 0
+        ? (parseFloat(overall.total_win_pips) / parseFloat(overall.total_loss_pips))
+        : 0;
+
+      // ============================================================
+      // PAYOFF RATIO (Average Win / Average Loss)
+      // Target: >2.0 for 2:1 Risk-Reward
+      // ============================================================
+      const avgWin = parseFloat(overall.avg_win_pips) || 0;
+      const avgLoss = parseFloat(overall.avg_loss_pips) || 0;
+      const payoffRatio = avgLoss > 0 ? avgWin / avgLoss : 0;
+
+      // ============================================================
+      // EXPECTANCY (Edge per trade)
+      // Formula: (Win% × AvgWin) - (Loss% × AvgLoss)
+      // ============================================================
+      const winRate = parseFloat(overall.win_rate) || 0;
+      const wins = parseInt(overall.wins) || 0;
+      const losses = parseInt(overall.losses) || 0;
+      const totalDecided = wins + losses;
+      const lossRate = totalDecided > 0 ? (losses / totalDecided) * 100 : 0;
+      const expectancy = totalDecided > 0
+        ? ((winRate / 100) * avgWin) - ((lossRate / 100) * avgLoss)
+        : 0;
+
+      // ============================================================
+      // FETCH ALL RETURNS FOR ADVANCED METRICS
+      // ============================================================
+      const allReturns = await db.execute(sql.raw(`
+        SELECT profit_loss_pips, outcome, created_at
         FROM signal_history
-        WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'STOP_HIT')
-        ORDER BY created_at DESC
-      `) as any[];
+        ${completedWhereClause}
+        ORDER BY created_at ASC
+      `)) as any[];
 
       const returns = allReturns.map((r: any) => parseFloat(r.profit_loss_pips) || 0);
       const avgReturn = returns.length > 0
         ? returns.reduce((sum, r) => sum + r, 0) / returns.length
         : 0;
+
+      // ============================================================
+      // SHARPE RATIO (Risk-Adjusted Return)
+      // Formula: AvgReturn / StdDev
+      // Good: >0.75, Excellent: >1.5
+      // ============================================================
       const variance = returns.length > 0
         ? returns.reduce((sum, r) => sum + Math.pow(r - avgReturn, 2), 0) / returns.length
         : 0;
       const stdDev = Math.sqrt(variance);
-      const sharpeRatio = stdDev > 0 ? (avgReturn / stdDev).toFixed(2) : '0.00';
+      const sharpeRatio = stdDev > 0 ? avgReturn / stdDev : 0;
 
-      // 2. Per-Symbol Performance
-      const symbolStats = await db.execute(sql`
+      // ============================================================
+      // SORTINO RATIO (Downside Risk-Adjusted Return)
+      // Only considers negative volatility - better than Sharpe
+      // Good: >1.0, Excellent: >2.0, Outstanding: >3.0
+      // ============================================================
+      const negativeReturns = returns.filter(r => r < 0);
+      const downsideVariance = negativeReturns.length > 0
+        ? negativeReturns.reduce((sum, r) => sum + Math.pow(r, 2), 0) / negativeReturns.length
+        : 0;
+      const downsideDeviation = Math.sqrt(downsideVariance);
+      const sortinoRatio = downsideDeviation > 0 ? avgReturn / downsideDeviation : 0;
+
+      // ============================================================
+      // MAX DRAWDOWN & CALMAR RATIO
+      // Calmar = Annual Return / Max Drawdown
+      // Good: >1.0, Excellent: >2.0
+      // ============================================================
+      let peak = 0;
+      let maxDrawdown = 0;
+      let runningPnL = 0;
+
+      for (const r of returns) {
+        runningPnL += r;
+        if (runningPnL > peak) {
+          peak = runningPnL;
+        }
+        const drawdown = peak - runningPnL;
+        if (drawdown > maxDrawdown) {
+          maxDrawdown = drawdown;
+        }
+      }
+
+      const netPips = parseFloat(overall.net_pips) || 0;
+      const calmarRatio = maxDrawdown > 0 ? netPips / maxDrawdown : 0;
+
+      // ============================================================
+      // SQN (System Quality Number) - Van Tharp
+      // Formula: √N × (Expectancy / StdDev)
+      // 2.0-2.5: Average, 2.5-3.0: Good, 3.0-5.0: Excellent, 5.0+: Superb
+      // Using 100-trade normalized version
+      // ============================================================
+      const sqnRaw = stdDev > 0 && returns.length > 0
+        ? (Math.sqrt(Math.min(returns.length, 100)) * (avgReturn / stdDev))
+        : 0;
+
+      // ============================================================
+      // RECOVERY FACTOR
+      // Net Profit / Max Drawdown
+      // Good: >3.0
+      // ============================================================
+      const recoveryFactor = maxDrawdown > 0 ? netPips / maxDrawdown : 0;
+
+      // ============================================================
+      // CONSECUTIVE WINS/LOSSES ANALYSIS
+      // ============================================================
+      let maxConsecWins = 0;
+      let maxConsecLosses = 0;
+      let currentConsecWins = 0;
+      let currentConsecLosses = 0;
+
+      for (const trade of allReturns) {
+        if (trade.outcome?.includes('TP')) {
+          currentConsecWins++;
+          currentConsecLosses = 0;
+          if (currentConsecWins > maxConsecWins) maxConsecWins = currentConsecWins;
+        } else if (trade.outcome === 'STOP_HIT') {
+          currentConsecLosses++;
+          currentConsecWins = 0;
+          if (currentConsecLosses > maxConsecLosses) maxConsecLosses = currentConsecLosses;
+        }
+      }
+
+      // ============================================================
+      // R-MULTIPLE DISTRIBUTION
+      // Assuming 1R = average loss (stop loss distance)
+      // ============================================================
+      const rMultiples = avgLoss > 0
+        ? returns.map(r => r / avgLoss)
+        : returns;
+      const avgRMultiple = rMultiples.length > 0
+        ? rMultiples.reduce((sum, r) => sum + r, 0) / rMultiples.length
+        : 0;
+      const largestWinR = rMultiples.length > 0 ? Math.max(...rMultiples) : 0;
+      const largestLossR = rMultiples.length > 0 ? Math.min(...rMultiples) : 0;
+
+      // 2. Per-Symbol Performance with filters
+      const symbolWhereClause = whereConditions.length > 0
+        ? `WHERE ${whereConditions.join(' AND ')}`
+        : '';
+
+      const symbolStats = await db.execute(sql.raw(`
         SELECT
           symbol,
           COUNT(*) as total_signals,
@@ -442,59 +603,84 @@ export function registerAIRoutes(app: Express) {
             WHEN outcome = 'STOP_HIT' THEN ABS(profit_loss_pips)
             ELSE 0
           END) as loss_pips,
-          SUM(profit_loss_pips) as net_pips
+          SUM(profit_loss_pips) as net_pips,
+          AVG(CASE WHEN outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT') THEN profit_loss_pips END) as avg_win,
+          AVG(CASE WHEN outcome = 'STOP_HIT' THEN ABS(profit_loss_pips) END) as avg_loss
         FROM signal_history
+        ${symbolWhereClause}
         GROUP BY symbol
         ORDER BY completed DESC
-      `) as any[];
+      `)) as any[];
 
       const symbolMetrics = symbolStats.map((s: any) => {
-        const pf = parseFloat(s.loss_pips) > 0
-          ? (parseFloat(s.win_pips) / parseFloat(s.loss_pips)).toFixed(2)
-          : '0.00';
+        const symbolPF = parseFloat(s.loss_pips) > 0
+          ? parseFloat(s.win_pips) / parseFloat(s.loss_pips)
+          : 0;
+        const symbolAvgWin = parseFloat(s.avg_win) || 0;
+        const symbolAvgLoss = parseFloat(s.avg_loss) || 0;
+        const symbolPayoff = symbolAvgLoss > 0 ? symbolAvgWin / symbolAvgLoss : 0;
+        const symbolWR = parseFloat(s.win_rate) || 0;
+        const symbolLR = 100 - symbolWR;
+        const symbolExpectancy = ((symbolWR / 100) * symbolAvgWin) - ((symbolLR / 100) * symbolAvgLoss);
+
         return {
           symbol: s.symbol,
           totalSignals: parseInt(s.total_signals) || 0,
           completed: parseInt(s.completed) || 0,
           wins: parseInt(s.wins) || 0,
           losses: parseInt(s.losses) || 0,
-          winRate: parseFloat(s.win_rate) || 0,
+          winRate: symbolWR,
           netPips: parseFloat(s.net_pips) || 0,
-          profitFactor: parseFloat(pf),
+          profitFactor: parseFloat(symbolPF.toFixed(2)),
+          payoffRatio: parseFloat(symbolPayoff.toFixed(2)),
+          avgWinPips: parseFloat(symbolAvgWin.toFixed(1)),
+          avgLossPips: parseFloat(symbolAvgLoss.toFixed(1)),
+          expectancy: parseFloat(symbolExpectancy.toFixed(2)),
           hasEnoughData: parseInt(s.completed) >= 30,
         };
       });
 
-      // 3. Live Trading Performance (FXIFY-specific)
-      const liveStats = await db.execute(sql`
+      // 3. Live Trading Performance (FXIFY-specific) with filters
+      const liveWhereBase = whereConditions.length > 0
+        ? `${whereConditions.join(' AND ')} AND`
+        : '';
+
+      const liveStats = await db.execute(sql.raw(`
         SELECT
-          COUNT(*) FILTER (WHERE trade_live = true) as live_signals,
-          COUNT(*) FILTER (WHERE trade_live = true AND outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT')) as live_wins,
-          COUNT(*) FILTER (WHERE trade_live = true AND outcome = 'STOP_HIT') as live_losses,
+          COUNT(*) FILTER (WHERE ${liveWhereBase} trade_live = true) as live_signals,
+          COUNT(*) FILTER (WHERE ${liveWhereBase} trade_live = true AND outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT')) as live_wins,
+          COUNT(*) FILTER (WHERE ${liveWhereBase} trade_live = true AND outcome = 'STOP_HIT') as live_losses,
           ROUND(
-            100.0 * COUNT(*) FILTER (WHERE trade_live = true AND outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT')) /
-            NULLIF(COUNT(*) FILTER (WHERE trade_live = true AND outcome != 'PENDING'), 0),
+            100.0 * COUNT(*) FILTER (WHERE ${liveWhereBase} trade_live = true AND outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT')) /
+            NULLIF(COUNT(*) FILTER (WHERE ${liveWhereBase} trade_live = true AND outcome != 'PENDING'), 0),
             2
           ) as live_win_rate,
           SUM(CASE
-            WHEN trade_live = true AND outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT') THEN ABS(profit_loss_pips)
+            WHEN ${liveWhereBase} trade_live = true AND outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT') THEN ABS(profit_loss_pips)
             ELSE 0
           END) as live_win_pips,
           SUM(CASE
-            WHEN trade_live = true AND outcome = 'STOP_HIT' THEN ABS(profit_loss_pips)
+            WHEN ${liveWhereBase} trade_live = true AND outcome = 'STOP_HIT' THEN ABS(profit_loss_pips)
             ELSE 0
           END) as live_loss_pips,
           SUM(CASE
-            WHEN trade_live = true THEN profit_loss_pips
+            WHEN ${liveWhereBase} trade_live = true THEN profit_loss_pips
             ELSE 0
-          END) as live_net_pips
+          END) as live_net_pips,
+          AVG(CASE WHEN ${liveWhereBase} trade_live = true AND outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT') THEN profit_loss_pips END) as live_avg_win,
+          AVG(CASE WHEN ${liveWhereBase} trade_live = true AND outcome = 'STOP_HIT' THEN ABS(profit_loss_pips) END) as live_avg_loss
         FROM signal_history
-      `) as any[];
+      `)) as any[];
 
       const live = liveStats[0];
       const livePF = parseFloat(live.live_loss_pips) > 0
-        ? (parseFloat(live.live_win_pips) / parseFloat(live.live_loss_pips)).toFixed(2)
-        : '0.00';
+        ? parseFloat(live.live_win_pips) / parseFloat(live.live_loss_pips)
+        : 0;
+      const liveAvgWin = parseFloat(live.live_avg_win) || 0;
+      const liveAvgLoss = parseFloat(live.live_avg_loss) || 0;
+      const liveWR = parseFloat(live.live_win_rate) || 0;
+      const liveLR = 100 - liveWR;
+      const liveExpectancy = ((liveWR / 100) * liveAvgWin) - ((liveLR / 100) * liveAvgLoss);
 
       // 4. Recent Recommendations with Metrics
       const recommendations = await db.execute(sql`
@@ -529,34 +715,119 @@ export function registerAIRoutes(app: Express) {
       const hasEnoughData = symbolMetrics.some(s => s.hasEnoughData);
       const pendingRecCount = recommendations.filter(r => r.status === 'pending').length;
 
+      // 6. Risk of Ruin Estimation (simplified)
+      // Based on win rate and payoff ratio
+      // Professional target: <5%
+      const riskOfRuin = winRate > 0 && payoffRatio > 0
+        ? Math.pow((1 - ((winRate / 100) - ((1 - winRate / 100) / payoffRatio))) /
+                   (1 + ((winRate / 100) - ((1 - winRate / 100) / payoffRatio))), 50) * 100
+        : 100;
+
       res.json({
+        // Filter info
+        filters: {
+          version: version || 'all',
+          since: since || 'all-time',
+          tier: tier || 'all',
+          appliedFilters: whereConditions.length,
+        },
+
+        // Core Performance Metrics
         overall: {
           totalSignals: parseInt(overall.total_signals) || 0,
           completedSignals: parseInt(overall.completed_signals) || 0,
+          pendingSignals: (parseInt(overall.total_signals) || 0) - (parseInt(overall.completed_signals) || 0),
           wins: parseInt(overall.wins) || 0,
           losses: parseInt(overall.losses) || 0,
+          expired: parseInt(overall.expired) || 0,
           winRate: parseFloat(overall.win_rate) || 0,
-          profitFactor: parseFloat(profitFactor),
-          sharpeRatio: parseFloat(sharpeRatio),
-          netPips: parseFloat(overall.net_pips) || 0,
+          lossRate: parseFloat(lossRate.toFixed(2)),
+          netPips: parseFloat(netPips.toFixed(1)),
+          avgWinPips: parseFloat(avgWin.toFixed(1)),
+          avgLossPips: parseFloat(avgLoss.toFixed(1)),
+          firstSignalDate: overall.first_signal_date,
+          lastSignalDate: overall.last_signal_date,
         },
+
+        // Professional Risk-Adjusted Metrics
+        riskAdjusted: {
+          profitFactor: parseFloat(profitFactor.toFixed(2)),
+          profitFactorGrade: profitFactor >= 2.0 ? 'Excellent' : profitFactor >= 1.5 ? 'Good' : profitFactor >= 1.0 ? 'Break-even' : 'Poor',
+          sharpeRatio: parseFloat(sharpeRatio.toFixed(2)),
+          sharpeGrade: sharpeRatio >= 1.5 ? 'Excellent' : sharpeRatio >= 0.75 ? 'Good' : sharpeRatio >= 0 ? 'Average' : 'Poor',
+          sortinoRatio: parseFloat(sortinoRatio.toFixed(2)),
+          sortinoGrade: sortinoRatio >= 2.0 ? 'Excellent' : sortinoRatio >= 1.0 ? 'Good' : 'Needs Improvement',
+          calmarRatio: parseFloat(calmarRatio.toFixed(2)),
+          calmarGrade: calmarRatio >= 2.0 ? 'Excellent' : calmarRatio >= 1.0 ? 'Good' : 'Needs Improvement',
+          sqn: parseFloat(sqnRaw.toFixed(2)),
+          sqnGrade: sqnRaw >= 5.0 ? 'Superb' : sqnRaw >= 3.0 ? 'Excellent' : sqnRaw >= 2.5 ? 'Good' : sqnRaw >= 2.0 ? 'Average' : 'Below Average',
+        },
+
+        // Expectancy & Edge Analysis
+        edge: {
+          expectancyPerTrade: parseFloat(expectancy.toFixed(2)),
+          expectancyGrade: expectancy > 0 ? 'Positive Edge' : 'No Edge',
+          payoffRatio: parseFloat(payoffRatio.toFixed(2)),
+          payoffGrade: payoffRatio >= 2.0 ? 'Excellent (2:1+)' : payoffRatio >= 1.5 ? 'Good' : 'Needs Improvement',
+          recoveryFactor: parseFloat(recoveryFactor.toFixed(2)),
+          riskOfRuinPercent: parseFloat(Math.min(riskOfRuin, 100).toFixed(2)),
+          riskOfRuinGrade: riskOfRuin < 5 ? 'Safe' : riskOfRuin < 20 ? 'Acceptable' : 'Dangerous',
+        },
+
+        // R-Multiple Analysis (Van Tharp)
+        rMultiples: {
+          avgRMultiple: parseFloat(avgRMultiple.toFixed(2)),
+          largestWinR: parseFloat(largestWinR.toFixed(2)),
+          largestLossR: parseFloat(largestLossR.toFixed(2)),
+          rExpectancy: parseFloat((avgRMultiple).toFixed(3)),
+        },
+
+        // Drawdown Analysis
+        drawdown: {
+          maxDrawdownPips: parseFloat(maxDrawdown.toFixed(1)),
+          currentDrawdownPips: parseFloat((peak - runningPnL).toFixed(1)),
+          peakPips: parseFloat(peak.toFixed(1)),
+          maxConsecutiveWins: maxConsecWins,
+          maxConsecutiveLosses: maxConsecLosses,
+        },
+
+        // Live Trading Performance (FXIFY HIGH tier only)
         liveTrading: {
           signals: parseInt(live.live_signals) || 0,
           wins: parseInt(live.live_wins) || 0,
           losses: parseInt(live.live_losses) || 0,
           winRate: parseFloat(live.live_win_rate) || 0,
-          profitFactor: parseFloat(livePF),
+          profitFactor: parseFloat(livePF.toFixed(2)),
           netPips: parseFloat(live.live_net_pips) || 0,
+          avgWinPips: parseFloat(liveAvgWin.toFixed(1)),
+          avgLossPips: parseFloat(liveAvgLoss.toFixed(1)),
+          expectancy: parseFloat(liveExpectancy.toFixed(2)),
         },
+
+        // Per-Symbol Breakdown
         symbolMetrics,
+
+        // Recent AI Recommendations
         recentRecommendations: recsWithMetrics,
+
+        // System Health
         systemHealth: {
           hasEnoughData,
+          minSignalsForReliability: 30,
+          currentSignalCount: returns.length,
           pendingRecommendations: pendingRecCount,
           backtesterLastRun: backtester.getLastRunTime(),
           aiAnalyzerLastRun: aiAnalyzer.getLastRunTime(),
+          dataQuality: returns.length >= 30 ? 'Reliable' : returns.length >= 10 ? 'Limited' : 'Insufficient',
         },
+
+        // Metadata
         timestamp: new Date().toISOString(),
+        calculatedMetrics: [
+          'Win Rate', 'Profit Factor', 'Sharpe Ratio', 'Sortino Ratio',
+          'Calmar Ratio', 'SQN', 'Expectancy', 'Payoff Ratio', 'R-Multiples',
+          'Max Drawdown', 'Recovery Factor', 'Risk of Ruin'
+        ],
       });
     } catch (error: any) {
       console.error('❌ Error fetching metrics dashboard:', error);

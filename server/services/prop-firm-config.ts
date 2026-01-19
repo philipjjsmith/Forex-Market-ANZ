@@ -238,6 +238,27 @@ class PropFirmService {
   }
 
   /**
+   * Force reset daily tracker (for new trading day or fresh start)
+   * Unlike initDailyTracker, this always resets regardless of date
+   */
+  resetDailyTracker(startingBalance: number): void {
+    const today = new Date().toISOString().split('T')[0];
+
+    this.dailyTracker = {
+      date: today,
+      startingBalance,
+      currentBalance: startingBalance,
+      dailyPnL: 0,
+      dailyPnLPercent: 0,
+      tradesCount: 0,
+      isLocked: false
+    };
+
+    console.log(`[PropFirm] Daily tracker RESET for ${today} with balance $${startingBalance}`);
+    console.log(`[PropFirm] All counters cleared. Trading unlocked.`);
+  }
+
+  /**
    * Check if max trades per day reached
    */
   maxTradesReached(): boolean {

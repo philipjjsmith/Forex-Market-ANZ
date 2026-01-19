@@ -34,7 +34,8 @@ export function registerAdminRoutes(app: Express) {
 
       // Get API usage stats
       const exchangeRateStats = exchangeRateAPI.getCacheStats();
-      const twelveDataStats = twelveDataAPI.getCacheStats();
+      const twelveDataStats = await twelveDataAPI.getCacheStats();
+      const twelveDataUsage = await twelveDataAPI.getUsageStats();
 
       // Calculate cache hit rates (simplified - you'd track this in production)
       const exchangeRateCacheHitRate = exchangeRateStats.size > 0 ? 85 : 0;

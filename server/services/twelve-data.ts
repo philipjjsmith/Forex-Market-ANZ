@@ -13,6 +13,12 @@ import nodePersist from 'node-persist';
 // Create dedicated storage instance for Twelve Data
 const storage = nodePersist.create();
 
+interface UsageStats {
+  date: string;        // Format: 'YYYY-MM-DD'
+  callsToday: number;
+  creditsUsed: number; // Track actual credits (some calls cost more)
+}
+
 interface TwelveDataCandle {
   datetime: string;
   open: string;
@@ -59,6 +65,9 @@ export class TwelveDataAPI {
       console.log('💾 Twelve Data file-based cache initialized');
     });
 
+    // Initialize daily usage counter
+    this.resetDailyUsageIfNeeded().catch(console.error);
+
     if (!this.apiKey) {
       console.warn('⚠️  TWELVE_DATA_KEY not set in environment variables');
     }
@@ -95,6 +104,59 @@ export class TwelveDataAPI {
 
     // Lower timeframes (5min, 15min, 30min) - cache for 15 minutes
     return 15 * 60 * 1000; // 15 minutes (default)
+  }
+
+  /**
+   * Reset daily usage counter if it's a new day (UTC)
+   */
+  private async resetDailyUsageIfNeeded(): Promise<void> {
+    await this.cacheInitialized;
+
+    const today = new Date().toISOString().split('T')[0]; // 'YYYY-MM-DD'
+    const usage = await storage.getItem('daily-usage') as UsageStats | undefined;
+
+    // Reset if new day (UTC)
+    if (!usage || usage.date !== today) {
+      await storage.setItem('daily-usage', {
+        date: today,
+        callsToday: 0,
+        creditsUsed: 0
+      });
+      console.log(`📊 Reset Twelve Data usage counter (new day: ${today})`);
+    }
+  }
+
+  /**
+   * Increment usage counter after each API call
+   */
+  private async incrementUsageCounter(): Promise<void> {
+    await this.cacheInitialized;
+    await this.resetDailyUsageIfNeeded();
+
+    const usage = await storage.getItem('daily-usage') as UsageStats;
+    usage.callsToday += 1;
+    usage.creditsUsed += 1; // Each time_series call = 1 credit
+
+    await storage.setItem('daily-usage', usage);
+
+    // Warning if approaching limit
+    if (usage.callsToday >= 750) {
+      console.warn(`⚠️  Twelve Data usage: ${usage.callsToday}/800 (${800 - usage.callsToday} remaining)`);
+    }
+  }
+
+  /**
+   * Get current usage statistics
+   */
+  async getUsageStats(): Promise<{ callsToday: number; limit: number }> {
+    await this.cacheInitialized;
+    await this.resetDailyUsageIfNeeded();
+
+    const usage = await storage.getItem('daily-usage') as UsageStats;
+    return {
+      callsToday: usage?.callsToday || 0,
+      limit: 800
+    };
   }
 
   /**
@@ -185,6 +247,9 @@ export class TwelveDataAPI {
           volume: item.volume ? parseFloat(item.volume) : 1000,
         }))
         .reverse(); // Oldest first for strategy analysis
+
+      // Track API usage
+      await this.incrementUsageCounter();
 
       // Store in persistent file-based cache
       await storage.setItem(cacheKey, {
