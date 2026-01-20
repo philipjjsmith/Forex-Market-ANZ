@@ -156,7 +156,10 @@ export function registerAdminRoutes(app: Express) {
       let dateFilter = sql``;
 
       // 🆕 Historical filter takes precedence (100% accurate date-based filtering)
-      if (historicalFilter === 'nov4forward') {
+      if (historicalFilter === 'freshstart') {
+        // FRESH START: Jan 19, 2026 - Clean slate for new strategy tracking
+        dateFilter = sql`AND created_at >= '2026-01-19 00:00:00 UTC'`;
+      } else if (historicalFilter === 'nov4forward') {
         // Show only signals from Nov 4, 2025 05:44:16 UTC forward (after fix deployment)
         dateFilter = sql`AND created_at >= '2025-11-04 05:44:16 UTC'`;
       } else if (days > 0) {

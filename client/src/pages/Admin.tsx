@@ -173,7 +173,7 @@ export default function Admin() {
   const [activeTab, setActiveTab] = useState<'system' | 'ai' | 'growth'>('system');
   const [growthDays, setGrowthDays] = useState(0); // 0 = all time
   const [growthVersion, setGrowthVersion] = useState<string>('all'); // 🆕 Version filter
-  const [historicalFilter, setHistoricalFilter] = useState<string>('nov4forward'); // 🆕 Date-based filter (DEFAULT: Nov 4+ only)
+  const [historicalFilter, setHistoricalFilter] = useState<string>('freshstart'); // 🆕 Date-based filter (DEFAULT: Fresh Start Jan 19+)
   const [dataQualityFilter, setDataQualityFilter] = useState<string>('production'); // 🆕 Data quality filter (DEFAULT: production only)
   const [lotSize, setLotSize] = useState<'micro' | 'mini' | 'standard'>('mini');
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
@@ -1283,7 +1283,8 @@ export default function Admin() {
                         <SelectValue placeholder="Data filter" />
                       </SelectTrigger>
                       <SelectContent className="bg-slate-800 text-white border-white/30">
-                        <SelectItem value="nov4forward">Nov 4+ (Fixed System) ✅</SelectItem>
+                        <SelectItem value="freshstart">Fresh Start (Jan 19+) 🚀</SelectItem>
+                        <SelectItem value="nov4forward">Nov 4+ (Old Data) 📊</SelectItem>
                         <SelectItem value="all">All Historical Data ⚠️</SelectItem>
                       </SelectContent>
                     </Select>
