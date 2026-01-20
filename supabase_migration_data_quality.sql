@@ -15,16 +15,17 @@ ON signal_history(data_quality);
 
 -- ============================================================
 -- STEP 2: Mark existing signals based on creation date
--- Pre-Nov 4, 2025 05:44:16 UTC = 'legacy' (old strategy)
--- Nov 4+ = 'production' (new ICT 3-TF strategy)
+-- FRESH START: January 19, 2026 00:00:00 UTC
+-- All signals before this = 'legacy' (historical learning data)
+-- All signals after this = 'production' (clean slate tracking)
 -- ============================================================
 UPDATE signal_history
 SET data_quality = 'legacy'
-WHERE created_at < '2025-11-04 05:44:16 UTC';
+WHERE created_at < '2026-01-19 00:00:00 UTC';
 
 UPDATE signal_history
 SET data_quality = 'production'
-WHERE created_at >= '2025-11-04 05:44:16 UTC';
+WHERE created_at >= '2026-01-19 00:00:00 UTC';
 
 -- ============================================================
 -- STEP 3: Add tier column if not exists (for HIGH/MEDIUM filtering)

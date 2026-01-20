@@ -415,12 +415,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const canTrade = propFirmService.canTrade(dailyLossPercent);
       const maxTradesReached = propFirmService.maxTradesReached();
 
-      // Data filter: 'production' (Nov 4+ only, DEFAULT), 'legacy' (pre-Nov 4), 'all' (everything)
+      // Data filter: 'production' (fresh start, DEFAULT), 'legacy' (old data), 'all' (everything)
       const dataFilter = (req.query.data as string) || 'production';
 
       // Build date filter based on data quality
-      // Nov 4, 2025 05:44:16 UTC = ICT 3-Timeframe strategy deployment
-      const STRATEGY_PIVOT_DATE = '2025-11-04 05:44:16 UTC';
+      // FRESH START: January 19, 2026 00:00:00 UTC - Clean slate for new strategy tracking
+      // All signals before this date are considered "legacy" (historical learning data)
+      const STRATEGY_PIVOT_DATE = '2026-01-19 00:00:00 UTC';
 
       let dateFilterSQL = sql``;
       if (dataFilter === 'production') {
@@ -510,10 +511,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           current: dataFilter,
           options: ['production', 'legacy', 'all'],
           description: dataFilter === 'production'
-            ? 'Showing Nov 4, 2025+ signals only (new ICT 3-TF strategy)'
+            ? 'Fresh start: Jan 19, 2026+ signals only (clean slate)'
             : dataFilter === 'legacy'
-            ? 'Showing pre-Nov 4, 2025 signals only (old strategy)'
-            : 'Showing all signals (combined)',
+            ? 'Historical data: pre-Jan 19, 2026 (learning archive)'
+            : 'All signals combined (historical + new)',
           dateRange: {
             from: perf.first_signal_date || null,
             to: perf.last_signal_date || null
