@@ -999,7 +999,8 @@ export class SignalGenerator {
         candles,
         created_at,
         expires_at,
-        outcome
+        outcome,
+        data_quality
       ) VALUES (
         ${signal.id},
         ${systemUserId},
@@ -1024,7 +1025,8 @@ export class SignalGenerator {
         ${JSON.stringify(candles.slice(-200))},
         NOW(),
         NOW() + INTERVAL '48 hours',
-        'PENDING'
+        'PENDING',
+        'production'
       )
       ON CONFLICT (signal_id) DO NOTHING
     `);

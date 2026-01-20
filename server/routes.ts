@@ -415,6 +415,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const canTrade = propFirmService.canTrade(dailyLossPercent);
       const maxTradesReached = propFirmService.maxTradesReached();
 
+      // Data filter: 'production' (Nov 4+ only, DEFAULT), 'legacy' (pre-Nov 4), 'all' (everything)
+      const dataFilter = (req.query.data as string) || 'production';
+
+      // Build date filter based on data quality
+      // Nov 4, 2025 05:44:16 UTC = ICT 3-Timeframe strategy deployment
+      const STRATEGY_PIVOT_DATE = '2025-11-04 05:44:16 UTC';
+
+      let dateFilterSQL = sql``;
+      if (dataFilter === 'production') {
+        // Show only signals from Nov 4+ (new ICT 3-TF strategy)
+        dateFilterSQL = sql`AND created_at >= ${STRATEGY_PIVOT_DATE}`;
+      } else if (dataFilter === 'legacy') {
+        // Show only pre-Nov 4 signals (old strategy)
+        dateFilterSQL = sql`AND created_at < ${STRATEGY_PIVOT_DATE}`;
+      }
+      // else: 'all' - no date filter, show everything
+
       // Get strategy v3.1.0 performance from signal_history
       const strategyPerformance = await db.execute(sql`
         SELECT
@@ -432,10 +449,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           SUM(profit_loss_pips) as net_pips,
           AVG(CASE WHEN outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT') THEN profit_loss_pips END) as avg_win,
           AVG(CASE WHEN outcome = 'STOP_HIT' THEN ABS(profit_loss_pips) END) as avg_loss,
-          COUNT(DISTINCT DATE(created_at)) as trading_days
+          COUNT(DISTINCT DATE(created_at)) as trading_days,
+          MIN(created_at) as first_signal_date,
+          MAX(created_at) as last_signal_date
         FROM signal_history
         WHERE strategy_version = '3.1.0'
           AND trade_live = true
+          ${dateFilterSQL}
       `) as any[];
 
       const perf = strategyPerformance[0] || {};
@@ -484,6 +504,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         challengeType: config.challengeType,
         strategyVersion: '3.1.0',
         timestamp: new Date().toISOString(),
+
+        // Data Filter Info (for transparency)
+        dataFilter: {
+          current: dataFilter,
+          options: ['production', 'legacy', 'all'],
+          description: dataFilter === 'production'
+            ? 'Showing Nov 4, 2025+ signals only (new ICT 3-TF strategy)'
+            : dataFilter === 'legacy'
+            ? 'Showing pre-Nov 4, 2025 signals only (old strategy)'
+            : 'Showing all signals (combined)',
+          dateRange: {
+            from: perf.first_signal_date || null,
+            to: perf.last_signal_date || null
+          }
+        },
 
         // Phase Progress
         phaseProgress: {

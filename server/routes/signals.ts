@@ -216,7 +216,8 @@ export function registerSignalRoutes(app: Express) {
           indicators,
           candles,
           created_at,
-          expires_at
+          expires_at,
+          data_quality
         ) VALUES (
           ${signal.id},
           ${userId},
@@ -240,7 +241,8 @@ export function registerSignalRoutes(app: Express) {
           ${JSON.stringify(signal.indicators)},
           ${JSON.stringify(candles)},
           NOW(),
-          NOW() + INTERVAL '48 hours'
+          NOW() + INTERVAL '48 hours',
+          'production'
         )
         ON CONFLICT (signal_id) DO NOTHING
       `);
