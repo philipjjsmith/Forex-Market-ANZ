@@ -125,8 +125,8 @@ export class ExchangeRateAPI {
   async fetchAllQuotes(): Promise<ForexQuote[]> {
     const pairs = [
       { from: 'EUR', to: 'USD' },
-      { from: 'USD', to: 'JPY' },
-    ]; // Reduced to top 2 pairs (36% global volume)
+      { from: 'USD', to: 'CHF' },
+    ]; // Optimized: EUR/USD (60% WR) + USD/CHF (25% WR) - based on historical performance
 
     try {
       const quotes = await Promise.all(
