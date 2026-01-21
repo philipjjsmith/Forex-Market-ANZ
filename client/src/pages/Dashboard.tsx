@@ -17,7 +17,7 @@ export default function Dashboard() {
   const [, setLocation] = useLocation();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
-  const [pairs] = useState(['EUR/USD', 'USD/JPY']); // Focused on top 2 pairs (36% global volume)
+  const [pairs] = useState(['EUR/USD', 'USD/CHF']); // Optimized pairs: EUR/USD (60% WR) + USD/CHF (25% WR)
   const [selectedPair, setSelectedPair] = useState('EUR/USD');
   const [signals, setSignals] = useState<Signal[]>([]);
   const [marketData, setMarketData] = useState<Record<string, {
