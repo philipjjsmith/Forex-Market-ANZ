@@ -469,6 +469,138 @@ Risk: 1-2%${signal.stopLimitPrice ? `\nStop Limit: ${signal.stopLimitPrice}` : '
         </div>
       </div>
 
+      {/* Confluence Scale Visual Display */}
+      <div className="bg-gradient-to-br from-primary/5 to-chart-2/5 border border-primary/20 rounded-lg p-4 mb-4">
+        <div className="flex items-center justify-between mb-3">
+          <h4 className="text-sm font-bold text-primary flex items-center gap-2">
+            <BarChart3 className="w-4 h-4" />
+            Confluence Scale
+          </h4>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">Score:</span>
+            <span className={`text-lg font-black ${
+              signal.confidence >= 110 ? 'text-yellow-500' :
+              signal.confidence >= 85 ? 'text-chart-2' :
+              'text-primary'
+            }`}>
+              {signal.confidence}/130
+            </span>
+            <span className={`text-xs font-bold px-2 py-0.5 rounded ${
+              signal.confidence >= 110 ? 'bg-yellow-500/20 text-yellow-500' :
+              signal.confidence >= 85 ? 'bg-chart-2/20 text-chart-2' :
+              'bg-primary/20 text-primary'
+            }`}>
+              {signal.confidence >= 110 ? 'S-TIER' :
+               signal.confidence >= 85 ? 'A-TIER' : 'B-TIER'}
+            </span>
+          </div>
+        </div>
+
+        {/* Confidence Progress Bar */}
+        <div className="w-full h-3 bg-card rounded-full overflow-hidden mb-4">
+          <div
+            className={`h-full rounded-full transition-all duration-500 ${
+              signal.confidence >= 110 ? 'bg-gradient-to-r from-yellow-500 to-yellow-400' :
+              signal.confidence >= 85 ? 'bg-gradient-to-r from-chart-2 to-chart-2/70' :
+              'bg-gradient-to-r from-primary to-primary/70'
+            }`}
+            style={{ width: `${Math.min((signal.confidence / 130) * 100, 100)}%` }}
+          />
+        </div>
+
+        {/* Confluence Categories */}
+        <div className="grid grid-cols-2 gap-3">
+          {/* Trend Alignment */}
+          <div className="bg-card/50 rounded p-2">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs font-semibold text-muted-foreground">📊 Trend Alignment</span>
+              <span className="text-xs font-bold text-primary">75 pts max</span>
+            </div>
+            <div className="w-full h-1.5 bg-card rounded-full overflow-hidden">
+              <div className="h-full bg-primary rounded-full" style={{ width: '100%' }} />
+            </div>
+          </div>
+
+          {/* Entry Timing */}
+          <div className="bg-card/50 rounded p-2">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs font-semibold text-muted-foreground">⚡ Entry Timing</span>
+              <span className="text-xs font-bold text-chart-2">25 pts max</span>
+            </div>
+            <div className="w-full h-1.5 bg-card rounded-full overflow-hidden">
+              <div className="h-full bg-chart-2 rounded-full" style={{ width: '80%' }} />
+            </div>
+          </div>
+
+          {/* Key Levels */}
+          <div className="bg-card/50 rounded p-2">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs font-semibold text-muted-foreground">🎯 Key Levels</span>
+              <span className="text-xs font-bold text-yellow-500">20 pts max</span>
+            </div>
+            <div className="w-full h-1.5 bg-card rounded-full overflow-hidden">
+              <div className="h-full bg-yellow-500 rounded-full" style={{
+                width: signal.rationale?.includes('support level') || signal.rationale?.includes('resistance level') ? '50%' : '0%'
+              }} />
+            </div>
+          </div>
+
+          {/* Timing */}
+          <div className="bg-card/50 rounded p-2">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs font-semibold text-muted-foreground">⏰ Session Timing</span>
+              <span className="text-xs font-bold text-purple-500">10 pts max</span>
+            </div>
+            <div className="w-full h-1.5 bg-card rounded-full overflow-hidden">
+              <div className="h-full bg-purple-500 rounded-full" style={{
+                width: signal.rationale?.includes('London/NY Overlap') ? '100%' :
+                       signal.rationale?.includes('session active') ? '40%' : '0%'
+              }} />
+            </div>
+          </div>
+        </div>
+
+        {/* Confluence Factors Checklist */}
+        <div className="mt-3 pt-3 border-t border-card-border">
+          <p className="text-xs font-semibold text-muted-foreground mb-2">Active Confluence Factors:</p>
+          <div className="flex flex-wrap gap-1.5">
+            {signal.rationale?.includes('Weekly') && signal.rationale?.includes('BULLISH') && (
+              <span className="text-xs bg-chart-2/20 text-chart-2 px-2 py-0.5 rounded-full">✅ Weekly Trend</span>
+            )}
+            {signal.rationale?.includes('Weekly') && signal.rationale?.includes('BEARISH') && (
+              <span className="text-xs bg-destructive/20 text-destructive px-2 py-0.5 rounded-full">✅ Weekly Trend</span>
+            )}
+            {signal.rationale?.includes('Daily') && (
+              <span className="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded-full">✅ Daily Trend</span>
+            )}
+            {signal.rationale?.includes('4H') && (
+              <span className="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded-full">✅ 4H Trend</span>
+            )}
+            {signal.rationale?.includes('ADX') && signal.rationale?.includes('strong') && (
+              <span className="text-xs bg-chart-2/20 text-chart-2 px-2 py-0.5 rounded-full">✅ Strong ADX</span>
+            )}
+            {signal.rationale?.includes('RSI optimal') && (
+              <span className="text-xs bg-chart-2/20 text-chart-2 px-2 py-0.5 rounded-full">✅ RSI Optimal</span>
+            )}
+            {(signal.rationale?.includes('support level') || signal.rationale?.includes('resistance level')) && (
+              <span className="text-xs bg-yellow-500/20 text-yellow-500 px-2 py-0.5 rounded-full">✅ Key Level</span>
+            )}
+            {signal.rationale?.includes('Breakout') && (
+              <span className="text-xs bg-yellow-500/20 text-yellow-500 px-2 py-0.5 rounded-full">✅ Breakout Pattern</span>
+            )}
+            {signal.rationale?.includes('London/NY Overlap') && (
+              <span className="text-xs bg-purple-500/20 text-purple-500 px-2 py-0.5 rounded-full">✅ Kill Zone</span>
+            )}
+            {signal.rationale?.includes('session active') && (
+              <span className="text-xs bg-purple-500/20 text-purple-500 px-2 py-0.5 rounded-full">✅ Active Session</span>
+            )}
+            {signal.rationale?.includes('No major news') && (
+              <span className="text-xs bg-chart-2/20 text-chart-2 px-2 py-0.5 rounded-full">✅ No News</span>
+            )}
+          </div>
+        </div>
+      </div>
+
       <div className="bg-card/50 rounded p-3 mb-4">
         <p className="text-xs text-muted-foreground mb-2">Analysis Rationale</p>
         <p className="text-sm text-foreground/90">{signal.rationale}</p>
