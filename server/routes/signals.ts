@@ -306,11 +306,33 @@ export function registerSignalRoutes(app: Express) {
       `);
 
       // Parse numeric fields (postgres returns DECIMAL as strings)
-      const signals = (result as any[]).map((signal: any) =>
-        parseNumericFields(signal, [
+      // Then transform to EA-expected field names (camelCase)
+      const signals = (result as any[]).map((signal: any) => {
+        const parsed = parseNumericFields(signal, [
           'confidence', 'entry_price', 'current_price', 'stop_loss', 'tp1', 'tp2', 'tp3'
-        ])
-      );
+        ]);
+        // Transform to EA-expected field names (EA uses camelCase, DB uses snake_case)
+        return {
+          id: parsed.signal_id,
+          symbol: parsed.symbol,
+          type: parsed.type,
+          entry: parsed.entry_price,
+          currentPrice: parsed.current_price,
+          stop: parsed.stop_loss,
+          tp1: parsed.tp1,
+          tp2: parsed.tp2,
+          tp3: parsed.tp3,
+          confidence: parsed.confidence,
+          tier: parsed.tier,
+          tradeLive: parsed.trade_live,
+          positionSizePercent: parsed.position_size_percent,
+          orderType: parsed.order_type,
+          executionType: parsed.execution_type,
+          createdAt: parsed.created_at,
+          expiresAt: parsed.expires_at,
+          indicators: parsed.indicators
+        };
+      });
 
       res.json({
         signals
