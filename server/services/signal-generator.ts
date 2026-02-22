@@ -620,27 +620,16 @@ class MACrossoverStrategy {
         rationale.push('⚠️ Within news window - increased volatility');
       }
 
-    // 🚨 CRITICAL FIX #2: BALANCE LONG/SHORT SIGNAL GENERATION
-    // Allow 2-of-3 timeframe alignment for SHORT signals (instead of requiring all 3)
-    // LONG requires all 3 UP (conservative), SHORT requires 2-of-3 DOWN (balanced)
-    // This prevents December disaster: 93 LONG, 0 SHORT (missed entire down-move)
-    } else if ((bearishCross || bearishPullback)) {
-      // Count how many of (Weekly, Daily, 4H) are DOWN
-      const downTrends = [weeklyTrend === 'DOWN', dailyTrend === 'DOWN', fourHourTrend === 'DOWN'].filter(Boolean).length;
+    // 📊 STEP 4: ICT 3-TIMEFRAME RULE - Check for SHORT signals
+    // REQUIREMENT: Weekly + Daily + 4H must ALL be DOWN (same as LONG requirement)
+    // 1H can be UP (pullback = BEST entry!)
+    } else if ((bearishCross || bearishPullback) && weeklyTrend === 'DOWN' && dailyTrend === 'DOWN' && fourHourTrend === 'DOWN') {
+      signalType = 'SHORT';
+      entryType = bearishCross ? 'CROSSOVER' : 'PULLBACK';
 
-      // Require at least 2 of 3 timeframes DOWN for SHORT signal
-      if (downTrends >= 2) {
-        signalType = 'SHORT';
-        entryType = bearishCross ? 'CROSSOVER' : 'PULLBACK';
-
-      // 🆕 v3.1.0 ICT CONFIDENCE SCORING (Max: 100 points)
-      // 3 Higher Timeframes (75 points) + 1H Entry Timing (25 points)
-      // Note: SHORT signals allow 2-of-3 alignment (more balanced detection)
-      if (downTrends === 3) {
-        rationale.push('🎯 Perfect 3-TF alignment (W+D+4H all DOWN)');
-      } else {
-        rationale.push(`⚡ 2-of-3 TF alignment (${downTrends}/3 DOWN - balanced detection)`);
-      }
+      // 🆕 v3.2.0 ICT CONFIDENCE SCORING - SHORT (Max: 130 points)
+      // 3 Higher Timeframes (75 points) + 1H Entry Timing (25 points) + Confluence (30 points)
+      rationale.push('🎯 3-TF alignment (W+D+4H all DOWN)');
 
       // 1. Weekly timeframe BEARISH (25 points max)
       if (weeklyTrend === 'DOWN' && weeklyMACD && weeklyMACD.macd < weeklyMACD.signal) {
@@ -757,14 +746,6 @@ class MACrossoverStrategy {
         rationale.push('⚠️ Within news window - increased volatility');
       }
 
-      } else {
-        // SHORT rejected - insufficient timeframe alignment
-        if (diagnosticMode) {
-          console.log(`└─ ❌ REJECTED SHORT: Only ${downTrends} of 3 timeframes DOWN (need 2+)`);
-          console.log(`   W:${weeklyTrend}, D:${dailyTrend}, 4H:${fourHourTrend}\n`);
-        }
-        return null;
-      }
     }
 
     // ⚡ PHASE 3D: MANDATORY RSI filters (block overbought/oversold extremes)
@@ -817,7 +798,7 @@ class MACrossoverStrategy {
     // Get prop firm configuration
     const propConfig = propFirmService.getConfig();
 
-    if (confidence >= 85) {  // HIGH tier: 85+ points - Strong confluence alignment
+    if (confidence >= 95) {  // HIGH tier: 95+ points (73% of 130 max) - Strong confluence alignment
       tier = 'HIGH';
       tradeLive = true;
       // Use prop firm configured risk (1.0% for Phase 1, 1.5% for Phase 2)
