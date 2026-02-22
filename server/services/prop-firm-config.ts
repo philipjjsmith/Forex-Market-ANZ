@@ -117,7 +117,16 @@ interface DailyLossTracker {
 
 class PropFirmService {
   private config: PropFirmConfig = FXIFY_TWO_PHASE_STANDARD;
-  private dailyTracker: DailyLossTracker | null = null;
+  // Auto-initialize with today's date so canTrade() works from first request (even before signal gen runs)
+  private dailyTracker: DailyLossTracker = {
+    date: new Date().toISOString().split('T')[0],
+    startingBalance: 10000,
+    currentBalance: 10000,
+    dailyPnL: 0,
+    dailyPnLPercent: 0,
+    tradesCount: 0,
+    isLocked: false
+  };
 
   /**
    * Set the active prop firm configuration
@@ -233,7 +242,7 @@ class PropFirmService {
   /**
    * Get daily tracker status
    */
-  getDailyStatus(): DailyLossTracker | null {
+  getDailyStatus(): DailyLossTracker {
     return this.dailyTracker;
   }
 
@@ -262,7 +271,6 @@ class PropFirmService {
    * Check if max trades per day reached
    */
   maxTradesReached(): boolean {
-    if (!this.dailyTracker) return false;
     return this.dailyTracker.tradesCount >= this.config.maxTradesPerDay;
   }
 

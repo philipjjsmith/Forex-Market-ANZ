@@ -85,7 +85,7 @@ export class Indicators {
       const high = candles[i].high;
       const low = candles[i].low;
       const prevClose = candles[i - 1].close;
-      
+
       const tr = Math.max(
         high - low,
         Math.abs(high - prevClose),
@@ -93,8 +93,14 @@ export class Indicators {
       );
       trueRanges.push(tr);
     }
-    
-    return this.sma(trueRanges.slice(-period), period);
+
+    // Wilder's smoothing: seed with SMA of first `period` values, then exponential smoothing
+    // This matches MT5/TradingView ATR behavior (not a plain SMA of last N bars)
+    let atr = trueRanges.slice(0, period).reduce((a, b) => a + b, 0) / period;
+    for (let i = period; i < trueRanges.length; i++) {
+      atr = (atr * (period - 1) + trueRanges[i]) / period;
+    }
+    return atr;
   }
 
   static bollingerBands(closes: number[], period = 20, stdDev = 2) {
@@ -141,13 +147,15 @@ export class Indicators {
     }
     
     const atr = this.sma(tr.slice(-period), period);
-    if (!atr) return null;
+    if (!atr || atr === 0) return null;
 
     const diPlus = ((this.sma(dmPlus.slice(-period), period) || 0) / atr) * 100;
     const diMinus = ((this.sma(dmMinus.slice(-period), period) || 0) / atr) * 100;
-    
-    const dx = Math.abs(diPlus - diMinus) / (diPlus + diMinus) * 100;
-    
+
+    // Guard against division by zero when diPlus and diMinus are both 0 (no directional movement)
+    const diSum = diPlus + diMinus;
+    const dx = diSum === 0 ? 0 : (Math.abs(diPlus - diMinus) / diSum) * 100;
+
     return { adx: dx, diPlus, diMinus };
   }
 }

@@ -46,6 +46,8 @@ export class TwelveDataAPI {
   private baseUrl: string;
   private apiKey: string;
   private cacheInitialized: Promise<void>;
+  private lastApiCallTime: number = 0;
+  private readonly API_CALL_DELAY_MS = 8000; // 8 seconds between calls (free tier: 8/min)
 
   constructor() {
     this.baseUrl = 'https://api.twelvedata.com';
@@ -195,9 +197,29 @@ export class TwelveDataAPI {
     try {
       console.log(`🌐 Fetching ${outputsize} ${interval} candles for ${symbol} from Twelve Data...`);
 
+      // Global rate limiter — enforces 8s between ALL API calls regardless of caller
+      const timeSinceLastCall = Date.now() - this.lastApiCallTime;
+      if (this.lastApiCallTime > 0 && timeSinceLastCall < this.API_CALL_DELAY_MS) {
+        const waitMs = this.API_CALL_DELAY_MS - timeSinceLastCall;
+        console.log(`⏳ Rate limiting: waiting ${waitMs}ms before Twelve Data API call...`);
+        await new Promise(resolve => setTimeout(resolve, waitMs));
+      }
+      this.lastApiCallTime = Date.now();
+
       const url = `${this.baseUrl}/time_series?symbol=${symbol}&interval=${interval}&outputsize=${outputsize}&apikey=${this.apiKey}`;
 
       const response = await fetch(url);
+
+      // Handle HTTP-level 429 before the generic !response.ok check — enables stale cache fallback
+      if (response.status === 429) {
+        console.warn(`⚠️  HTTP 429 rate limit for ${symbol}. Attempting stale cache...`);
+        if (cached && cached.candles.length > 0) {
+          const cacheAgeMinutes = Math.round((Date.now() - cached.timestamp) / (60 * 1000));
+          console.log(`✅ Using stale cache for ${cacheKey} (age: ${cacheAgeMinutes}min) due to HTTP 429`);
+          return cached.candles.map(c => ({ ...c, timestamp: new Date(c.timestamp) }));
+        }
+        throw new Error(`HTTP 429 rate limit and no cached data available for ${symbol}`);
+      }
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -211,19 +233,13 @@ export class TwelveDataAPI {
           throw new Error('Invalid Twelve Data API key');
         }
         if (data.message?.includes('limit')) {
-          // Rate limit hit - try to use cached data even if expired
+          // JSON-level rate limit — try stale cache
           console.warn(`⚠️  API rate limit reached for ${symbol}. Attempting to use cached data...`);
 
           if (cached && cached.candles.length > 0) {
             const cacheAgeMinutes = Math.round((Date.now() - cached.timestamp) / (60 * 1000));
             console.log(`✅ Using stale cache for ${cacheKey} (age: ${cacheAgeMinutes}min) due to rate limit`);
-
-            // Return stale cache data
-            const candles = cached.candles.map(c => ({
-              ...c,
-              timestamp: new Date(c.timestamp)
-            }));
-            return candles;
+            return cached.candles.map(c => ({ ...c, timestamp: new Date(c.timestamp) }));
           } else {
             // No cache available at all
             throw new Error(`API rate limit reached (800/day) and no cached data available for ${symbol}`);

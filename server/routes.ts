@@ -232,7 +232,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   /**
    * Get current prop firm configuration
    */
-  app.get("/api/prop-firm/config", async (req, res) => {
+  app.get("/api/prop-firm/config", requireAuth, async (req, res) => {
     try {
       const config = propFirmService.getConfig();
       const summary = propFirmService.getRiskSummary();
@@ -253,7 +253,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   /**
    * Set prop firm configuration (Phase 1, Phase 2, or Funded)
    */
-  app.post("/api/prop-firm/config", async (req, res) => {
+  app.post("/api/prop-firm/config", requireAuth, async (req, res) => {
     try {
       const { phase } = req.body;
 
@@ -290,7 +290,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   /**
    * Initialize daily tracker with starting balance
    */
-  app.post("/api/prop-firm/init-daily", async (req, res) => {
+  app.post("/api/prop-firm/init-daily", requireAuth, async (req, res) => {
     try {
       const { startingBalance } = req.body;
 
@@ -316,7 +316,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   /**
    * Update daily tracker with trade result
    */
-  app.post("/api/prop-firm/update-trade", async (req, res) => {
+  app.post("/api/prop-firm/update-trade", requireAuth, async (req, res) => {
     try {
       const { pnl, currentBalance } = req.body;
 
@@ -346,7 +346,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   /**
    * Check if trading is allowed
    */
-  app.get("/api/prop-firm/can-trade", async (req, res) => {
+  app.get("/api/prop-firm/can-trade", requireAuth, async (req, res) => {
     try {
       const dailyStatus = propFirmService.getDailyStatus();
       const dailyLossPercent = Math.abs(dailyStatus?.dailyPnLPercent || 0);
@@ -370,7 +370,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   /**
    * Reset daily tracker (for new trading day or fresh start)
    */
-  app.post("/api/prop-firm/reset-daily", async (req, res) => {
+  app.post("/api/prop-firm/reset-daily", requireAuth, async (req, res) => {
     try {
       const { startingBalance } = req.body;
 
@@ -407,7 +407,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
    * - All professional metrics (Sharpe, Sortino, Calmar, SQN, etc.)
    * - FXIFY-specific compliance monitoring
    */
-  app.get("/api/prop-firm/dashboard", async (req, res) => {
+  app.get("/api/prop-firm/dashboard", requireAuth, async (req, res) => {
     try {
       const config = propFirmService.getConfig();
       const dailyStatus = propFirmService.getDailyStatus();
@@ -454,7 +454,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           MIN(created_at) as first_signal_date,
           MAX(created_at) as last_signal_date
         FROM signal_history
-        WHERE strategy_version = '3.1.0'
+        WHERE strategy_version >= '3.1.0'
           AND trade_live = true
           ${dateFilterSQL}
       `) as any[];

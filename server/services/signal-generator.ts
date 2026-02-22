@@ -281,7 +281,7 @@ function detectBreakoutRetest(candles: Candle[], type: 'LONG' | 'SHORT'): boolea
     const maxPriorHigh = Math.max(...priorHighs);
 
     // Check if we broke above that high in last 10 candles
-    const brokeAbove = recent.slice(-10, -2).some(c => c.close > maxPriorHigh);
+    const brokeAbove = recent.slice(-10).some(c => c.close > maxPriorHigh);
 
     // Check if we pulled back near that level (retest)
     const pulledBack = Math.abs(currentPrice - maxPriorHigh) / maxPriorHigh < 0.003;
@@ -296,7 +296,7 @@ function detectBreakoutRetest(candles: Candle[], type: 'LONG' | 'SHORT'): boolea
     const minPriorLow = Math.min(...priorLows);
 
     // Check if we broke below that low in last 10 candles
-    const brokeBelow = recent.slice(-10, -2).some(c => c.close < minPriorLow);
+    const brokeBelow = recent.slice(-10).some(c => c.close < minPriorLow);
 
     // Check if we pulled back near that level (retest)
     const pulledBack = Math.abs(currentPrice - minPriorLow) / minPriorLow < 0.003;
@@ -387,20 +387,27 @@ class MACrossoverStrategy {
     const weeklyFastMA = Indicators.ema(weeklyCloses, fastPeriod);
     const weeklySlowMA = Indicators.ema(weeklyCloses, slowPeriod);
     const weeklyMACD = Indicators.macd(weeklyCloses, 12, 26, 9);
-    const weeklyTrend = weeklyFastMA && weeklySlowMA && weeklyFastMA > weeklySlowMA ? 'UP' : 'DOWN';
 
     // Daily timeframe - Intermediate trend
     const dailyFastMA = Indicators.ema(dailyCloses, fastPeriod);
     const dailySlowMA = Indicators.ema(dailyCloses, slowPeriod);
     const dailyMACD = Indicators.macd(dailyCloses, 12, 26, 9);
     const prevDailyMACD = Indicators.macd(dailyCloses.slice(0, -1), 12, 26, 9); // Previous bar — for slope calculation
-    const dailyTrend = dailyFastMA && dailySlowMA && dailyFastMA > dailySlowMA ? 'UP' : 'DOWN';
 
     // 4H timeframe - Entry trend confirmation
     const fourHourFastMA = Indicators.ema(fourHourCloses, fastPeriod);
     const fourHourSlowMA = Indicators.ema(fourHourCloses, slowPeriod);
     const fourHourMACD = Indicators.macd(fourHourCloses, 12, 26, 9);
-    const fourHourTrend = fourHourFastMA && fourHourSlowMA && fourHourFastMA > fourHourSlowMA ? 'UP' : 'DOWN';
+
+    // Guard: all MAs must be non-null before determining trend direction.
+    // Previously these defaulted to 'DOWN' when null — causing false SHORT signals.
+    if (!weeklyFastMA || !weeklySlowMA || !dailyFastMA || !dailySlowMA || !fourHourFastMA || !fourHourSlowMA) {
+      return null; // Insufficient data — cannot determine trend direction reliably
+    }
+
+    const weeklyTrend = weeklyFastMA > weeklySlowMA ? 'UP' : 'DOWN';
+    const dailyTrend = dailyFastMA > dailySlowMA ? 'UP' : 'DOWN';
+    const fourHourTrend = fourHourFastMA > fourHourSlowMA ? 'UP' : 'DOWN';
 
     // 1H timeframe - Entry timing and indicators (this is where we execute)
     const oneHourFastMA = Indicators.ema(oneHourCloses, fastPeriod);
@@ -461,11 +468,15 @@ class MACrossoverStrategy {
     // REQUIRES prior outer-band touch within last 20 candles (~20 hours):
     // Without this, the condition fires on every minor consolidation in a trend,
     // generating 6-15 signals/month instead of the intended 2-5.
+    //
+    // BB look-ahead fix: compute bbHistory WITHOUT the current candle so we compare
+    // prior candles to the bands that existed at the time — not future bands.
+    const bbHistory = Indicators.bollingerBands(oneHourCloses.slice(0, -1), 20, 2);
     const inBullishTrend = oneHourFastMA > oneHourSlowMA && fourHourTrend === 'UP' && dailyTrend === 'UP';
     const inBearishTrend = oneHourFastMA < oneHourSlowMA && fourHourTrend === 'DOWN' && dailyTrend === 'DOWN';
     const priorCandles = oneHourCandles.slice(-21, -1); // last 20 closed candles before current
-    const recentlyTouchedLower = priorCandles.some(c => c.low <= bb.lower);
-    const recentlyTouchedUpper = priorCandles.some(c => c.high >= bb.upper);
+    const recentlyTouchedLower = bbHistory ? priorCandles.some(c => c.low <= bbHistory.lower) : false;
+    const recentlyTouchedUpper = bbHistory ? priorCandles.some(c => c.high >= bbHistory.upper) : false;
     const bullishPullback = inBullishTrend && currentPrice >= bb.lower && currentPrice <= bb.middle && recentlyTouchedLower;
     const bearishPullback = inBearishTrend && currentPrice <= bb.upper && currentPrice >= bb.middle && recentlyTouchedUpper;
 
@@ -1170,7 +1181,7 @@ export class SignalGenerator {
    * @param symbol - Currency pair (e.g., 'EUR/USD')
    * @returns Object with signal and candles, or null if no opportunity
    */
-  async generateSignalForSymbol(symbol: string): Promise<{ signal: Signal, candles: Candle[] } | null> {
+  async generateSignalForSymbol(symbol: string): Promise<{ signal: Signal | null, candles: Candle[], analysis?: object } | null> {
     try {
       console.log(`🔍 On-demand analysis for ${symbol} [FIX v2 - Strategy Instantiation]...`);
 

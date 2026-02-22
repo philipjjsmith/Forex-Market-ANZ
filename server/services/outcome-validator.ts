@@ -94,19 +94,24 @@ export class OutcomeValidator {
       let expired = 0;
 
       for (const signal of pendingSignals) {
-        // Check if signal expired (48 hours)
-        if (new Date() > new Date(signal.expires_at)) {
-          await this.markAsExpired(signal);
-          expired++;
-          continue;
-        }
+        try {
+          // Check if signal expired (48 hours)
+          if (new Date() > new Date(signal.expires_at)) {
+            await this.markAsExpired(signal);
+            expired++;
+            continue;
+          }
 
-        // Check if TP or SL hit using candle HIGH/LOW extremes
-        const result = await this.checkOutcomeFromCandles(signal);
+          // Check if TP or SL hit using candle HIGH/LOW extremes
+          const result = await this.checkOutcomeFromCandles(signal);
 
-        if (result) {
-          await this.updateSignalOutcome(signal, result.outcome, result.outcomePrice);
-          updated++;
+          if (result) {
+            await this.updateSignalOutcome(signal, result.outcome, result.outcomePrice);
+            updated++;
+          }
+        } catch (signalError) {
+          console.error(`❌ Error processing signal ${signal.signal_id}:`, signalError);
+          // Continue processing remaining signals even if one fails
         }
       }
 
@@ -159,8 +164,9 @@ export class OutcomeValidator {
 
       const signalCreatedAt = new Date(signal.created_at).getTime();
 
-      // Only check candles that opened AFTER the signal was created
-      const relevantCandles = candles.filter(c => new Date(c.timestamp).getTime() >= signalCreatedAt);
+      // Only check candles that opened STRICTLY AFTER the signal was created
+      // Using > (not >=) to exclude the signal's own candle, which pre-dates the entry
+      const relevantCandles = candles.filter(c => new Date(c.timestamp).getTime() > signalCreatedAt);
 
       if (relevantCandles.length === 0) {
         return null; // No completed candles since signal creation yet
@@ -176,9 +182,21 @@ export class OutcomeValidator {
           : candle.high >= signal.stop_loss;
 
         if (tpHit && slHit) {
-          // Both TP and SL within same candle — assume SL hit first (conservative/standard)
-          console.log(`⚠️  ${signal.signal_id}: ambiguous candle (TP+SL both hit) — assuming STOP_HIT`);
-          return { outcome: 'STOP_HIT', outcomePrice: signal.stop_loss };
+          // Both TP and SL within same candle — infer order from candle body direction
+          // Bullish candle (close >= open): price moved up first → TP hit first for LONG, SL for SHORT
+          // Bearish candle (close < open): price moved down first → SL hit first for LONG, TP for SHORT
+          const candleIsBullish = candle.close >= candle.open;
+          let outcome: 'TP1_HIT' | 'STOP_HIT';
+          let outcomePrice: number;
+          if (signal.type === 'LONG') {
+            outcome = candleIsBullish ? 'TP1_HIT' : 'STOP_HIT';
+            outcomePrice = candleIsBullish ? signal.tp1 : signal.stop_loss;
+          } else {
+            outcome = candleIsBullish ? 'STOP_HIT' : 'TP1_HIT';
+            outcomePrice = candleIsBullish ? signal.stop_loss : signal.tp1;
+          }
+          console.log(`⚠️  ${signal.signal_id}: ambiguous candle → inferring ${outcome} from candle body direction`);
+          return { outcome, outcomePrice };
         }
 
         if (tpHit) {
@@ -238,15 +256,14 @@ export class OutcomeValidator {
         return candles.slice(-200); // Keep last 200 for consistency
       }
 
-      // Fallback: Generate demo candles if API fails
-      console.log(`⚠️  Twelve Data API unavailable, generating demo candles`);
-      return this.generateDemoCandles(signal, durationHours, outcomePrice);
+      // API returned no data — return empty array (no data is better than synthetic data in production)
+      console.warn(`⚠️  Twelve Data API returned no candles for ${signal.symbol} — skipping candle update`);
+      return [];
 
     } catch (error) {
       console.error(`❌ Error fetching trade duration candles:`, error);
-      // Fallback to demo candles
-      const durationHours = Math.ceil((Date.now() - new Date(signal.created_at).getTime()) / (1000 * 60 * 60));
-      return this.generateDemoCandles(signal, durationHours, outcomePrice);
+      // Return empty array — no data is better than synthetic data stored permanently in DB
+      return [];
     }
   }
 
@@ -365,7 +382,14 @@ export class OutcomeValidator {
     try {
       // Determine confidence bracket
       const indicators = await this.getSignalIndicators(signal.signal_id);
-      const confidence = indicators?.confidence || 70;
+
+      // Guard: if confidence is null/undefined, skip bracket assignment rather than
+      // defaulting to 70 which would place the signal in the wrong bracket
+      if (!indicators || indicators.confidence == null) {
+        console.warn(`⚠️  No confidence data for ${signal.signal_id} — skipping performance metrics`);
+        return;
+      }
+      const confidence = parseFloat(indicators.confidence);
 
       let confidenceBracket: string;
       if (confidence >= 90) {
@@ -401,6 +425,7 @@ export class OutcomeValidator {
 
     } catch (error) {
       console.error('❌ Error updating performance metrics:', error);
+      throw error; // Propagate so callers can detect and log the failure
     }
   }
 

@@ -644,7 +644,7 @@ export function registerSignalRoutes(app: Express) {
 
       // Build date filter condition
       const dateFilter = days > 0
-        ? sql`AND outcome_time >= NOW() - INTERVAL '${sql.raw(days.toString())} days'`
+        ? sql`AND outcome_time >= NOW() - (${days}::int * INTERVAL '1 day')`
         : sql``;
 
       // Get total count for pagination
@@ -721,7 +721,7 @@ export function registerSignalRoutes(app: Express) {
    */
   app.get("/api/signals/winning-trade-details/:signalId", requireAuth, async (req, res) => {
     const { signalId } = req.params;
-    const userId = req.user!.id;
+    const userId = req.userId!;
 
     try {
       // Import services (lazy load)
@@ -832,7 +832,7 @@ export function registerSignalRoutes(app: Express) {
    * Get win rate and performance breakdown by trading session
    */
   app.get("/api/signals/session-performance", requireAuth, async (req, res) => {
-    const userId = req.user!.id;
+    const userId = req.userId!;
 
     try {
       const { sessionAnalyzer } = await import('../services/session-analyzer.js');
@@ -873,7 +873,7 @@ export function registerSignalRoutes(app: Express) {
    */
   app.get("/api/signals/strategy-stats/:strategyName", requireAuth, async (req, res) => {
     const { strategyName } = req.params;
-    const userId = req.user!.id;
+    const userId = req.userId!;
 
     try {
       const { strategyAnalyzer } = await import('../services/strategy-analyzer.js');
