@@ -393,6 +393,7 @@ class MACrossoverStrategy {
     const dailyFastMA = Indicators.ema(dailyCloses, fastPeriod);
     const dailySlowMA = Indicators.ema(dailyCloses, slowPeriod);
     const dailyMACD = Indicators.macd(dailyCloses, 12, 26, 9);
+    const prevDailyMACD = Indicators.macd(dailyCloses.slice(0, -1), 12, 26, 9); // Previous bar — for slope calculation
     const dailyTrend = dailyFastMA && dailySlowMA && dailyFastMA > dailySlowMA ? 'UP' : 'DOWN';
 
     // 4H timeframe - Entry trend confirmation
@@ -456,11 +457,17 @@ class MACrossoverStrategy {
     const withinNewsWindow = isWithinNewsWindow();
 
     // 🆕 HYBRID ENTRY: BB Middle Band Pullback Detection
-    // Detects pullback to BB middle line in established trends
+    // Detects pullback to BB middle line in established trends.
+    // REQUIRES prior outer-band touch within last 20 candles (~20 hours):
+    // Without this, the condition fires on every minor consolidation in a trend,
+    // generating 6-15 signals/month instead of the intended 2-5.
     const inBullishTrend = oneHourFastMA > oneHourSlowMA && fourHourTrend === 'UP' && dailyTrend === 'UP';
     const inBearishTrend = oneHourFastMA < oneHourSlowMA && fourHourTrend === 'DOWN' && dailyTrend === 'DOWN';
-    const bullishPullback = inBullishTrend && currentPrice >= bb.lower && currentPrice <= bb.middle;
-    const bearishPullback = inBearishTrend && currentPrice <= bb.upper && currentPrice >= bb.middle;
+    const priorCandles = oneHourCandles.slice(-21, -1); // last 20 closed candles before current
+    const recentlyTouchedLower = priorCandles.some(c => c.low <= bb.lower);
+    const recentlyTouchedUpper = priorCandles.some(c => c.high >= bb.upper);
+    const bullishPullback = inBullishTrend && currentPrice >= bb.lower && currentPrice <= bb.middle && recentlyTouchedLower;
+    const bearishPullback = inBearishTrend && currentPrice <= bb.upper && currentPrice >= bb.middle && recentlyTouchedUpper;
 
     let signalType: 'LONG' | 'SHORT' | null = null;
     let confidence = 0;
@@ -471,27 +478,35 @@ class MACrossoverStrategy {
       rationale.push(`AI-Enhanced (${aiInsights.totalSignals} signals analyzed, ${aiInsights.winRate.toFixed(1)}% win rate)`);
     }
 
-    // 🚨 CRITICAL FIX #1: REVERSAL DETECTION (Prevents December 2025 disaster)
-    // Block LONG signals when Daily MACD shows bearish divergence
-    // Block SHORT signals when Daily MACD shows bullish divergence
-    // This prevents generating signals when trend is about to reverse
-    if (dailyMACD) {
-      // For potential LONG signals: check if Daily MACD is bearish
-      if ((bullishCross || bullishPullback) && dailyMACD.histogram < 0) {
+    // 🚨 REVERSAL DETECTION — Elder Impulse System (slope-based, not sign-based)
+    // Block signals only when MACD momentum is actively WORSENING in the trade direction.
+    // Using SIGN alone (histogram < 0) creates weeks-long dead zones when MACD recovers slowly.
+    // Using SLOPE (is histogram falling or rising?) catches real reversals without false blocks.
+    //
+    // Rule: Block LONG when histogram is negative AND FALLING (bearish momentum growing)
+    //       Allow LONG when histogram is negative but RISING  (bearish momentum fading = pullback)
+    //       Block SHORT when histogram is positive AND RISING  (bullish momentum growing)
+    //       Allow SHORT when histogram is positive but FALLING (bullish momentum fading = pullback)
+    if (dailyMACD && prevDailyMACD) {
+      const histogramFalling = dailyMACD.histogram < prevDailyMACD.histogram;
+      const histogramRising  = dailyMACD.histogram > prevDailyMACD.histogram;
+
+      // Block LONG only when bearish momentum is actively increasing
+      if ((bullishCross || bullishPullback) && dailyMACD.histogram < 0 && histogramFalling) {
         if (diagnosticMode) {
-          console.log(`└─ ❌ REJECTED LONG: Daily MACD bearish (histogram: ${dailyMACD.histogram.toFixed(4)})`);
-          console.log(`   Trend may be reversing - avoiding entry\n`);
+          console.log(`└─ ❌ REJECTED LONG: MACD histogram falling (${prevDailyMACD.histogram.toFixed(4)} → ${dailyMACD.histogram.toFixed(4)})`);
+          console.log(`   Bearish momentum increasing - avoiding entry\n`);
         }
-        return null; // Block LONG - trend reversing downward
+        return null;
       }
 
-      // For potential SHORT signals: check if Daily MACD is bullish
-      if ((bearishCross || bearishPullback) && dailyMACD.histogram > 0) {
+      // Block SHORT only when bullish momentum is actively increasing
+      if ((bearishCross || bearishPullback) && dailyMACD.histogram > 0 && histogramRising) {
         if (diagnosticMode) {
-          console.log(`└─ ❌ REJECTED SHORT: Daily MACD bullish (histogram: ${dailyMACD.histogram.toFixed(4)})`);
-          console.log(`   Trend may be reversing - avoiding entry\n`);
+          console.log(`└─ ❌ REJECTED SHORT: MACD histogram rising (${prevDailyMACD.histogram.toFixed(4)} → ${dailyMACD.histogram.toFixed(4)})`);
+          console.log(`   Bullish momentum increasing - avoiding entry\n`);
         }
-        return null; // Block SHORT - trend reversing upward
+        return null;
       }
     }
 
