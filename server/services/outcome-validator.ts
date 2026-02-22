@@ -1,11 +1,19 @@
 import { db } from '../db';
 import { sql } from 'drizzle-orm';
 import { API_ENDPOINTS } from '../../client/src/config/api';
-import { exchangeRateAPI } from './exchangerate-api';
+import { twelveDataAPI } from './twelve-data';
 
 /**
  * Outcome Validator Service
  * Runs every 5 minutes to check if pending signals hit TP1 or Stop Loss
+ *
+ * v2.0.0: Uses candle HIGH/LOW from Twelve Data for outcome detection
+ * - Industry-standard approach: check candle extremes, not just close price
+ * - LONG TP1: any candle HIGH >= tp1 (after signal creation)
+ * - LONG SL: any candle LOW <= stop_loss (after signal creation)
+ * - SHORT TP1: any candle LOW <= tp1 (after signal creation)
+ * - SHORT SL: any candle HIGH >= stop_loss (after signal creation)
+ * - Ambiguous (both hit same candle): SL assumed first (conservative)
  */
 
 interface PendingSignal {
@@ -23,10 +31,15 @@ interface PendingSignal {
   expires_at: Date;
 }
 
-interface ForexQuote {
-  symbol: string;
-  price: number;
-  timestamp: string;
+// Helper: Check if forex market is open (duplicated from signal-generator for isolation)
+function isForexMarketOpen(): boolean {
+  const now = new Date();
+  const day = now.getUTCDay();
+  const hour = now.getUTCHours();
+  if (day === 6) return false;
+  if (day === 0 && hour < 22) return false;
+  if (day === 5 && hour >= 22) return false;
+  return true;
 }
 
 export class OutcomeValidator {
@@ -53,6 +66,13 @@ export class OutcomeValidator {
     this.lastRunTime = Date.now();
     console.log('🔍 [Outcome Validator] Starting validation cycle...');
 
+    // 🛡️ MARKET HOURS GATE: No point validating when market is closed and prices aren't moving
+    if (!isForexMarketOpen()) {
+      console.log('⏭️  Forex market closed - skipping outcome validation');
+      this.isRunning = false;
+      return;
+    }
+
     try {
       // 1. Fetch all PENDING signals
       const pendingSignals = await this.fetchPendingSignals();
@@ -69,22 +89,11 @@ export class OutcomeValidator {
         return;
       }
 
-      // 2. Get current prices for all unique symbols
-      const uniqueSymbols = Array.from(new Set(pendingSignals.map(s => s.symbol)));
-      const currentPrices = await this.fetchCurrentPrices(uniqueSymbols);
-
-      // 3. Check each signal
+      // 2. Check each signal using candle HIGH/LOW (industry-standard approach)
       let updated = 0;
       let expired = 0;
 
       for (const signal of pendingSignals) {
-        const currentPrice = currentPrices.get(signal.symbol);
-
-        if (!currentPrice) {
-          console.warn(`⚠️  No price data for ${signal.symbol}, skipping signal ${signal.signal_id}`);
-          continue;
-        }
-
         // Check if signal expired (48 hours)
         if (new Date() > new Date(signal.expires_at)) {
           await this.markAsExpired(signal);
@@ -92,11 +101,11 @@ export class OutcomeValidator {
           continue;
         }
 
-        // Check if TP or SL hit
-        const outcome = this.checkOutcome(signal, currentPrice);
+        // Check if TP or SL hit using candle HIGH/LOW extremes
+        const result = await this.checkOutcomeFromCandles(signal);
 
-        if (outcome) {
-          await this.updateSignalOutcome(signal, outcome, currentPrice);
+        if (result) {
+          await this.updateSignalOutcome(signal, result.outcome, result.outcomePrice);
           updated++;
         }
       }
@@ -128,58 +137,65 @@ export class OutcomeValidator {
   }
 
   /**
-   * Fetch current prices from Forex API
+   * Check if signal hit TP1 or Stop Loss using candle HIGH/LOW extremes (industry standard)
+   *
+   * Fetches 1H candles from Twelve Data (already cached by signal generator),
+   * then scans each candle after the signal's creation time for TP/SL touches.
+   *
+   * This correctly detects intraday excursions that a close-price poll would miss.
    */
-  private async fetchCurrentPrices(symbols: string[]): Promise<Map<string, number>> {
-    const priceMap = new Map<string, number>();
-
+  private async checkOutcomeFromCandles(
+    signal: PendingSignal
+  ): Promise<{ outcome: 'TP1_HIT' | 'STOP_HIT'; outcomePrice: number } | null> {
     try {
-      console.log('📡 Fetching current prices from ExchangeRate-API...');
+      // Fetch 1H candles — these are cached by signal generator (30-min TTL)
+      // so this costs 0 additional API credits in the common case
+      const candles = await twelveDataAPI.fetchHistoricalCandles(signal.symbol, '1h', 200);
 
-      // Use the existing exchangeRateAPI service (has 15-min caching!)
-      const quotes = await exchangeRateAPI.fetchAllQuotes();
-
-      // Map quotes to price map
-      for (const quote of quotes) {
-        priceMap.set(quote.symbol, quote.exchangeRate);
+      if (!candles || candles.length === 0) {
+        console.warn(`⚠️  No candle data for ${signal.symbol} — cannot validate ${signal.signal_id}`);
+        return null;
       }
 
-      console.log(`✅ Fetched prices for ${priceMap.size} currency pairs`);
+      const signalCreatedAt = new Date(signal.created_at).getTime();
+
+      // Only check candles that opened AFTER the signal was created
+      const relevantCandles = candles.filter(c => new Date(c.timestamp).getTime() >= signalCreatedAt);
+
+      if (relevantCandles.length === 0) {
+        return null; // No completed candles since signal creation yet
+      }
+
+      for (const candle of relevantCandles) {
+        const tpHit = signal.type === 'LONG'
+          ? candle.high >= signal.tp1
+          : candle.low <= signal.tp1;
+
+        const slHit = signal.type === 'LONG'
+          ? candle.low <= signal.stop_loss
+          : candle.high >= signal.stop_loss;
+
+        if (tpHit && slHit) {
+          // Both TP and SL within same candle — assume SL hit first (conservative/standard)
+          console.log(`⚠️  ${signal.signal_id}: ambiguous candle (TP+SL both hit) — assuming STOP_HIT`);
+          return { outcome: 'STOP_HIT', outcomePrice: signal.stop_loss };
+        }
+
+        if (tpHit) {
+          return { outcome: 'TP1_HIT', outcomePrice: signal.tp1 };
+        }
+
+        if (slHit) {
+          return { outcome: 'STOP_HIT', outcomePrice: signal.stop_loss };
+        }
+      }
+
+      return null; // Neither TP nor SL hit yet
 
     } catch (error) {
-      console.error('❌ Error fetching forex prices:', error);
+      console.error(`❌ Error checking candle outcome for ${signal.signal_id}:`, error);
+      return null;
     }
-
-    return priceMap;
-  }
-
-  /**
-   * Check if signal hit TP1 or Stop Loss
-   */
-  private checkOutcome(
-    signal: PendingSignal,
-    currentPrice: number
-  ): 'TP1_HIT' | 'STOP_HIT' | null {
-
-    if (signal.type === 'LONG') {
-      // LONG: TP1 is above entry, SL is below entry
-      if (currentPrice >= signal.tp1) {
-        return 'TP1_HIT';
-      }
-      if (currentPrice <= signal.stop_loss) {
-        return 'STOP_HIT';
-      }
-    } else {
-      // SHORT: TP1 is below entry, SL is above entry
-      if (currentPrice <= signal.tp1) {
-        return 'TP1_HIT';
-      }
-      if (currentPrice >= signal.stop_loss) {
-        return 'STOP_HIT';
-      }
-    }
-
-    return null;
   }
 
   /**
@@ -214,9 +230,7 @@ export class OutcomeValidator {
         candleCount = Math.max(100, Math.min(200, durationHours + 20));
       }
 
-      // Try to fetch from Twelve Data API (may fail due to rate limits)
-      // Import is done at top of file - we need to add it
-      const { twelveDataAPI } = await import('./twelve-data');
+      // Fetch from Twelve Data API (cached — low credit usage)
       const candles = await twelveDataAPI.fetchHistoricalCandles(signal.symbol, interval, candleCount);
 
       if (candles && candles.length > 0) {

@@ -305,6 +305,18 @@ function detectBreakoutRetest(candles: Candle[], type: 'LONG' | 'SHORT'): boolea
   }
 }
 
+// Helper function: Check if forex market is open
+// Forex market hours (UTC): Sun 22:00 → Fri 22:00
+function isForexMarketOpen(): boolean {
+  const now = new Date();
+  const day = now.getUTCDay();   // 0=Sun, 1=Mon, ..., 5=Fri, 6=Sat
+  const hour = now.getUTCHours();
+  if (day === 6) return false;                    // Saturday — always closed
+  if (day === 0 && hour < 22) return false;       // Sunday before 10 PM UTC
+  if (day === 5 && hour >= 22) return false;      // Friday after 10 PM UTC
+  return true;
+}
+
 // Helper function: Check if within news window (simplified - checks hour of day)
 function isWithinNewsWindow(): boolean {
   const hour = new Date().getUTCHours();
@@ -903,7 +915,16 @@ export class SignalGenerator {
     this.isRunning = true;
     this.lastRunTime = Date.now();
 
-    // 🎯 FXIFY TWO-PHASE: Log prop firm configuration
+    // 🛡️ MARKET HOURS GATE: Skip signal generation when forex market is closed
+    if (!isForexMarketOpen()) {
+      console.log('⏭️  Forex market closed - skipping signal generation');
+      this.isRunning = false;
+      return;
+    }
+
+    // 🎯 FXIFY TWO-PHASE: Initialize daily tracker (resets each new trading day)
+    propFirmService.initDailyTracker(10000); // $10k default starting balance; resets if new day
+
     const propConfig = propFirmService.getConfig();
     console.log('🤖 [Signal Generator] Starting automated analysis...');
     console.log(`📊 [PropFirm] Active: ${propConfig.name} - ${propConfig.challengeType}`);
@@ -938,6 +959,21 @@ export class SignalGenerator {
         // 🚫 PHASE 2 QUICK WIN: Skip GBP/USD (19.6% win rate - catastrophic)
         if (symbol === 'GBP/USD') {
           console.log(`⏭️  Skipping ${symbol} - disabled due to poor performance (19.6% win rate)`);
+          continue;
+        }
+
+        // 🔒 DEDUPLICATION: Skip if there is already a PENDING signal for this symbol
+        // Prevents duplicate signals from BB pullback (fires every 15 min while condition holds)
+        // and EMA crossover (fires multiple times per crossover event via cache reuse)
+        const existingPending = await db.execute(sql`
+          SELECT signal_id FROM signal_history
+          WHERE symbol = ${symbol}
+            AND outcome = 'PENDING'
+            AND data_quality = 'production'
+          LIMIT 1
+        `);
+        if ((existingPending as any[]).length > 0) {
+          console.log(`⏭️  Skipping ${symbol} - active PENDING signal exists (dedup)`);
           continue;
         }
 
@@ -995,6 +1031,8 @@ export class SignalGenerator {
               signalsTracked++;
               const tierBadge = signal.tier === 'HIGH' ? '🟢 HIGH' : '🟡 MEDIUM';
               console.log(`✅ Tracked ${symbol} signal ${tierBadge} (${signal.confidence}/100 points)`);
+              // 🛡️ FXIFY: Count this signal against the daily trade limit
+              propFirmService.updateDailyTracker(0, 10000);
             } catch (error) {
               console.error(`❌ Failed to track ${symbol} signal:`, error);
             }
