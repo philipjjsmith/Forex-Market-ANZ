@@ -6,6 +6,7 @@ import { aiAnalyzer } from './ai-analyzer';
 import { parameterService } from './parameter-service';
 import { propFirmService } from './prop-firm-config';
 import { sessionAnalyzer } from './session-analyzer';
+import { telegramNotifier } from './telegram-notifier';
 
 /**
  * Automated Signal Generator Service
@@ -329,6 +330,84 @@ function isWithinNewsWindow(): boolean {
   return newsHours.includes(hour);
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ICT FAIR VALUE GAP (FVG) DETECTOR
+// A 3-candle imbalance pattern where institutional orders were left unfilled.
+// Price returns to "fill the gap" — this is the entry trigger.
+//
+// Bullish FVG:  candle[n].low > candle[n-2].high  (gap ABOVE candle n-2)
+// Bearish FVG:  candle[n].high < candle[n-2].low  (gap BELOW candle n-2)
+// Entry at CE = Consequent Encroachment (midpoint of the gap)
+// ─────────────────────────────────────────────────────────────────────────────
+interface FVG {
+  type: 'BULLISH' | 'BEARISH';
+  high: number;          // Top of gap
+  low: number;           // Bottom of gap
+  ce: number;            // Consequent Encroachment (midpoint) — entry target
+  candleIndex: number;   // Which candle (in the window) created this FVG
+  filled: boolean;       // Has price closed inside the gap?
+}
+
+function detectFVGs(candles: Candle[]): FVG[] {
+  const gaps: FVG[] = [];
+  for (let i = 2; i < candles.length; i++) {
+    const prev2 = candles[i - 2];
+    const current = candles[i];
+
+    // Bullish FVG: gap above prev2.high, below current.low
+    if (current.low > prev2.high) {
+      gaps.push({
+        type: 'BULLISH',
+        high: current.low,
+        low: prev2.high,
+        ce: (current.low + prev2.high) / 2,
+        candleIndex: i,
+        filled: false,
+      });
+    }
+
+    // Bearish FVG: gap below prev2.low, above current.high
+    if (current.high < prev2.low) {
+      gaps.push({
+        type: 'BEARISH',
+        high: prev2.low,
+        low: current.high,
+        ce: (prev2.low + current.high) / 2,
+        candleIndex: i,
+        filled: false,
+      });
+    }
+  }
+  return gaps;
+}
+
+/**
+ * Find the most recent unfilled FVG in the specified direction.
+ * Looks back `lookback` candles (default 30) from the current candle.
+ * Returns null if no active FVG found in that direction.
+ */
+function getActiveFVG(candles: Candle[], direction: 'LONG' | 'SHORT', lookback = 30): FVG | null {
+  const fvgType = direction === 'LONG' ? 'BULLISH' : 'BEARISH';
+  const window = candles.slice(-lookback - 1, -1); // exclude current (forming) candle
+  const lastClose = candles[candles.length - 1].close;
+  const allFvgs = detectFVGs(window);
+
+  return allFvgs
+    .filter(f => f.type === fvgType)
+    .filter(f => {
+      // Mark as unfilled: price hasn't closed inside the gap yet
+      if (f.type === 'BULLISH') {
+        // Unfilled = price is still above the gap bottom (low) — not yet entered the zone
+        // OR price is currently in the zone (valid entry area)
+        return lastClose >= f.low;
+      } else {
+        // Unfilled = price is still below the gap top (high)
+        return lastClose <= f.high;
+      }
+    })
+    .slice(-1)[0] ?? null; // Most recent qualifying FVG
+}
+
 class MACrossoverStrategy {
   name = 'ICT 3-Timeframe + Confluence Strategy';
   // v3.2.0: CONFLUENCE SCALE - Research-backed multi-factor system
@@ -445,6 +524,8 @@ class MACrossoverStrategy {
     }
 
     // 📊 STEP 2: Detect entry signals on 1H timeframe
+    // Primary: FVG (Fair Value Gap) — institutional imbalance zones (leading indicator)
+    // Secondary: EMA crossover — kept as fallback for markets with no recent FVG
     const prevOneHourFastMA = Indicators.ema(oneHourCloses.slice(0, -1), fastPeriod);
     const prevOneHourSlowMA = Indicators.ema(oneHourCloses.slice(0, -1), slowPeriod);
 
@@ -452,6 +533,10 @@ class MACrossoverStrategy {
 
     const bullishCross = prevOneHourFastMA <= prevOneHourSlowMA && oneHourFastMA > oneHourSlowMA;
     const bearishCross = prevOneHourFastMA >= prevOneHourSlowMA && oneHourFastMA < oneHourSlowMA;
+
+    // FVG detection on 1H candles
+    const bullishFVG = getActiveFVG(oneHourCandles, 'LONG', 30);
+    const bearishFVG = getActiveFVG(oneHourCandles, 'SHORT', 30);
 
     const currentPrice = oneHourCloses[oneHourCloses.length - 1];
 
@@ -521,23 +606,37 @@ class MACrossoverStrategy {
       }
     }
 
-    // 📊 STEP 3: ICT 3-TIMEFRAME RULE - Check for LONG signals
-    // REQUIREMENT: Weekly + Daily + 4H must ALL be UP
-    // 1H can be DOWN (that's a pullback = BEST entry!)
-    if ((bullishCross || bullishPullback) && weeklyTrend === 'UP' && dailyTrend === 'UP' && fourHourTrend === 'UP') {
+    // 📊 STEP 3: ENTRY DETECTION — Check for LONG signals
+    // HARD REQUIREMENT: Daily + 4H must both be UP (trend confirmation)
+    // WEEKLY = BIAS FILTER: adds pts when aligned, partial pts when counter-trend
+    //   Removing weekly as hard requirement eliminates 32-day dry spells during
+    //   market transitions when daily/4H align but weekly hasn't caught up yet.
+    // ENTRY: FVG active (preferred, leading) OR EMA crossover/pullback (fallback)
+    const hasLongEntry = bullishFVG !== null || bullishCross || bullishPullback;
+    if (hasLongEntry && dailyTrend === 'UP' && fourHourTrend === 'UP') {
       signalType = 'LONG';
-      entryType = bullishCross ? 'CROSSOVER' : 'PULLBACK';
+      // Determine entry type for rationale
+      if (bullishFVG) {
+        entryType = 'PULLBACK'; // FVG = entering at institutional imbalance = pullback entry
+      } else {
+        entryType = bullishCross ? 'CROSSOVER' : 'PULLBACK';
+      }
 
-      // 🆕 v3.1.0 ICT CONFIDENCE SCORING (Max: 100 points)
-      // 3 Higher Timeframes (75 points) + 1H Entry Timing (25 points)
+      // CONFIDENCE SCORING (Max: ~130 points)
+      // Trend Timeframes (75 pts) + Entry Timing (25 pts) + Confluence (30 pts)
 
-      // 1. Weekly timeframe BULLISH (25 points max)
+      // 1. Weekly timeframe — BIAS FILTER (not hard requirement)
+      // When weekly confirms: full pts. When counter-weekly: partial pts (contrarian context)
       if (weeklyTrend === 'UP' && weeklyMACD && weeklyMACD.macd > weeklyMACD.signal) {
         confidence += 25;
         rationale.push('✅ Weekly BULLISH + MACD confirms (+25)');
       } else if (weeklyTrend === 'UP') {
         confidence += 20;
         rationale.push('⚠️ Weekly BULLISH but MACD weak (+20)');
+      } else {
+        // Counter-weekly trade: still valid (Daily+4H aligned), but lower confidence
+        confidence += 10;
+        rationale.push('⚠️ Counter-weekly LONG — D+4H aligned (+10)');
       }
 
       // 2. Daily timeframe BULLISH (25 points max)
@@ -576,9 +675,11 @@ class MACrossoverStrategy {
       // 4. 1H Entry Timing (25 points max) - 1H can be DOWN (pullback)
       // Award points for entry signal quality, not 1H trend direction
 
-      // Entry signal detected (10 points)
+      // Entry signal detected (10 points) — FVG > crossover
       confidence += 10;
-      if (entryType === 'CROSSOVER') {
+      if (bullishFVG) {
+        rationale.push(`✅ FVG entry on 1H — CE: ${bullishFVG.ce.toFixed(5)} [${bullishFVG.low.toFixed(5)}-${bullishFVG.high.toFixed(5)}] (+10)`);
+      } else if (entryType === 'CROSSOVER') {
         rationale.push('✅ MA crossover entry on 1H (+10)');
       } else {
         rationale.push('✅ Pullback entry signal on 1H (+10)');
@@ -646,24 +747,28 @@ class MACrossoverStrategy {
         rationale.push('⚠️ Within news window - increased volatility');
       }
 
-    // 📊 STEP 4: ICT 3-TIMEFRAME RULE - Check for SHORT signals
-    // REQUIREMENT: Weekly + Daily + 4H must ALL be DOWN (same as LONG requirement)
-    // 1H can be UP (pullback = BEST entry!)
-    } else if ((bearishCross || bearishPullback) && weeklyTrend === 'DOWN' && dailyTrend === 'DOWN' && fourHourTrend === 'DOWN') {
+    // 📊 STEP 4: ENTRY DETECTION — Check for SHORT signals
+    // HARD REQUIREMENT: Daily + 4H must both be DOWN
+    // WEEKLY = BIAS FILTER: adds pts when aligned, partial pts when counter-trend
+    // ENTRY: FVG active (preferred) OR EMA crossover/pullback (fallback)
+    } else if ((bearishFVG !== null || bearishCross || bearishPullback) && dailyTrend === 'DOWN' && fourHourTrend === 'DOWN') {
       signalType = 'SHORT';
-      entryType = bearishCross ? 'CROSSOVER' : 'PULLBACK';
+      if (bearishFVG) {
+        entryType = 'PULLBACK';
+      } else {
+        entryType = bearishCross ? 'CROSSOVER' : 'PULLBACK';
+      }
 
-      // 🆕 v3.2.0 ICT CONFIDENCE SCORING - SHORT (Max: 130 points)
-      // 3 Higher Timeframes (75 points) + 1H Entry Timing (25 points) + Confluence (30 points)
-      rationale.push('🎯 3-TF alignment (W+D+4H all DOWN)');
-
-      // 1. Weekly timeframe BEARISH (25 points max)
+      // 1. Weekly timeframe — BIAS FILTER (not hard requirement)
       if (weeklyTrend === 'DOWN' && weeklyMACD && weeklyMACD.macd < weeklyMACD.signal) {
         confidence += 25;
         rationale.push('✅ Weekly BEARISH + MACD confirms (+25)');
       } else if (weeklyTrend === 'DOWN') {
         confidence += 20;
         rationale.push('⚠️ Weekly BEARISH but MACD weak (+20)');
+      } else {
+        confidence += 10;
+        rationale.push('⚠️ Counter-weekly SHORT — D+4H aligned (+10)');
       }
 
       // 2. Daily timeframe BEARISH (25 points max)
@@ -702,9 +807,11 @@ class MACrossoverStrategy {
       // 4. 1H Entry Timing (25 points max) - 1H can be UP (pullback)
       // Award points for entry signal quality, not 1H trend direction
 
-      // Entry signal detected (10 points)
+      // Entry signal detected (10 points) — FVG > crossover
       confidence += 10;
-      if (entryType === 'CROSSOVER') {
+      if (bearishFVG) {
+        rationale.push(`✅ FVG entry on 1H — CE: ${bearishFVG.ce.toFixed(5)} [${bearishFVG.low.toFixed(5)}-${bearishFVG.high.toFixed(5)}] (+10)`);
+      } else if (entryType === 'CROSSOVER') {
         rationale.push('✅ MA crossover entry on 1H (+10)');
       } else {
         rationale.push('✅ Pullback entry signal on 1H (+10)');
@@ -839,28 +946,43 @@ class MACrossoverStrategy {
       rationale.push(`🟡 B-TIER (${confidence}/130) - PRACTICE SIGNAL`);
     }
 
-    // ⚡ OPTIMIZED: Stop loss for maximum profitability (swing trading)
-    // Research-proven: 3.0x ATR = highest profit for EUR/USD (60.6% win rate, 1.04 profit factor)
-    const stopMultiplier = approvedParams?.atrMultiplier || 3.0; // Optimal for swing trading - EUR/USD backtesting confirmed
-    const stop = signalType === 'LONG'
-      ? currentPrice - (atr * stopMultiplier)
-      : currentPrice + (atr * stopMultiplier);
+    // ⚡ SL/TP: Fixed 1.5×ATR stop, 3.0×ATR TP1 = 2:1 R:R minimum
+    // At 55% WR with 2:1 R:R: EV = +0.65R per trade (passes The5ers Bootcamp in ~20-25 trades)
+    // FVG entries are precise, so 1.5×ATR stop is sufficient (previously 3.0×ATR was too wide)
+    const SL_MULTIPLIER = 1.5;   // 1.5×ATR stop loss
+    const TP1_MULTIPLIER = 3.0;  // 3.0×ATR TP1 = 2:1 R:R
+    const TP2_MULTIPLIER = 6.0;  // 6.0×ATR TP2 = 4:1 R:R
+    const TP3_MULTIPLIER = 9.0;  // 9.0×ATR TP3 = 6:1 R:R
 
-    // 🎯 ATR-based Take Profit Targets (Optimized for maximum profitability)
-    // TP1: 3.0x ATR (1:1 R:R with 3.0x stop) - First target (60%+ win rate expected)
-    // TP2: 6.0x ATR (2:1 R:R) - Second target
-    // TP3: 12.0x ATR (4:1 R:R) - Bonus target for big moves
+    // Pip factor: JPY pairs use 2 decimal places (1 pip = 0.01), all others 4 decimal places
+    const pipFactor = symbol.includes('JPY') ? 100 : 10000;
+
+    // Minimum SL floor in pips (prevent stop-hunt distances that are too tight)
+    const MIN_SL_PIPS: Record<string, number> = {
+      'EUR/USD': 8,
+      'USD/CHF': 8,
+      'GBP/USD': 10,
+      'USD/JPY': 6,
+    };
+    const minSlDistance = (MIN_SL_PIPS[symbol] ?? 8) / pipFactor;
+    const rawSl = atr * SL_MULTIPLIER;
+    const actualSlDistance = Math.max(rawSl, minSlDistance);
+
+    const stop = signalType === 'LONG'
+      ? currentPrice - actualSlDistance
+      : currentPrice + actualSlDistance;
+
     const tp1 = signalType === 'LONG'
-      ? currentPrice + (atr * 3.0) // TP1 at 3.0 ATR (1:1 R:R - maximum profitability)
-      : currentPrice - (atr * 3.0);
+      ? currentPrice + (atr * TP1_MULTIPLIER) // 2:1 R:R minimum
+      : currentPrice - (atr * TP1_MULTIPLIER);
 
     const tp2 = signalType === 'LONG'
-      ? currentPrice + (atr * 6.0) // TP2 at 6.0 ATR (2:1 R:R)
-      : currentPrice - (atr * 6.0);
+      ? currentPrice + (atr * TP2_MULTIPLIER) // 4:1 R:R
+      : currentPrice - (atr * TP2_MULTIPLIER);
 
     const tp3 = signalType === 'LONG'
-      ? currentPrice + (atr * 12.0) // TP3 at 12.0 ATR (4:1 R:R)
-      : currentPrice - (atr * 12.0);
+      ? currentPrice + (atr * TP3_MULTIPLIER) // 6:1 R:R
+      : currentPrice - (atr * TP3_MULTIPLIER);
 
     const riskPerTrade = Math.abs(currentPrice - stop);
     const riskReward = Math.abs(tp1 - currentPrice) / riskPerTrade;
@@ -929,16 +1051,26 @@ export class SignalGenerator {
       return;
     }
 
-    // 🎯 FXIFY TWO-PHASE: Initialize daily tracker (resets each new trading day)
-    propFirmService.initDailyTracker(10000); // $10k default starting balance; resets if new day
+    // 🎯 ICT KILL ZONE GATE: Only trade during institutional liquidity windows
+    // London Open 07:00-10:00 UTC, NY Open 12:00-15:00 UTC
+    // Trading outside these windows = chasing retail moves in low-liquidity = stop hunts
+    if (!sessionAnalyzer.isInKillZone()) {
+      console.log(`⏭️  Outside ICT kill zone (${sessionAnalyzer.getKillZoneName()}) — skipping signal generation`);
+      this.isRunning = false;
+      return;
+    }
+    console.log(`✅ In kill zone: ${sessionAnalyzer.getKillZoneName()}`);
+
+    // 🎯 The5ers: Initialize daily tracker (resets each new trading day)
+    propFirmService.initDailyTracker(10000);
 
     const propConfig = propFirmService.getConfig();
     console.log('🤖 [Signal Generator] Starting automated analysis...');
     console.log(`📊 [PropFirm] Active: ${propConfig.name} - ${propConfig.challengeType}`);
     console.log(`📊 [PropFirm] Risk per trade: ${propConfig.highTierRisk}% | Daily limit: ${propConfig.maxDailyLoss}% | Buffer: ${propConfig.dailyLossBuffer}%`);
 
-    // 🛡️ FXIFY PROTECTION: Check if max trades reached for today
-    if (propFirmService.maxTradesReached()) {
+    // 🛡️ PROP FIRM PROTECTION: Check if max trades reached for today (DB query — survives Render restarts)
+    if (await propFirmService.maxTradesReached()) {
       console.log(`⚠️ [PropFirm] Max trades per day (${propConfig.maxTradesPerDay}) reached. Skipping signal generation.`);
       this.isRunning = false;
       return;
@@ -1038,8 +1170,23 @@ export class SignalGenerator {
               signalsTracked++;
               const tierBadge = signal.tier === 'HIGH' ? '🟢 HIGH' : '🟡 MEDIUM';
               console.log(`✅ Tracked ${symbol} signal ${tierBadge} (${signal.confidence}/100 points)`);
-              // 🛡️ FXIFY: Count this signal against the daily trade limit
+              // Count this signal against the daily trade limit
               propFirmService.updateDailyTracker(0, 10000);
+              // Send Telegram notification so the trade can be placed manually on The5ers
+              await telegramNotifier.sendSignalAlert({
+                symbol: signal.symbol,
+                type: signal.type,
+                entry: signal.entry,
+                stop: signal.stop,
+                tp1: signal.targets[0],
+                tp2: signal.targets[1],
+                tp3: signal.targets[2],
+                confidence: signal.confidence,
+                tier: signal.tier,
+                riskReward: signal.riskReward,
+                rationale: signal.rationale,
+                version: signal.version,
+              });
             } catch (error) {
               console.error(`❌ Failed to track ${symbol} signal:`, error);
             }

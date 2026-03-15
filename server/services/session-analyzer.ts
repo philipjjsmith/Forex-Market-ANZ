@@ -281,6 +281,33 @@ export class SessionAnalyzer {
 
     return characteristics[session];
   }
+
+  /**
+   * ICT Kill Zone gate — the ONLY times institutional money is active.
+   * Based on ICT methodology: only trade during London Open or NY Open.
+   *
+   * London Open Kill Zone: 07:00–10:00 UTC
+   * NY Open Kill Zone:     12:00–15:00 UTC
+   *
+   * All other hours (Asia, dead London afternoon, after NY open) are excluded.
+   * This eliminates low-liquidity stop-hunt environments where retail gets wiped.
+   */
+  isInKillZone(time?: Date): boolean {
+    const utcHour = (time ?? new Date()).getUTCHours();
+    const inLondonOpen = utcHour >= 7 && utcHour < 10;   // 07:00-09:59 UTC
+    const inNYOpen     = utcHour >= 12 && utcHour < 15;  // 12:00-14:59 UTC
+    return inLondonOpen || inNYOpen;
+  }
+
+  /**
+   * Get kill zone name for logging
+   */
+  getKillZoneName(time?: Date): string {
+    const utcHour = (time ?? new Date()).getUTCHours();
+    if (utcHour >= 7 && utcHour < 10)  return 'London Open (07:00-10:00 UTC)';
+    if (utcHour >= 12 && utcHour < 15) return 'NY Open (12:00-15:00 UTC)';
+    return 'Outside kill zones';
+  }
 }
 
 // Export singleton instance

@@ -13,7 +13,7 @@ import { signalGenerator } from "./services/signal-generator";
 import { outcomeValidator } from "./services/outcome-validator";
 import { aiAnalyzer } from "./services/ai-analyzer";
 import { backtester } from "./services/backtester";
-import { propFirmService, FXIFY_TWO_PHASE_STANDARD, FXIFY_TWO_PHASE_STANDARD_PHASE2, FXIFY_FUNDED_ACCOUNT } from "./services/prop-firm-config";
+import { propFirmService, THE5ERS_BOOTCAMP, THE5ERS_BOOTCAMP_PHASE2, BRIGHTFUNDED_PHASE1 } from "./services/prop-firm-config";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
 
@@ -260,13 +260,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let config;
       switch (phase) {
         case 'phase1':
-          config = FXIFY_TWO_PHASE_STANDARD;
+          config = THE5ERS_BOOTCAMP;
           break;
         case 'phase2':
-          config = FXIFY_TWO_PHASE_STANDARD_PHASE2;
+          config = THE5ERS_BOOTCAMP_PHASE2;
           break;
         case 'funded':
-          config = FXIFY_FUNDED_ACCOUNT;
+          config = BRIGHTFUNDED_PHASE1;
           break;
         default:
           return res.status(400).json({
@@ -351,7 +351,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const dailyStatus = propFirmService.getDailyStatus();
       const dailyLossPercent = Math.abs(dailyStatus?.dailyPnLPercent || 0);
       const canTrade = propFirmService.canTrade(dailyLossPercent);
-      const maxTradesReached = propFirmService.maxTradesReached();
+      const maxTradesReached = await propFirmService.maxTradesReached();
 
       res.json({
         success: true,
@@ -413,7 +413,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const dailyStatus = propFirmService.getDailyStatus();
       const dailyLossPercent = Math.abs(dailyStatus?.dailyPnLPercent || 0);
       const canTrade = propFirmService.canTrade(dailyLossPercent);
-      const maxTradesReached = propFirmService.maxTradesReached();
+      const maxTradesReached = await propFirmService.maxTradesReached();
 
       // Data filter: 'production' (fresh start, DEFAULT), 'legacy' (old data), 'all' (everything)
       const dataFilter = (req.query.data as string) || 'production';

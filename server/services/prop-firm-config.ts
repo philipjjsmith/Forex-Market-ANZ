@@ -2,14 +2,20 @@
  * Prop Firm Configuration Service
  * Configures trading parameters for specific prop firm challenges
  *
- * FXIFY Two-Phase Standard Configuration:
- * - Phase 1: 5% profit target, 4% daily loss, 10% max drawdown
- * - Phase 2: 5% profit target, 4% daily loss, 10% max drawdown
- * - Static drawdown (recommended for EA trading)
- * - EAs allowed on MT4/MT5
- * - Minimum 5 trading days
- * - No time limit
+ * ACTIVE: The5ers Bootcamp Configuration
+ * - Phase 1: 10% profit target, balance-based drawdown (5% max from initial)
+ * - Phase 2: 10% profit target (The5ers scales, same rules apply)
+ * - Balance-based static drawdown: floor fixed from initial balance
+ * - EAs allowed on MatchTrader (US traders)
+ * - No minimum trading days, no time limit
+ * - Bi-weekly payouts, $150 minimum
+ *
+ * PREVIOUS: FXIFY — eliminated. US traders restricted to DXtrade (no EA support)
+ * due to MetaQuotes banning MT4/MT5 for US traders at FXIFY.
  */
+
+import { db } from '../db';
+import { sql } from 'drizzle-orm';
 
 export interface PropFirmConfig {
   name: string;
@@ -42,30 +48,31 @@ export interface PropFirmConfig {
   autoStopOnDailyLimit: boolean;
 }
 
-// FXIFY Two-Phase Standard Configuration
-export const FXIFY_TWO_PHASE_STANDARD: PropFirmConfig = {
-  name: 'FXIFY',
-  challengeType: 'Two-Phase Standard',
+// The5ers Bootcamp Configuration (Phase 1)
+// $22 entry — US traders, MatchTrader, EA allowed
+export const THE5ERS_BOOTCAMP: PropFirmConfig = {
+  name: 'The5ers',
+  challengeType: 'Bootcamp Phase 1',
 
   // Risk Management - Conservative for Phase 1
   riskPerTrade: 1.0,              // 1% risk per trade (conservative)
-  maxDailyLoss: 4.0,              // 4% daily loss limit
-  dailyLossBuffer: 3.0,           // Stop trading at 3% (leaves 1% buffer)
-  maxDrawdown: 10.0,              // 10% max drawdown
-  drawdownType: 'static',         // Static drawdown (recommended for EA)
+  maxDailyLoss: 5.0,              // 5% max drawdown from initial (balance-based static)
+  dailyLossBuffer: 4.0,           // Stop trading at 4% (leaves 1% buffer)
+  maxDrawdown: 5.0,               // 5% max total drawdown (balance-based floor)
+  drawdownType: 'static',         // Balance-based static: floor fixed from initial balance
 
   // Profit Targets
-  phase1Target: 5.0,              // 5% profit target Phase 1
-  phase2Target: 5.0,              // 5% profit target Phase 2
+  phase1Target: 10.0,             // 10% profit target Phase 1 (The5ers Bootcamp)
+  phase2Target: 10.0,             // 10% profit target Phase 2
 
   // Trading Rules
-  minTradingDays: 5,              // Minimum 5 trading days
-  maxTradesPerDay: 3,             // Max 3 trades per day (protects daily loss)
+  minTradingDays: 0,              // No minimum trading days
+  maxTradesPerDay: 3,             // Max 3 signals per day (conservative, protects drawdown)
   allowedStrategies: [
     'ICT 3-Timeframe Strategy',
+    'FVG Entry Strategy',
     'Swing Trading',
     'Day Trading',
-    'Position Trading'
   ],
   prohibitedStrategies: [
     'High-Frequency Trading (HFT)',
@@ -79,7 +86,7 @@ export const FXIFY_TWO_PHASE_STANDARD: PropFirmConfig = {
 
   // Position Sizing by Tier
   highTierRisk: 1.0,              // 1% for HIGH confidence (Phase 1 conservative)
-  mediumTierRisk: 0.0,            // 0% for MEDIUM (practice only)
+  mediumTierRisk: 0.0,            // 0% for MEDIUM (practice only — never live trade)
 
   // Safety Features
   enableDailyLossProtection: true,
@@ -87,21 +94,53 @@ export const FXIFY_TWO_PHASE_STANDARD: PropFirmConfig = {
   autoStopOnDailyLimit: true
 };
 
-// Phase 2 Configuration (slightly more aggressive after passing Phase 1)
-export const FXIFY_TWO_PHASE_STANDARD_PHASE2: PropFirmConfig = {
-  ...FXIFY_TWO_PHASE_STANDARD,
-  challengeType: 'Two-Phase Standard (Phase 2)',
-  riskPerTrade: 1.5,              // 1.5% risk per trade (can be more aggressive)
-  highTierRisk: 1.5,              // 1.5% for HIGH confidence
+// The5ers Phase 2 Configuration (after passing Phase 1)
+export const THE5ERS_BOOTCAMP_PHASE2: PropFirmConfig = {
+  ...THE5ERS_BOOTCAMP,
+  challengeType: 'Bootcamp Phase 2',
+  riskPerTrade: 1.5,              // Slightly more aggressive after proving strategy
+  highTierRisk: 1.5,
 };
 
-// Funded Account Configuration (most conservative)
-export const FXIFY_FUNDED_ACCOUNT: PropFirmConfig = {
-  ...FXIFY_TWO_PHASE_STANDARD,
-  challengeType: 'Funded Account',
-  riskPerTrade: 1.0,              // Back to 1% for funded (protect capital)
+// BrightFunded Phase 1 — Scale-up firm (truly static 10% drawdown, ~4hr payouts)
+// Switch to this AFTER The5ers Bootcamp is passed and system is proven profitable
+export const BRIGHTFUNDED_PHASE1: PropFirmConfig = {
+  name: 'BrightFunded',
+  challengeType: 'Standard Phase 1',
+
+  riskPerTrade: 1.0,
+  maxDailyLoss: 5.0,              // 5% daily drawdown limit
+  dailyLossBuffer: 4.0,
+  maxDrawdown: 10.0,              // 10% truly static max drawdown
+  drawdownType: 'static',
+
+  phase1Target: 8.0,              // 8% Phase 1 target
+  phase2Target: 5.0,              // 5% Phase 2 target
+
+  minTradingDays: 0,
+  maxTradesPerDay: 3,
+  allowedStrategies: [
+    'ICT 3-Timeframe Strategy',
+    'FVG Entry Strategy',
+    'Swing Trading',
+    'Day Trading',
+  ],
+  prohibitedStrategies: [
+    'High-Frequency Trading (HFT)',
+    'Tick Scalping',
+    'Latency Arbitrage',
+    'Statistical Arbitrage',
+    'News Scalping (5min before/after)',
+    'Reverse Hedging',
+    'Group Hedging'
+  ],
+
   highTierRisk: 1.0,
-  dailyLossBuffer: 2.5,           // Even more conservative on funded account
+  mediumTierRisk: 0.0,
+
+  enableDailyLossProtection: true,
+  enableDrawdownProtection: true,
+  autoStopOnDailyLimit: true
 };
 
 // Daily Loss Tracking
@@ -116,8 +155,8 @@ interface DailyLossTracker {
 }
 
 class PropFirmService {
-  private config: PropFirmConfig = FXIFY_TWO_PHASE_STANDARD;
-  // Auto-initialize with today's date so canTrade() works from first request (even before signal gen runs)
+  private config: PropFirmConfig = THE5ERS_BOOTCAMP;
+  // Auto-initialize with today's date so canTrade() works from first request
   private dailyTracker: DailyLossTracker = {
     date: new Date().toISOString().split('T')[0],
     startingBalance: 10000,
@@ -159,7 +198,6 @@ class PropFirmService {
    * Check if trading is allowed (daily loss protection)
    */
   canTrade(currentDailyLossPercent: number): { allowed: boolean; reason: string } {
-    // Check daily loss limit
     if (this.config.enableDailyLossProtection) {
       if (currentDailyLossPercent >= this.config.dailyLossBuffer) {
         return {
@@ -169,7 +207,6 @@ class PropFirmService {
       }
     }
 
-    // Check if daily tracker is locked
     if (this.dailyTracker?.isLocked) {
       return {
         allowed: false,
@@ -184,7 +221,6 @@ class PropFirmService {
    * Check if strategy is allowed
    */
   isStrategyAllowed(strategyName: string): boolean {
-    // Check if explicitly prohibited
     const isProhibited = this.config.prohibitedStrategies.some(
       prohibited => strategyName.toLowerCase().includes(prohibited.toLowerCase())
     );
@@ -203,7 +239,6 @@ class PropFirmService {
   initDailyTracker(startingBalance: number): void {
     const today = new Date().toISOString().split('T')[0];
 
-    // Reset if new day
     if (this.dailyTracker?.date !== today) {
       this.dailyTracker = {
         date: today,
@@ -229,7 +264,6 @@ class PropFirmService {
     this.dailyTracker.dailyPnLPercent = (this.dailyTracker.dailyPnL / this.dailyTracker.startingBalance) * 100;
     this.dailyTracker.tradesCount++;
 
-    // Check if we should lock trading for the day
     if (this.dailyTracker.dailyPnLPercent <= -this.config.dailyLossBuffer) {
       this.dailyTracker.isLocked = true;
       console.warn(`[PropFirm] DAILY LOSS BUFFER HIT! Trading locked for today.`);
@@ -248,7 +282,6 @@ class PropFirmService {
 
   /**
    * Force reset daily tracker (for new trading day or fresh start)
-   * Unlike initDailyTracker, this always resets regardless of date
    */
   resetDailyTracker(startingBalance: number): void {
     const today = new Date().toISOString().split('T')[0];
@@ -268,10 +301,31 @@ class PropFirmService {
   }
 
   /**
-   * Check if max trades per day reached
+   * Check if max trades per day reached.
+   * IMPORTANT: Queries the DATABASE (not in-memory) so this survives Render restarts.
+   * Render free tier restarts on every UptimeRobot ping — in-memory counters are unreliable.
    */
-  maxTradesReached(): boolean {
-    return this.dailyTracker.tradesCount >= this.config.maxTradesPerDay;
+  async maxTradesReached(): Promise<boolean> {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const result = await db.execute(sql`
+        SELECT COUNT(*) as n
+        FROM signal_history
+        WHERE data_quality = 'production'
+          AND DATE(created_at AT TIME ZONE 'UTC') = ${today}::date
+          AND outcome IN ('PENDING', 'TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'STOP_HIT')
+      `);
+      const count = Number((result as any[])[0]?.n ?? 0);
+      if (count >= this.config.maxTradesPerDay) {
+        console.log(`[PropFirm] Max trades reached: ${count}/${this.config.maxTradesPerDay} today (DB check)`);
+        return true;
+      }
+      return false;
+    } catch (err) {
+      // If DB query fails, fall back to in-memory counter (safe default)
+      console.warn('[PropFirm] DB trade count check failed, using in-memory fallback:', err);
+      return this.dailyTracker.tradesCount >= this.config.maxTradesPerDay;
+    }
   }
 
   /**
