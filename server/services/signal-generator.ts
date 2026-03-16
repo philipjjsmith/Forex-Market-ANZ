@@ -7,6 +7,7 @@ import { parameterService } from './parameter-service';
 import { propFirmService } from './prop-firm-config';
 import { sessionAnalyzer } from './session-analyzer';
 import { telegramNotifier } from './telegram-notifier';
+import { tradeExecutor } from './trade-executor';
 
 /**
  * Automated Signal Generator Service
@@ -1186,6 +1187,16 @@ export class SignalGenerator {
                 riskReward: signal.riskReward,
                 rationale: signal.rationale,
                 version: signal.version,
+              });
+              // Auto-execute on The5ers MatchTrader (HIGH tier only; no-op until MTR env vars set)
+              await tradeExecutor.executeSignal({
+                symbol: signal.symbol,
+                type: signal.type,
+                entry: signal.entry,
+                stop: signal.stop,
+                targets: signal.targets,
+                confidence: signal.confidence,
+                tier: signal.tier,
               });
             } catch (error) {
               console.error(`❌ Failed to track ${symbol} signal:`, error);
