@@ -7,7 +7,7 @@ import { parameterService } from './parameter-service';
 import { propFirmService } from './prop-firm-config';
 import { sessionAnalyzer } from './session-analyzer';
 import { telegramNotifier } from './telegram-notifier';
-import { tradeExecutor } from './trade-executor';
+import { ctraderExecutor } from './ctrader-executor';
 
 /**
  * Automated Signal Generator Service
@@ -1188,8 +1188,8 @@ export class SignalGenerator {
                 rationale: signal.rationale,
                 version: signal.version,
               });
-              // Auto-execute on The5ers MatchTrader (HIGH tier only; no-op until MTR env vars set)
-              await tradeExecutor.executeSignal({
+              // Auto-execute on The5ers cTrader (HIGH tier only; no-op until CTRADER_ env vars set)
+              await ctraderExecutor.executeSignal({
                 symbol: signal.symbol,
                 type: signal.type,
                 entry: signal.entry,

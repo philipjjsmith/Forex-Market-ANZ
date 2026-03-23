@@ -1092,6 +1092,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
     };
   }
 
+  // ─── cTrader OAuth callback ────────────────────────────────────────────────
+  // Step 1: Visit the auth URL (generated in /api/ctrader/auth-url)
+  // Step 2: Authorize on cTrader → redirected here with ?code=xxx
+  // Step 3: We exchange code for tokens, display refresh token to copy into Render
+  app.get('/api/ctrader/auth-url', (req, res) => {
+    const clientId   = process.env.CTRADER_CLIENT_ID;
+    if (!clientId) return res.status(500).json({ error: 'CTRADER_CLIENT_ID not set in Render env vars' });
+    const redirectUri = 'https://forex-market-anz.onrender.com/api/ctrader/callback';
+    const authUrl = `https://id.ctrader.com/my/settings/openapi/grantingaccess/?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=trading&product=web`;
+    return res.json({ authUrl });
+  });
+
+  app.get('/api/ctrader/callback', async (req, res) => {
+    const code = req.query.code as string;
+    if (!code) return res.status(400).send('<h2>❌ Missing authorization code in redirect</h2>');
+
+    const clientId     = process.env.CTRADER_CLIENT_ID;
+    const clientSecret = process.env.CTRADER_CLIENT_SECRET;
+    if (!clientId || !clientSecret) {
+      return res.status(500).send('<h2>❌ CTRADER_CLIENT_ID or CTRADER_CLIENT_SECRET not set in Render</h2>');
+    }
+
+    try {
+      const redirectUri = 'https://forex-market-anz.onrender.com/api/ctrader/callback';
+      const tokenUrl = new URL('https://openapi.ctrader.com/apps/token');
+      tokenUrl.searchParams.set('grant_type',   'authorization_code');
+      tokenUrl.searchParams.set('code',          code);
+      tokenUrl.searchParams.set('redirect_uri',  redirectUri);
+      tokenUrl.searchParams.set('client_id',     clientId);
+      tokenUrl.searchParams.set('client_secret', clientSecret);
+
+      const tokenRes = await fetch(tokenUrl.toString());
+      const tokens   = await tokenRes.json() as {
+        accessToken?: string; refreshToken?: string;
+        errorCode?: string;   description?: string;
+      };
+
+      if (tokens.errorCode) {
+        return res.status(400).send(`<h2>❌ Token exchange failed: ${tokens.errorCode} — ${tokens.description}</h2>`);
+      }
+
+      console.log('[cTrader OAuth] ✅ Refresh token:', tokens.refreshToken);
+
+      return res.send(`<!DOCTYPE html><html><body style="font-family:sans-serif;max-width:640px;margin:60px auto;padding:20px">
+        <h1 style="color:green">✅ cTrader Authorization Successful!</h1>
+        <p>Copy your <strong>Refresh Token</strong> below and add it to Render as <code>CTRADER_REFRESH_TOKEN</code>:</p>
+        <pre style="background:#f4f4f4;padding:16px;border-radius:6px;word-break:break-all;font-size:13px">${tokens.refreshToken}</pre>
+        <hr/>
+        <p>Then add all 4 env vars to Render → Save Changes → redeploy:</p>
+        <table style="border-collapse:collapse;width:100%">
+          <tr><td style="padding:6px;border:1px solid #ddd"><code>CTRADER_CLIENT_ID</code></td><td style="padding:6px;border:1px solid #ddd">your client ID</td></tr>
+          <tr><td style="padding:6px;border:1px solid #ddd"><code>CTRADER_CLIENT_SECRET</code></td><td style="padding:6px;border:1px solid #ddd">your client secret</td></tr>
+          <tr><td style="padding:6px;border:1px solid #ddd"><code>CTRADER_REFRESH_TOKEN</code></td><td style="padding:6px;border:1px solid #ddd">value above ☝️</td></tr>
+          <tr><td style="padding:6px;border:1px solid #ddd"><code>CTRADER_ACCOUNT_BALANCE</code></td><td style="padding:6px;border:1px solid #ddd">2500</td></tr>
+        </table>
+        <p style="margin-top:20px;color:green"><strong>Once deployed — the next HIGH-tier signal will auto-trade on your The5ers account.</strong></p>
+      </body></html>`);
+    } catch (err: any) {
+      console.error('[cTrader OAuth] Error:', err.message);
+      return res.status(500).send(`<h2>❌ OAuth error: ${err.message}</h2>`);
+    }
+  });
+
   // use storage to perform CRUD operations on the storage interface
   // e.g. storage.insertUser(user) or storage.getUserByUsername(username)
 
