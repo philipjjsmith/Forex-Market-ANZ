@@ -16,8 +16,8 @@
 import tls from 'tls';
 import { EventEmitter } from 'events';
 
-const LIVE_HOST = 'live.ctraderapi.com';
-const LIVE_PORT = 5036; // JSON port (protobuf uses 5035)
+const LIVE_HOST = 'live1.p.ctrader.com';
+const LIVE_PORT = 5035; // JSON/protobuf port (confirmed from official SDK)
 
 // cTrader Open API payload type numbers (decoded from protobuf binary)
 const PT = {
@@ -106,7 +106,7 @@ class CTraderExecutor {
         buf = Buffer.concat([buf, chunk]);
         // Parse all complete messages from the buffer
         while (buf.length >= 4) {
-          const msgLen = buf.readUInt32LE(0); // 4-byte little-endian length prefix
+          const msgLen = buf.readUInt32BE(0); // 4-byte big-endian length prefix (network byte order)
           if (buf.length < 4 + msgLen) break;
           const msgBuf = buf.subarray(4, 4 + msgLen);
           buf = buf.subarray(4 + msgLen);
@@ -136,7 +136,7 @@ class CTraderExecutor {
     const json = JSON.stringify({ payloadType, payload });
     const msgBuf = Buffer.from(json, 'utf8');
     const lenBuf = Buffer.alloc(4);
-    lenBuf.writeUInt32LE(msgBuf.length, 0);
+    lenBuf.writeUInt32BE(msgBuf.length, 0);
     console.log(`[cTrader] → type:${payloadType}`, JSON.stringify(payload).substring(0, 150));
     socket.write(Buffer.concat([lenBuf, msgBuf]));
   }
