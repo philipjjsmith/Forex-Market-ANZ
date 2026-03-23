@@ -8,16 +8,16 @@
  *   CTRADER_REFRESH_TOKEN   — captured by /api/ctrader/callback after OAuth
  *   CTRADER_ACCOUNT_BALANCE — 2500 (The5ers High Stakes starting balance)
  *
- * Protocol: TLS TCP to live.ctraderapi.com:5036 (JSON port)
- * Framing:  4-byte little-endian length prefix + UTF-8 JSON body
+ * Protocol: TLS TCP to live.ctraderapi.com:5036 (JSON port — Spotware official docs)
+ * Framing:  4-byte big-endian length prefix + UTF-8 JSON body (network byte order)
  * Auth:     AppAuth → GetAccounts → AccountAuth → SymbolLookup → NewOrder
  */
 
 import tls from 'tls';
 import { EventEmitter } from 'events';
 
-const LIVE_HOST = 'live1.p.ctrader.com';
-const LIVE_PORT = 5035; // JSON/protobuf port (confirmed from official SDK)
+const LIVE_HOST = 'live.ctraderapi.com';
+const LIVE_PORT = 5036; // JSON port — official docs: "JSON always requires port 5036 (and only this port)"
 
 // cTrader Open API payload type numbers (decoded from protobuf binary)
 const PT = {
