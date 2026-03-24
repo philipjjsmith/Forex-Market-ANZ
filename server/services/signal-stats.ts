@@ -5,6 +5,7 @@
  * to attach live performance stats to every Telegram message.
  *
  * All queries filter data_quality = 'production' to exclude legacy/test signals.
+ * MANUALLY_CLOSED trades are included: win if profit_loss_pips > 0, loss if < 0.
  */
 
 import { db } from '../db';
@@ -13,14 +14,19 @@ import { sql } from 'drizzle-orm';
 // ─── Month Win Count ──────────────────────────────────────────────────────────
 
 /**
- * Returns the number of winning trades (TP hit) this calendar month (UTC).
+ * Returns the number of winning live trades this calendar month (UTC).
+ * Includes auto-closed (TP1_HIT) and manually closed (profit > 0) live trades.
  */
 export async function getMonthWinCount(): Promise<number> {
   const result = await db.execute(sql`
     SELECT COUNT(*)::int AS count
     FROM signal_history
-    WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT')
+    WHERE (
+      outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT')
+      OR (outcome = 'MANUALLY_CLOSED' AND profit_loss_pips > 0)
+    )
       AND data_quality = 'production'
+      AND trade_live = true
       AND outcome_time >= DATE_TRUNC('month', NOW() AT TIME ZONE 'UTC')
   `);
   return ((result as any)[0]?.count as number) ?? 0;
@@ -29,14 +35,19 @@ export async function getMonthWinCount(): Promise<number> {
 // ─── Month Loss Count ─────────────────────────────────────────────────────────
 
 /**
- * Returns the number of losing trades (stop hit) this calendar month (UTC).
+ * Returns the number of losing live trades this calendar month (UTC).
+ * Includes auto-closed (STOP_HIT) and manually closed (loss) live trades.
  */
 export async function getMonthLossCount(): Promise<number> {
   const result = await db.execute(sql`
     SELECT COUNT(*)::int AS count
     FROM signal_history
-    WHERE outcome = 'STOP_HIT'
+    WHERE (
+      outcome = 'STOP_HIT'
+      OR (outcome = 'MANUALLY_CLOSED' AND profit_loss_pips < 0)
+    )
       AND data_quality = 'production'
+      AND trade_live = true
       AND outcome_time >= DATE_TRUNC('month', NOW() AT TIME ZONE 'UTC')
   `);
   return ((result as any)[0]?.count as number) ?? 0;
@@ -47,12 +58,16 @@ export async function getMonthLossCount(): Promise<number> {
 /**
  * Returns the net pip total for live trades this calendar month (UTC).
  * Positive = net winning month, negative = net losing month.
+ * Includes MANUALLY_CLOSED trades — their profit_loss_pips is already stored correctly.
  */
 export async function getMonthNetPips(): Promise<number> {
   const result = await db.execute(sql`
     SELECT COALESCE(SUM(profit_loss_pips), 0)::float AS net_pips
     FROM signal_history
-    WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'STOP_HIT')
+    WHERE (
+      outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'STOP_HIT')
+      OR outcome = 'MANUALLY_CLOSED'
+    )
       AND data_quality = 'production'
       AND trade_live = true
       AND outcome_time >= DATE_TRUNC('month', NOW() AT TIME ZONE 'UTC')
@@ -67,12 +82,16 @@ export async function getMonthNetPips(): Promise<number> {
  * Positive integer = win streak (e.g. +3 = 3 wins in a row)
  * Negative integer = loss streak (e.g. -2 = 2 losses in a row)
  * Zero = no resolved signals yet
+ * MANUALLY_CLOSED: win if profit_loss_pips > 0, loss if < 0
  */
 export async function getCurrentStreak(): Promise<number> {
   const result = await db.execute(sql`
-    SELECT outcome
+    SELECT outcome, profit_loss_pips
     FROM signal_history
-    WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'STOP_HIT')
+    WHERE (
+      outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'STOP_HIT')
+      OR outcome = 'MANUALLY_CLOSED'
+    )
       AND data_quality = 'production'
       AND trade_live = true
     ORDER BY outcome_time DESC
@@ -82,12 +101,15 @@ export async function getCurrentStreak(): Promise<number> {
   const rows = result as any[];
   if (!rows.length) return 0;
 
-  const firstIsWin = ['TP1_HIT', 'TP2_HIT', 'TP3_HIT'].includes(rows[0].outcome);
+  const checkIsWin = (row: any) =>
+    ['TP1_HIT', 'TP2_HIT', 'TP3_HIT'].includes(row.outcome) ||
+    (row.outcome === 'MANUALLY_CLOSED' && Number(row.profit_loss_pips) > 0);
+
+  const firstIsWin = checkIsWin(rows[0]);
   let streak = 0;
 
   for (const row of rows) {
-    const isWin = ['TP1_HIT', 'TP2_HIT', 'TP3_HIT'].includes(row.outcome);
-    if (isWin === firstIsWin) {
+    if (checkIsWin(row) === firstIsWin) {
       streak++;
     } else {
       break;
@@ -125,6 +147,7 @@ export async function getSignalNumber(signalId: string): Promise<number> {
 /**
  * Returns aggregated stats for the current calendar week (Monday–Sunday UTC).
  * Used for the weekly summary Telegram post every Friday at 22:00 UTC.
+ * Includes MANUALLY_CLOSED trades: win if pips > 0, loss if pips < 0.
  */
 export async function getWeekStats(): Promise<{
   wins: number;
@@ -134,20 +157,32 @@ export async function getWeekStats(): Promise<{
 }> {
   const result = await db.execute(sql`
     SELECT
-      COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT'))::int AS wins,
-      COUNT(*) FILTER (WHERE outcome = 'STOP_HIT')::int                          AS losses,
-      COUNT(*) FILTER (WHERE outcome = 'EXPIRED')::int                           AS expired,
+      COUNT(*) FILTER (
+        WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT')
+           OR (outcome = 'MANUALLY_CLOSED' AND profit_loss_pips > 0)
+      )::int AS wins,
+      COUNT(*) FILTER (
+        WHERE outcome = 'STOP_HIT'
+           OR (outcome = 'MANUALLY_CLOSED' AND profit_loss_pips < 0)
+      )::int AS losses,
+      COUNT(*) FILTER (WHERE outcome = 'EXPIRED')::int AS expired,
       COALESCE(
         SUM(profit_loss_pips) FILTER (
           WHERE trade_live = true
-            AND outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'STOP_HIT')
+            AND (
+              outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'STOP_HIT')
+              OR outcome = 'MANUALLY_CLOSED'
+            )
         ),
         0
       )::float AS net_pips
     FROM signal_history
     WHERE data_quality = 'production'
       AND outcome_time >= DATE_TRUNC('week', NOW() AT TIME ZONE 'UTC')
-      AND outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'STOP_HIT', 'EXPIRED')
+      AND (
+        outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'STOP_HIT', 'EXPIRED')
+        OR outcome = 'MANUALLY_CLOSED'
+      )
   `);
 
   const row = (result as any)[0] ?? {};
@@ -184,19 +219,22 @@ export interface DaySignalResult {
 }
 
 /**
- * Returns all signals that resolved today (UTC) — wins, losses, and expiries.
+ * Returns all signals that resolved today (UTC) — wins, losses, expiries, and manual closes.
  * Used for the daily close summary posted every day at 22:00 UTC.
  */
 export async function getDayStats(): Promise<{
   resolved: DaySignalResult[];
   newSignals: number;
 }> {
-  // Signals that closed today
+  // Signals that closed today (including manually closed)
   const resolvedResult = await db.execute(sql`
     SELECT symbol, type, outcome, profit_loss_pips
     FROM signal_history
     WHERE data_quality = 'production'
-      AND outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'STOP_HIT', 'EXPIRED')
+      AND (
+        outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'STOP_HIT', 'EXPIRED')
+        OR outcome = 'MANUALLY_CLOSED'
+      )
       AND outcome_time >= DATE_TRUNC('day', NOW() AT TIME ZONE 'UTC')
     ORDER BY outcome_time ASC
   `);

@@ -320,14 +320,11 @@ class TelegramNotifier {
         const dir     = sig.type === 'LONG' ? 'L' : 'S';
         const pipsStr = TelegramNotifier.fmtPips(sig.profitLossPips);
 
-        let icon: string;
-        if (sig.outcome === 'TP1_HIT' || sig.outcome === 'TP2_HIT' || sig.outcome === 'TP3_HIT') {
-          icon = '✅';
-        } else if (sig.outcome === 'STOP_HIT') {
-          icon = '❌';
-        } else {
-          icon = '⏰';
-        }
+        const isWin = sig.outcome === 'TP1_HIT' || sig.outcome === 'TP2_HIT' || sig.outcome === 'TP3_HIT' ||
+                      (sig.outcome === 'MANUALLY_CLOSED' && sig.profitLossPips > 0);
+        const isLoss = sig.outcome === 'STOP_HIT' ||
+                       (sig.outcome === 'MANUALLY_CLOSED' && sig.profitLossPips < 0);
+        const icon = isWin ? '✅' : isLoss ? '❌' : '⏰';
 
         if (sig.outcome === 'EXPIRED') {
           lines.push(`${icon} ${sym} ${dir} — Expired`);

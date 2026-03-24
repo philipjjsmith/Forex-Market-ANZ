@@ -2,6 +2,8 @@ import type { Express } from "express";
 import { db } from "../db";
 import { sql } from "drizzle-orm";
 import { requireAuth } from "../auth-middleware";
+import { telegramNotifier } from "../services/telegram-notifier";
+import { getMonthWinCount, getMonthLossCount, getMonthNetPips, getCurrentStreak, getSignalNumber } from "../services/signal-stats";
 
 /**
  * Signal Tracking API Routes
@@ -453,7 +455,7 @@ export function registerSignalRoutes(app: Express) {
 
       // Get signal details
       const signalResult = await db.execute(sql`
-        SELECT type, entry_price, user_id
+        SELECT type, entry_price, stop_loss, tp1, symbol, tier, trade_live, user_id, created_at
         FROM signal_history
         WHERE signal_id = ${signalId}
         LIMIT 1
@@ -470,7 +472,6 @@ export function registerSignalRoutes(app: Express) {
       }
 
       // Calculate profit/loss
-      // 🔧 FIX: JPY pairs use 0.01 for 1 pip, all other pairs use 0.0001
       const pipValue = signal.symbol.includes('JPY') ? 0.01 : 0.0001;
       let profitLossPips: number;
 
@@ -492,6 +493,41 @@ export function registerSignalRoutes(app: Express) {
           updated_at = NOW()
         WHERE signal_id = ${signalId}
       `);
+
+      // Fire Telegram outcome alert (non-blocking — never affects the response)
+      (async () => {
+        try {
+          const pipFactor  = signal.symbol.includes('JPY') ? 100 : 10000;
+          const stopPips   = Math.abs(signal.entry_price - signal.stop_loss) * pipFactor;
+          const durationMs = Date.now() - new Date(signal.created_at).getTime();
+          // Map to nearest standard outcome for message formatting
+          const outcomeType = profitLossPips >= 0 ? 'TP1_HIT' : 'STOP_HIT';
+
+          const [monthWins, monthLosses, monthPips, streak, signalNumber] = await Promise.all([
+            getMonthWinCount(), getMonthLossCount(), getMonthNetPips(),
+            getCurrentStreak(), getSignalNumber(signalId),
+          ]);
+
+          await telegramNotifier.sendOutcomeAlert({
+            signalNumber,
+            symbol:         signal.symbol,
+            type:           signal.type as 'LONG' | 'SHORT',
+            outcome:        outcomeType,
+            entryPrice:     Number(signal.entry_price),
+            outcomePrice:   closePrice,
+            profitLossPips,
+            stopPips,
+            durationMs,
+            tier:           (signal.tier ?? 'HIGH') as 'HIGH' | 'MEDIUM',
+            monthWins,
+            monthLosses,
+            monthPips,
+            currentStreak:  streak,
+          });
+        } catch (err) {
+          console.error('[ArgoFX Telegram] Manual close alert failed:', err);
+        }
+      })();
 
       res.json({
         success: true,
