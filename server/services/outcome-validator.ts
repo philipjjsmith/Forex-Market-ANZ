@@ -2,6 +2,8 @@ import { db } from '../db';
 import { sql } from 'drizzle-orm';
 import { API_ENDPOINTS } from '../../client/src/config/api';
 import { twelveDataAPI } from './twelve-data';
+import { telegramNotifier } from './telegram-notifier';
+import { getMonthWinCount, getMonthLossCount, getMonthNetPips, getCurrentStreak, getSignalNumber } from './signal-stats';
 
 /**
  * Outcome Validator Service
@@ -27,6 +29,8 @@ interface PendingSignal {
   tp1: number;
   tp2: number;
   tp3: number;
+  tier: 'HIGH' | 'MEDIUM';
+  trade_live: boolean;
   created_at: Date;
   expires_at: Date;
 }
@@ -132,7 +136,7 @@ export class OutcomeValidator {
       SELECT
         id, signal_id, user_id, symbol, type,
         entry_price, stop_loss, tp1, tp2, tp3,
-        created_at, expires_at
+        tier, trade_live, created_at, expires_at
       FROM signal_history
       WHERE outcome = 'PENDING'
       ORDER BY created_at DESC
@@ -347,6 +351,9 @@ export class OutcomeValidator {
 
     console.log(`✅ Signal ${signal.signal_id} → ${outcome} at ${outcomePrice} (${profitLossPips.toFixed(1)} pips)`);
 
+    // Send ArgoFX Telegram outcome notification (non-blocking — never affects outcome save)
+    await this.sendOutcomeNotification(signal, outcome, outcomePrice, profitLossPips);
+
     // Update performance metrics
     await this.updatePerformanceMetrics(signal);
   }
@@ -371,8 +378,63 @@ export class OutcomeValidator {
 
     console.log(`⏰ Signal ${signal.signal_id} expired (48 hours passed)`);
 
+    // Send ArgoFX Telegram expiry notification (non-blocking)
+    await this.sendOutcomeNotification(signal, 'EXPIRED', signal.entry_price, 0);
+
     // Update performance metrics
     await this.updatePerformanceMetrics(signal);
+  }
+
+  /**
+   * Send ArgoFX Telegram outcome notification.
+   * Fully isolated — any failure is caught and logged. Never throws.
+   * Never blocks outcome recording or performance metrics.
+   */
+  private async sendOutcomeNotification(
+    signal: PendingSignal,
+    outcome: 'TP1_HIT' | 'STOP_HIT' | 'EXPIRED',
+    outcomePrice: number,
+    profitLossPips: number
+  ): Promise<void> {
+    try {
+      const pipFactor = signal.symbol.includes('JPY') ? 100 : 10000;
+      const stopPips  = Math.abs(signal.entry_price - signal.stop_loss) * pipFactor;
+      const durationMs = Date.now() - new Date(signal.created_at).getTime();
+
+      // Fetch stats in parallel — fall back to zeros if any query fails
+      let monthWins = 0, monthLosses = 0, monthPips = 0, streak = 0, signalNumber = 0;
+      try {
+        [monthWins, monthLosses, monthPips, streak, signalNumber] = await Promise.all([
+          getMonthWinCount(),
+          getMonthLossCount(),
+          getMonthNetPips(),
+          getCurrentStreak(),
+          getSignalNumber(signal.signal_id),
+        ]);
+      } catch (statsErr) {
+        console.error('[ArgoFX Telegram] Stats query failed — sending notification with zeros:', statsErr);
+      }
+
+      await telegramNotifier.sendOutcomeAlert({
+        signalNumber,
+        symbol:         signal.symbol,
+        type:           signal.type,
+        outcome,
+        entryPrice:     signal.entry_price,
+        outcomePrice,
+        profitLossPips,
+        stopPips,
+        durationMs,
+        tier:           signal.tier ?? 'HIGH',
+        monthWins,
+        monthLosses,
+        monthPips,
+        currentStreak:  streak,
+      });
+    } catch (err) {
+      // Catch-all — Telegram must never crash outcome processing
+      console.error('[ArgoFX Telegram] Outcome notification failed (non-critical):', err);
+    }
   }
 
   /**
