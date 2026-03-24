@@ -8,6 +8,7 @@ import { propFirmService } from './prop-firm-config';
 import { sessionAnalyzer } from './session-analyzer';
 import { telegramNotifier } from './telegram-notifier';
 import { ctraderExecutor } from './ctrader-executor';
+import { getSignalNumber } from './signal-stats';
 
 /**
  * Automated Signal Generator Service
@@ -1173,6 +1174,9 @@ export class SignalGenerator {
               console.log(`✅ Tracked ${symbol} signal ${tierBadge} (${signal.confidence}/100 points)`);
               // Count this signal against the daily trade limit
               propFirmService.updateDailyTracker(0, 10000);
+              // Get sequential signal number for Telegram (Signal #47 etc.)
+              let signalNumber = 0;
+              try { signalNumber = await getSignalNumber(signal.id); } catch { /* non-critical */ }
               // Send Telegram notification so the trade can be placed manually on The5ers
               await telegramNotifier.sendSignalAlert({
                 symbol: signal.symbol,
@@ -1187,6 +1191,7 @@ export class SignalGenerator {
                 riskReward: signal.riskReward,
                 rationale: signal.rationale,
                 version: signal.version,
+                signalNumber,
               });
               // Auto-execute on The5ers cTrader (HIGH tier only; no-op until CTRADER_ env vars set)
               await ctraderExecutor.executeSignal({
