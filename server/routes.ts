@@ -12,10 +12,15 @@ import { registerAIRoutes } from "./routes/ai-insights";
 import { signalGenerator } from "./services/signal-generator";
 import { outcomeValidator } from "./services/outcome-validator";
 import { aiAnalyzer } from "./services/ai-analyzer";
+import { telegramNotifier } from "./services/telegram-notifier";
+import { getWeekStats, getMonthWinCount, getMonthLossCount, getMonthNetPips, getTotalSignalCount } from "./services/signal-stats";
 import { backtester } from "./services/backtester";
 import { propFirmService, THE5ERS_BOOTCAMP, THE5ERS_BOOTCAMP_PHASE2, BRIGHTFUNDED_PHASE1 } from "./services/prop-firm-config";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
+
+// In-memory dedup guard for weekly summary (reset on restart — acceptable)
+let lastWeeklySummaryTime = 0;
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // ========== CRON/SCHEDULED JOB ENDPOINTS ==========
@@ -137,6 +142,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('❌ Cron error (analyze-ai):', error);
       res.status(500).json({ error: error.message });
     }
+
+  /**
+   * ArgoFX Weekly Summary (every Friday at 22:00 UTC)
+   * Triggered by: cron-job.org — schedule: 0 22 * * 5
+   * Posts win/loss/pip stats to both ArgoFX Telegram channels.
+   */
+  app.get("/api/cron/weekly-summary", async (req, res) => {
+    try {
+      const now = Date.now();
+      const oneHour = 60 * 60 * 1000;
+
+      // Dedup guard — skip if fired within the last hour
+      if (lastWeeklySummaryTime > 0 && now - lastWeeklySummaryTime < oneHour) {
+        return res.json({
+          skipped: true,
+          message: 'Weekly summary already sent within the last hour',
+          nextEligible: new Date(lastWeeklySummaryTime + oneHour).toISOString(),
+        });
+      }
+
+      lastWeeklySummaryTime = now;
+
+      // Fetch all stats in parallel
+      const [weekStats, monthWins, monthLosses, monthNetPips, totalSignals] = await Promise.all([
+        getWeekStats(),
+        getMonthWinCount(),
+        getMonthLossCount(),
+        getMonthNetPips(),
+        getTotalSignalCount(),
+      ]);
+
+      // Fire-and-forget — non-blocking
+      telegramNotifier.sendWeeklySummary({
+        weekWins:     weekStats.wins,
+        weekLosses:   weekStats.losses,
+        weekExpired:  weekStats.expired,
+        weekNetPips:  weekStats.netPips,
+        monthWins,
+        monthLosses,
+        monthNetPips,
+        totalSignals,
+      }).catch(err => console.error('[ArgoFX] Weekly summary send failed:', err));
+
+      res.json({
+        success: true,
+        message: 'ArgoFX weekly summary triggered',
+        stats: { weekStats, monthWins, monthLosses, monthNetPips, totalSignals },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error: any) {
+      console.error('❌ Cron error (weekly-summary):', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
   });
 
   /**
