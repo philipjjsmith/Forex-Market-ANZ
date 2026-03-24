@@ -267,8 +267,6 @@ class TelegramNotifier {
   async sendWeeklySummary(data: WeeklySummaryData): Promise<void> {
     if (!this.isEnabled) return;
 
-    const weekWR  = TelegramNotifier.winRate(data.weekWins, data.weekLosses);
-    const monthWR = TelegramNotifier.winRate(data.monthWins, data.monthLosses);
     const wkPips  = TelegramNotifier.fmtPips(data.weekNetPips);
     const moPips  = TelegramNotifier.fmtPips(data.monthNetPips);
     const total   = TelegramNotifier.esc(data.totalSignals);
@@ -277,12 +275,11 @@ class TelegramNotifier {
       `📈 *ArgoFX Weekly Summary*`,
       ``,
       `*This week:*`,
-      `✅ ${data.weekWins}W  ❌ ${data.weekLosses}L  ⏰ ${data.weekExpired} expired`,
-      `Net: \`${wkPips} pips\` \\| Win rate: *${weekWR}%*`,
+      `✅ *${data.weekWins} wins*${data.weekExpired > 0 ? `  ⏰ ${TelegramNotifier.esc(data.weekExpired)} no\\-trade` : ''}`,
+      `Net: \`${wkPips} pips\``,
       ``,
       `*Month to date:*`,
-      `${data.monthWins}W \\/ ${data.monthLosses}L — *${monthWR}% WR*`,
-      `Net: \`${moPips} pips\``,
+      `✅ *${data.monthWins} wins* \\| Net: \`${moPips} pips\``,
       ``,
       `📊 *All\\-time:* ${total} signals tracked`,
       `_Signals fire Mon–Fri during London \\& NY sessions_`,
@@ -306,7 +303,9 @@ class TelegramNotifier {
   async sendDailySummary(data: DailySummaryData): Promise<void> {
     if (!this.isEnabled) return;
 
-    const monthWR  = TelegramNotifier.winRate(data.monthWins, data.monthLosses);
+    // Only post if something actually happened today
+    if (data.resolved.length === 0 && data.newSignals === 0) return;
+
     const moPips   = TelegramNotifier.fmtPips(data.monthNetPips);
     const today    = new Date().toLocaleDateString('en-AU', { weekday: 'long', timeZone: 'UTC' });
 
@@ -315,9 +314,7 @@ class TelegramNotifier {
       ``,
     ];
 
-    if (data.resolved.length === 0) {
-      lines.push(`No signals resolved today\\.`);
-    } else {
+    if (data.resolved.length > 0) {
       for (const sig of data.resolved) {
         const sym     = TelegramNotifier.esc(sig.symbol);
         const dir     = sig.type === 'LONG' ? 'L' : 'S';
@@ -342,7 +339,7 @@ class TelegramNotifier {
 
     lines.push(
       ``,
-      `📊 *Month to date:* ${data.monthWins}W \\/ ${data.monthLosses}L \\(${monthWR}%\\) \\| \`${moPips} pips\``,
+      `📊 *Month to date:* ✅ ${data.monthWins} wins \\| \`${moPips} pips\``,
     );
 
     if (data.newSignals > 0) {
