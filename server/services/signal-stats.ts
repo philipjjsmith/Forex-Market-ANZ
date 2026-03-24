@@ -173,3 +173,51 @@ export async function getTotalSignalCount(): Promise<number> {
   `);
   return ((result as any)[0]?.total as number) ?? 0;
 }
+
+// ─── Day Stats ────────────────────────────────────────────────────────────────
+
+export interface DaySignalResult {
+  symbol: string;
+  type: 'LONG' | 'SHORT';
+  outcome: string;
+  profitLossPips: number;
+}
+
+/**
+ * Returns all signals that resolved today (UTC) — wins, losses, and expiries.
+ * Used for the daily close summary posted every day at 22:00 UTC.
+ */
+export async function getDayStats(): Promise<{
+  resolved: DaySignalResult[];
+  newSignals: number;
+}> {
+  // Signals that closed today
+  const resolvedResult = await db.execute(sql`
+    SELECT symbol, type, outcome, profit_loss_pips
+    FROM signal_history
+    WHERE data_quality = 'production'
+      AND outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'STOP_HIT', 'EXPIRED')
+      AND outcome_time >= DATE_TRUNC('day', NOW() AT TIME ZONE 'UTC')
+    ORDER BY outcome_time ASC
+  `);
+
+  // New signals generated today (regardless of outcome)
+  const newResult = await db.execute(sql`
+    SELECT COUNT(*)::int AS count
+    FROM signal_history
+    WHERE data_quality = 'production'
+      AND created_at >= DATE_TRUNC('day', NOW() AT TIME ZONE 'UTC')
+  `);
+
+  const resolved = (resolvedResult as any[]).map(r => ({
+    symbol:         r.symbol as string,
+    type:           r.type as 'LONG' | 'SHORT',
+    outcome:        r.outcome as string,
+    profitLossPips: Number(r.profit_loss_pips ?? 0),
+  }));
+
+  return {
+    resolved,
+    newSignals: ((newResult as any)[0]?.count as number) ?? 0,
+  };
+}

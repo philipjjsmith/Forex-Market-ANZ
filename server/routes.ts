@@ -13,7 +13,7 @@ import { signalGenerator } from "./services/signal-generator";
 import { outcomeValidator } from "./services/outcome-validator";
 import { aiAnalyzer } from "./services/ai-analyzer";
 import { telegramNotifier } from "./services/telegram-notifier";
-import { getWeekStats, getMonthWinCount, getMonthLossCount, getMonthNetPips, getTotalSignalCount } from "./services/signal-stats";
+import { getWeekStats, getMonthWinCount, getMonthLossCount, getMonthNetPips, getTotalSignalCount, getDayStats } from "./services/signal-stats";
 import { backtester } from "./services/backtester";
 import { propFirmService, THE5ERS_BOOTCAMP, THE5ERS_BOOTCAMP_PHASE2, BRIGHTFUNDED_PHASE1 } from "./services/prop-firm-config";
 import { db } from "./db";
@@ -142,6 +142,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('❌ Cron error (analyze-ai):', error);
       res.status(500).json({ error: error.message });
     }
+  });
 
   /**
    * ArgoFX Weekly Summary (every Friday at 22:00 UTC)
@@ -196,6 +197,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: error.message });
     }
   });
+
+  // In-memory dedup guard for daily summary (reset on restart — acceptable)
+  let lastDailySummaryTime = 0;
+
+  /**
+   * ArgoFX Daily Summary (every day at 22:00 UTC)
+   * Triggered by: cron-job.org — schedule: 0 22 * * *
+   * Posts today's resolved signals + monthly scorecard to both ArgoFX Telegram channels.
+   */
+  app.get("/api/cron/daily-summary", async (req, res) => {
+    try {
+      const now = Date.now();
+      const oneHour = 60 * 60 * 1000;
+
+      // Dedup guard — skip if fired within the last hour
+      if (lastDailySummaryTime > 0 && now - lastDailySummaryTime < oneHour) {
+        return res.json({
+          skipped: true,
+          message: 'Daily summary already sent within the last hour',
+          nextEligible: new Date(lastDailySummaryTime + oneHour).toISOString(),
+        });
+      }
+
+      lastDailySummaryTime = now;
+
+      // Fetch all stats in parallel
+      const [dayStats, monthWins, monthLosses, monthNetPips] = await Promise.all([
+        getDayStats(),
+        getMonthWinCount(),
+        getMonthLossCount(),
+        getMonthNetPips(),
+      ]);
+
+      // Fire-and-forget — non-blocking
+      telegramNotifier.sendDailySummary({
+        resolved:      dayStats.resolved,
+        newSignals:    dayStats.newSignals,
+        monthWins,
+        monthLosses,
+        monthNetPips,
+      }).catch(err => console.error('[ArgoFX] Daily summary send failed:', err));
+
+      res.json({
+        success: true,
+        message: 'ArgoFX daily summary triggered',
+        stats: { dayStats, monthWins, monthLosses, monthNetPips },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error: any) {
+      console.error('❌ Cron error (daily-summary):', error);
+      res.status(500).json({ error: error.message });
+    }
   });
 
   /**

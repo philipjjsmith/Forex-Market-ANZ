@@ -48,6 +48,14 @@ export interface WeeklySummaryData {
   totalSignals: number;
 }
 
+export interface DailySummaryData {
+  resolved: { symbol: string; type: 'LONG' | 'SHORT'; outcome: string; profitLossPips: number }[];
+  newSignals: number;
+  monthWins: number;
+  monthLosses: number;
+  monthNetPips: number;
+}
+
 // ─── Internal interface ───────────────────────────────────────────────────────
 
 interface SignalNotification {
@@ -283,6 +291,71 @@ class TelegramNotifier {
     ].join('\n');
 
     // Weekly summary goes to BOTH channels
+    const sends: Promise<void>[] = [];
+    if (this.chatIdPaid) {
+      sends.push(this.sendToChannel(message, this.chatIdPaid));
+    }
+    if (this.chatIdFree && this.chatIdFree !== this.chatIdPaid) {
+      sends.push(this.sendToChannel(message, this.chatIdFree));
+    }
+    await Promise.all(sends);
+  }
+
+  // ─── Daily Summary ─────────────────────────────────────────────────────────
+
+  async sendDailySummary(data: DailySummaryData): Promise<void> {
+    if (!this.isEnabled) return;
+
+    const monthWR  = TelegramNotifier.winRate(data.monthWins, data.monthLosses);
+    const moPips   = TelegramNotifier.fmtPips(data.monthNetPips);
+    const today    = new Date().toLocaleDateString('en-AU', { weekday: 'long', timeZone: 'UTC' });
+
+    const lines: string[] = [
+      `📋 *ArgoFX Daily Close — ${TelegramNotifier.esc(today)}*`,
+      ``,
+    ];
+
+    if (data.resolved.length === 0) {
+      lines.push(`No signals resolved today\\.`);
+    } else {
+      for (const sig of data.resolved) {
+        const sym     = TelegramNotifier.esc(sig.symbol);
+        const dir     = sig.type === 'LONG' ? 'L' : 'S';
+        const pipsStr = TelegramNotifier.fmtPips(sig.profitLossPips);
+
+        let icon: string;
+        if (sig.outcome === 'TP1_HIT' || sig.outcome === 'TP2_HIT' || sig.outcome === 'TP3_HIT') {
+          icon = '✅';
+        } else if (sig.outcome === 'STOP_HIT') {
+          icon = '❌';
+        } else {
+          icon = '⏰';
+        }
+
+        if (sig.outcome === 'EXPIRED') {
+          lines.push(`${icon} ${sym} ${dir} — Expired`);
+        } else {
+          lines.push(`${icon} ${sym} ${dir} \\| \`${pipsStr} pips\``);
+        }
+      }
+    }
+
+    lines.push(
+      ``,
+      `📊 *Month to date:* ${data.monthWins}W \\/ ${data.monthLosses}L \\(${monthWR}%\\) \\| \`${moPips} pips\``,
+    );
+
+    if (data.newSignals > 0) {
+      lines.push(`🔔 *New signals today:* ${TelegramNotifier.esc(data.newSignals)}`);
+    } else {
+      lines.push(`_No new signals generated today_`);
+    }
+
+    lines.push(``, DISCLAIMER);
+
+    const message = lines.join('\n');
+
+    // Daily summary goes to BOTH channels
     const sends: Promise<void>[] = [];
     if (this.chatIdPaid) {
       sends.push(this.sendToChannel(message, this.chatIdPaid));
