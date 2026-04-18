@@ -537,8 +537,8 @@ class MACrossoverStrategy {
     const bearishCross = prevOneHourFastMA >= prevOneHourSlowMA && oneHourFastMA < oneHourSlowMA;
 
     // FVG detection on 1H candles
-    const bullishFVG = getActiveFVG(oneHourCandles, 'LONG', 30);
-    const bearishFVG = getActiveFVG(oneHourCandles, 'SHORT', 30);
+    const bullishFVG = getActiveFVG(oneHourCandles, 'LONG', 50);
+    const bearishFVG = getActiveFVG(oneHourCandles, 'SHORT', 50);
 
     const currentPrice = oneHourCloses[oneHourCloses.length - 1];
 
@@ -693,7 +693,7 @@ class MACrossoverStrategy {
       }
 
       // RSI in optimal range (6 points)
-      if (rsi && rsi > 45 && rsi < 70) {
+      if (rsi && rsi >= 40 && rsi <= 78) {
         confidence += 6;
         rationale.push(`✅ RSI optimal: ${rsi.toFixed(1)} (+6)`);
       }
@@ -825,7 +825,7 @@ class MACrossoverStrategy {
       }
 
       // RSI in optimal range (6 points)
-      if (rsi && rsi > 30 && rsi < 55) {
+      if (rsi && rsi >= 22 && rsi <= 60) {
         confidence += 6;
         rationale.push(`✅ RSI optimal: ${rsi.toFixed(1)} (+6)`);
       }
@@ -888,14 +888,14 @@ class MACrossoverStrategy {
     if (!rsi) return null; // RSI is required
 
     if (signalType === 'LONG') {
-      // LONG requires RSI 45-70 (upward momentum, not overbought)
-      if (rsi < 45 || rsi > 70) {
-        return null; // Block trade - RSI shows weak momentum or overbought
+      // LONG requires RSI 40-78 (upward momentum, allows trending overbought entries)
+      if (rsi < 40 || rsi > 78) {
+        return null; // Block trade - RSI shows weak momentum or extreme overbought
       }
     } else if (signalType === 'SHORT') {
-      // SHORT requires RSI 30-55 (downward momentum, not oversold)
-      if (rsi < 30 || rsi > 55) {
-        return null; // Block trade - RSI shows weak momentum or oversold
+      // SHORT requires RSI 22-60 (downward momentum, allows trending oversold entries)
+      if (rsi < 22 || rsi > 60) {
+        return null; // Block trade - RSI shows weak momentum or extreme oversold
       }
     }
 
@@ -933,7 +933,7 @@ class MACrossoverStrategy {
     // Get prop firm configuration
     const propConfig = propFirmService.getConfig();
 
-    if (confidence >= 95) {  // HIGH tier: 95+ points (73% of 130 max) - Strong confluence alignment
+    if (confidence >= 90) {  // HIGH tier: 90+ points (69% of 130 max) - Strong confluence alignment
       tier = 'HIGH';
       tradeLive = true;
       // Use prop firm configured risk (1.0% for Phase 1, 1.5% for Phase 2)

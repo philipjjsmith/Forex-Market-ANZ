@@ -264,8 +264,9 @@ class TelegramNotifier {
 
   // ─── Weekly Summary ────────────────────────────────────────────────────────
 
-  async sendWeeklySummary(data: WeeklySummaryData): Promise<void> {
-    if (!this.isEnabled) return;
+  async sendWeeklySummary(_data: WeeklySummaryData): Promise<void> {
+    // Weekly summary temporarily disabled — re-enable by removing this line
+    return;
 
     const wkPips  = TelegramNotifier.fmtPips(data.weekNetPips);
     const moPips  = TelegramNotifier.fmtPips(data.monthNetPips);
