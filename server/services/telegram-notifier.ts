@@ -72,6 +72,7 @@ interface SignalNotification {
   rationale: string;
   version: string;
   signalNumber?: number; // optional — populated in Step 3
+  orderType: string;
 }
 
 // ─── Static disclaimer — pre-escaped for MarkdownV2 ─────────────────────────
@@ -173,6 +174,7 @@ class TelegramNotifier {
       `${direction} — ${tierLabel}`,
       `Confidence: *${conf}%* \\| R:R *${rr}:1*`,
       ``,
+      `📋 Order:  *${signal.orderType}*`,
       `📍 Entry:  \`${signal.entry.toFixed(5)}\``,
       `🛑 Stop:   \`${signal.stop.toFixed(5)}\`  \\(${TelegramNotifier.esc(slPips.toFixed(1))} pips\\)`,
       `🎯 TP1:   \`${signal.tp1.toFixed(5)}\`  \\(\\+${TelegramNotifier.esc(tp1Pips.toFixed(1))} pips \\| ${rr}R\\)`,

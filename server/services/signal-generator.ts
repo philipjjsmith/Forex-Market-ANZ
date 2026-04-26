@@ -1143,8 +1143,8 @@ class MACrossoverStrategy {
       tier,
       tradeLive,
       positionSizePercent,
-      orderType: 'MARKET',
-      executionType: 'IMMEDIATE',
+      orderType: signalType === 'LONG' ? 'Buy Limit' : 'Sell Limit',
+      executionType: 'PENDING',
       indicators: {
         fastMA: oneHourFastMA.toFixed(5),
         slowMA: oneHourSlowMA.toFixed(5),
@@ -1328,6 +1328,7 @@ export class SignalGenerator {
                 rationale: signal.rationale,
                 version: signal.version,
                 signalNumber,
+                orderType: signal.orderType,
               });
               // Auto-execute on The5ers cTrader (HIGH tier only; no-op until CTRADER_ env vars set)
               await ctraderExecutor.executeSignal({
