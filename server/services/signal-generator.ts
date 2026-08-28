@@ -249,8 +249,10 @@ function isForexMarketOpen(): boolean {
 }
 
 // Helper function: Check if within news window (simplified - checks hour of day)
-function isWithinNewsWindow(): boolean {
-  const hour = new Date().getUTCHours();
+function isWithinNewsWindow(asOf: Date = new Date()): boolean {
+  // asOf added 2026-08-28: this must be evaluable at a HISTORICAL moment, not only "now",
+  // or a backtest scores every replayed bar against today's clock.
+  const hour = asOf.getUTCHours();
 
   // Avoid major news times (simplified):
   // 8:30 AM EST (13:30 UTC) = NFP, CPI releases
@@ -512,7 +514,11 @@ function detectLiquiditySweep(
   return null;
 }
 
-class MACrossoverStrategy {
+// Exported 2026-08-28 so a backtest harness can call the REAL deployed strategy rather than
+// reimplementing it. That reimplementation is exactly why the existing backtester was
+// worthless: it simulated a plain MA crossover that was never deployed, so every parameter
+// it "approved" described a strategy nobody ran.
+export class MACrossoverStrategy {
   name = 'ICT 3-Timeframe + Order Block + Liquidity Sweep Strategy';
   // v3.3.0: ICT ORDER BLOCKS + LIQUIDITY SWEEPS - Institutional zone detection
   // - Weekly + Daily + 4H must align (major trend confirmation) = 75 pts
@@ -541,10 +547,24 @@ class MACrossoverStrategy {
     options?: {
       adxThreshold?: number;      // For sensitivity testing (default: 25)
       diagnosticMode?: boolean;   // Enable detailed logging
+      /**
+       * The moment this analysis represents. Defaults to now, so LIVE BEHAVIOUR IS
+       * UNCHANGED. A backtest passes the bar's timestamp instead.
+       *
+       * Without this, session and news scoring read the wall clock — up to +7 (session)
+       * and +3 (news) of ~130 points sourced from when the cron happened to fire rather
+       * than from market state. That made the strategy unreplayable: a feasibility probe
+       * reproduced a real signal's pair, direction and entry (within 5.3 pips) but scored
+       * confidence 91 against the live 84 — a delta of exactly the session term.
+       */
+      asOf?: Date;
+      /** Inject approved parameters instead of hitting the DB (required for replay). */
+      approvedParams?: { fastMA?: number; slowMA?: number; version?: string; atrMultiplier?: number } | null;
     }
   ): Promise<Signal | null> {
     const adxThreshold = options?.adxThreshold || 25;
     const diagnosticMode = options?.diagnosticMode || false;
+    const asOf = options?.asOf ?? new Date();
     // Need minimum candles for reliable analysis
     if (weeklyCandles.length < 26 || dailyCandles.length < 50 ||
         fourHourCandles.length < 50 || oneHourCandles.length < 100) {
@@ -558,7 +578,9 @@ class MACrossoverStrategy {
     const oneHourCloses = oneHourCandles.map(c => c.close);
 
     // 🎯 MILESTONE 3C: Get approved parameters for this symbol
-    const approvedParams = await parameterService.getApprovedParameters(symbol);
+    const approvedParams = options?.approvedParams !== undefined
+      ? options.approvedParams
+      : await parameterService.getApprovedParameters(symbol);
     const fastPeriod = approvedParams?.fastMA || 20;
     const slowPeriod = approvedParams?.slowMA || 50;
     const strategyVersion = approvedParams?.version || this.version;
@@ -660,7 +682,7 @@ class MACrossoverStrategy {
     // A sweep proves institutions cleared weak-hand orders before the real move begins
     const bullishSweep = detectLiquiditySweep(oneHourCandles, 'LONG');
     const bearishSweep = detectLiquiditySweep(oneHourCandles, 'SHORT');
-    const withinNewsWindow = isWithinNewsWindow();
+    const withinNewsWindow = isWithinNewsWindow(asOf);
 
     // 🆕 HYBRID ENTRY: BB Middle Band Pullback Detection
     // Detects pullback to BB middle line in established trends.
@@ -854,7 +876,7 @@ class MACrossoverStrategy {
 
       // 6. TIMING CONFLUENCE (10 points max)
       // Session timing - Kill Zones
-      const currentSession = sessionAnalyzer.detectSession(new Date());
+      const currentSession = sessionAnalyzer.detectSession(asOf);
       if (currentSession === 'LONDON_NY_OVERLAP') {
         confidence += 7;
         rationale.push('✅ London/NY Overlap - peak liquidity (+7)');
@@ -998,7 +1020,7 @@ class MACrossoverStrategy {
 
       // 6. TIMING CONFLUENCE (10 points max)
       // Session timing - Kill Zones
-      const currentSessionShort = sessionAnalyzer.detectSession(new Date());
+      const currentSessionShort = sessionAnalyzer.detectSession(asOf);
       if (currentSessionShort === 'LONDON_NY_OVERLAP') {
         confidence += 7;
         rationale.push('✅ London/NY Overlap - peak liquidity (+7)');
@@ -1126,8 +1148,8 @@ class MACrossoverStrategy {
     const riskReward = Math.abs(tp1 - currentPrice) / riskPerTrade;
 
     return {
-      id: `signal-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      timestamp: new Date().toISOString(),
+      id: `signal-${asOf.getTime()}-${Math.random().toString(36).substr(2, 9)}`,
+      timestamp: asOf.toISOString(),
       type: signalType,
       symbol: symbol, // Now passed as parameter
       entry: parseFloat(currentPrice.toFixed(5)),
