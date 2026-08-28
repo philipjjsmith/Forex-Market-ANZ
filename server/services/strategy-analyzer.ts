@@ -71,7 +71,7 @@ export class StrategyAnalyzer {
           `;
 
       const result = await db.execute(query);
-      const trades = result.rows as any[];
+      const trades = result as unknown as any[];            // postgres-js returns a plain array, not {rows}
 
       if (trades.length === 0) {
         return null;
@@ -177,7 +177,7 @@ export class StrategyAnalyzer {
     `;
 
     const result = await db.execute(query);
-    const allTrades = result.rows.map((r: any) => parseFloat(r.profit_loss_pips));
+    const allTrades = (result as unknown as any[]).map((r: any) => parseFloat(r.profit_loss_pips));
 
     const betterTrades = allTrades.filter(p => p > tradeProfit).length;
     const percentile = allTrades.length > 0
@@ -217,7 +217,7 @@ export class StrategyAnalyzer {
       `;
 
       const result = await db.execute(query);
-      const strategies = result.rows as any[];
+      const strategies = result as unknown as any[];
 
       const stats: StrategyStats[] = [];
 
@@ -285,7 +285,7 @@ export class StrategyAnalyzer {
       `;
 
       const recentResult = await db.execute(recentQuery);
-      const recentTrades = recentResult.rows as any[];
+      const recentTrades = recentResult as unknown as any[];
 
       if (recentTrades.length < 10) {
         return {
@@ -308,7 +308,7 @@ export class StrategyAnalyzer {
       `;
 
       const historicalResult = await db.execute(historicalQuery);
-      const historicalTrades = historicalResult.rows as any[];
+      const historicalTrades = historicalResult as unknown as any[];
 
       if (historicalTrades.length < 10) {
         return {

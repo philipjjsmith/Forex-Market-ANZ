@@ -1086,7 +1086,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Validate symbol
-      const validSymbols = ['EUR/USD', 'USD/CHF']; // Optimized pairs: EUR/USD (60% WR) + USD/CHF (25% WR)
+      const validSymbols = ['EUR/USD', 'USD/CHF', 'USD/JPY', 'GBP/USD', 'AUD/USD']; // see exchangerate-api.ts
       if (!validSymbols.includes(symbol)) {
         return res.status(400).json({
           success: false,
@@ -1137,7 +1137,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const validSymbols = ['EUR/USD', 'USD/CHF']; // Optimized pairs: EUR/USD (60% WR) + USD/CHF (25% WR)
+      const validSymbols = ['EUR/USD', 'USD/CHF', 'USD/JPY', 'GBP/USD', 'AUD/USD']; // see exchangerate-api.ts
       if (!validSymbols.includes(symbol)) {
         return res.status(400).json({
           success: false,

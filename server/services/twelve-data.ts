@@ -390,7 +390,8 @@ export class TwelveDataAPI {
    * Fetch candles for all major forex pairs
    */
   async fetchAllPairs(interval: string = '5min', outputsize: number = 1440): Promise<Map<string, Candle[]>> {
-    const pairs = ['EUR/USD', 'USD/CHF']; // Optimized: EUR/USD (60% WR) + USD/CHF (25% WR) - based on historical performance
+    // See exchangerate-api.ts for why this list was re-expanded on corrected evidence.
+    const pairs = ['EUR/USD', 'USD/CHF', 'USD/JPY', 'GBP/USD', 'AUD/USD'];
     const candlesMap = new Map<string, Candle[]>();
 
     for (const pair of pairs) {

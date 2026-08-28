@@ -1233,11 +1233,10 @@ export class SignalGenerator {
       for (const quote of quotes) {
         const { symbol, exchangeRate } = quote;
 
-        // 🚫 PHASE 2 QUICK WIN: Skip GBP/USD (19.6% win rate - catastrophic)
-        if (symbol === 'GBP/USD') {
-          console.log(`⏭️  Skipping ${symbol} - disabled due to poor performance (19.6% win rate)`);
-          continue;
-        }
+        // GBP/USD skip REMOVED 2026-08-28. It was disabled for a "19.6% win rate" measured
+        // by the old validator, which a full replay proved wrong on 131 of 306 production
+        // rows — and always in the same direction (37 losses became wins, 2 went the other
+        // way). The ban rested on a number that was never real.
 
         // 🔒 DEDUPLICATION + COOLDOWN
         //

@@ -123,10 +123,24 @@ export class ExchangeRateAPI {
    * Fetch all forex pairs (5 API calls or use cache)
    */
   async fetchAllQuotes(): Promise<ForexQuote[]> {
+    // Pairs re-expanded 2026-08-28 on CORRECTED evidence.
+    // The previous list (EUR/USD + USD/CHF only) was chosen from the OLD validator's record,
+    // which a full replay showed was wrong on 131 of 306 production rows — 37 recorded losses
+    // were actually wins against only 2 the other way. Every pair elimination rested on it:
+    //   USD/JPY  banned for "0% win rate" — corrected: 37.5% WR, +98.4 pips (2nd best by pips)
+    //   GBP/USD  banned for "19.6% win rate" — same broken measurement
+    //   EUR/USD  KEPT for a claimed "60% WR" — corrected: 30.0% WR, -187.9 pips (WORST pair)
+    // The selection was exactly backwards. Nothing executes today, so more pairs simply means
+    // more sample, and sample size is the binding constraint on ever proving an edge.
+    // Quota checked: generation only runs in the 6h of kill zones, so ~42 calls/symbol/day.
+    // 5 pairs = ~352/day against the 800/day free tier.
     const pairs = [
       { from: 'EUR', to: 'USD' },
       { from: 'USD', to: 'CHF' },
-    ]; // Optimized: EUR/USD (60% WR) + USD/CHF (25% WR) - based on historical performance
+      { from: 'USD', to: 'JPY' },
+      { from: 'GBP', to: 'USD' },
+      { from: 'AUD', to: 'USD' },
+    ];
 
     try {
       const quotes = await Promise.all(
