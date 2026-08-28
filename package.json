@@ -11,7 +11,8 @@
     "db:push": "drizzle-kit push",
     "db:migrate-ai-system": "tsx scripts/migrate-ai-system.ts",
     "db:migrate-phase3": "tsx scripts/migrate-phase3-partial-profits.ts",
-    "db:backfill-candles": "tsx scripts/backfill-signal-candles.ts"
+    "db:backfill-candles": "tsx scripts/backfill-signal-candles.ts",
+    "db:migrate-outcome-validation": "tsx scripts/apply-sql.ts db/manual/2026-08-27_outcome_validation_repair.sql"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

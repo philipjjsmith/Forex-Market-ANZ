@@ -2,6 +2,48 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## 🚨 READ THIS FIRST — much of the document below is STALE (updated 2026-08-27)
+
+Everything from "Signal Generation Pipeline" onward was written **2025-11-27** and describes
+**v3.1.0**. The code is **v3.3.0**. A full system audit on 2026-08-26/27 found the following.
+Where this file and the code disagree, **the code wins**.
+
+**Corrections to the sections below:**
+
+| This file says | Reality at HEAD |
+|---|---|
+| Confidence max **100 points** | **130-point** confluence scale |
+| HIGH tier at **85** | **HIGH ≥ 90**, S-TIER ≥ 115, MEDIUM 70–89 |
+| Risk **1.5%** per trade | **1.0%** (The5ers Bootcamp) |
+| Pairs incl. USD/JPY, GBP/USD, AUD/USD | **EUR/USD and USD/CHF only** |
+| "Target win rate 65–75%" | **Never achieved.** Best honest measurement is ~22–37% |
+| FXIFY prop firm | **Eliminated Feb 2026** — The5ers Bootcamp is active |
+
+**Critical facts a new session must not rediscover the hard way:**
+
+- **The outcome validator was fabricating losses.** It fetched "the most recent 200 1H
+  candles" — never anchored to the trade — and could scan pre-signal action as post-signal.
+  Verified: a USD/CHF LONG was recorded `STOP_HIT` five minutes in, on a level price never
+  reached across the entire 48h window. Rewritten 2026-08-27 to replay the exact window on
+  5-minute bars. **10 of 64 recorded stop-outs were physically impossible.**
+- **`TP2_HIT` / `TP3_HIT` can never be written.** `checkOutcomeFromCandles` returns only
+  `TP1_HIT | STOP_HIT`. The three-target ladder in every Telegram alert is decoration; the
+  system is really a fixed **+2R / −1R, TP1-only** strategy.
+- **Never read `signal_history` directly for analysis.** Use the `signal_history_deduped`
+  view. Raw rows over-count ~4.3× and, because duplicates cluster on losers, bias the win
+  rate **downward**.
+- **The backtester must not be run.** It reads `signal.outcome` verbatim instead of
+  re-pricing, so the ATR dimension is a no-op; its Monte Carlo shuffles booleans (a
+  permutation-invariant count) so the validation gate is dead code; and its 70/30 split runs
+  backwards in time.
+- **`scripts/test-critical-fixes.ts` contains the live DB password and is tracked on the
+  public repo.** Rotate the credential.
+- **No parameter tuning is statistically possible.** ~70 real trades; a genuine 5pp effect
+  needs ~1,300 per arm.
+
+Full detail lives in Philip's vault: `Knowledge/ArgoFX Full System Audit 2026-08-26` and
+`Knowledge/ArgoFX Phase 1 Implementation 2026-08-27`.
+
 ## ⚠️ CRITICAL: Always Check Remote Repository First
 
 **BEFORE analyzing ANY code or answering questions about the codebase:**

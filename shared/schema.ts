@@ -1,5 +1,7 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, jsonb } from "drizzle-orm/pg-core";
+import {
+  pgTable, text, varchar, timestamp, jsonb, integer, boolean, numeric, index, uniqueIndex,
+} from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -22,6 +24,114 @@ export const savedSignals = pgTable("saved_signals", {
   candles: jsonb("candles"), // Store candle data
   savedAt: timestamp("saved_at").defaultNow().notNull(),
 });
+
+/**
+ * signal_history — the trade record. 44 columns.
+ *
+ * ⚠️ DO NOT RUN `npm run db:push` AGAINST PRODUCTION WITHOUT A DIFF REVIEW.
+ * This table already exists in Supabase with 1,527 live rows and 16 indexes. It was created
+ * by hand-run SQL migrations, NOT by Drizzle, and was absent from this file until 2026-08-27.
+ * `drizzle-kit push` reconciles the DB to this definition — if anything here is even slightly
+ * off (a type, a default, a nullability), push can ALTER or DROP live columns.
+ *
+ * This definition exists for type-safe queries and so the table is finally visible to
+ * migration tooling. Treat it as read-only documentation until a `drizzle-kit generate`
+ * diff has been reviewed line by line against the live schema.
+ *
+ * The partial unique index below already exists in the DB as
+ * `signal_history_one_pending_per_symbol`. It prevents two CONCURRENT pending signals for a
+ * symbol — it does NOT prevent sequential re-entry after a trade resolves, which is the
+ * actual duplicate pattern (303 raw rows collapse to 70 real trades). That needs a cooldown
+ * in signal-generator.ts, not a constraint here.
+ */
+export const signalHistory = pgTable("signal_history", {
+  id: varchar("id").primaryKey().default(sql`(gen_random_uuid())::text`),
+  signalId: text("signal_id").notNull().unique(),
+  userId: varchar("user_id"),
+
+  symbol: text("symbol").notNull(),
+  type: text("type").notNull(),                       // 'LONG' | 'SHORT'
+  confidence: integer("confidence").notNull(),        // raw points on the 130-pt scale
+  entryPrice: numeric("entry_price", { precision: 10, scale: 5 }).notNull(),
+  currentPrice: numeric("current_price", { precision: 10, scale: 5 }).notNull(),
+  stopLoss: numeric("stop_loss", { precision: 10, scale: 5 }).notNull(),
+  tp1: numeric("tp1", { precision: 10, scale: 5 }).notNull(),
+  tp2: numeric("tp2", { precision: 10, scale: 5 }).notNull(),                      // never recorded — validator can only emit TP1_HIT/STOP_HIT
+  tp3: numeric("tp3", { precision: 10, scale: 5 }).notNull(),                      // never recorded — see above
+  stopLimitPrice: numeric("stop_limit_price", { precision: 10, scale: 5 }),
+  orderType: text("order_type").notNull(),            // says 'Buy Limit' but executors send MARKET
+  executionType: text("execution_type").notNull(),
+
+  strategyName: text("strategy_name").notNull(),
+  strategyVersion: text("strategy_version").notNull(),
+
+  outcome: text("outcome").default('PENDING'),        // PENDING|TP1_HIT|STOP_HIT|EXPIRED|MANUALLY_CLOSED
+  outcomePrice: numeric("outcome_price", { precision: 10, scale: 5 }),
+  outcomeTime: timestamp("outcome_time", { withTimezone: true }),
+  profitLossPips: numeric("profit_loss_pips", { precision: 10, scale: 2 }),
+  manuallyClosedByUser: boolean("manually_closed_by_user").default(false),
+
+  indicators: jsonb("indicators").notNull(),
+  candles: jsonb("candles").notNull(),                // ⚠️ overwritten at outcome time — see audit
+
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).default(sql`(now() + '48:00:00'::interval)`),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+
+  tier: text("tier").default('HIGH'),                 // HIGH >= 90 | MEDIUM 70-89
+  tradeLive: boolean("trade_live").default(true),
+  positionSizePercent: numeric("position_size_percent", { precision: 3, scale: 2 }).default('1.00'),
+
+  partialClose1Price: numeric("partial_close_1_price", { precision: 10, scale: 5 }),   // never written
+  partialClose1Time: timestamp("partial_close_1_time", { withTimezone: true }),
+  partialClose1Pips: numeric("partial_close_1_pips", { precision: 10, scale: 2 }),
+  stopMovedToBreakeven: boolean("stop_moved_to_breakeven").default(false),
+  breakevenStopPrice: numeric("breakeven_stop_price", { precision: 10, scale: 5 }),
+
+  dataQuality: text("data_quality").default('production'), // 'production' | 'legacy'
+
+  entrySlippage: numeric("entry_slippage", { precision: 10, scale: 2 }).default('0.0'), // never populated → grader is inert
+  exitSlippage: numeric("exit_slippage", { precision: 10, scale: 2 }).default('0.0'),
+  fillLatency: integer("fill_latency").default(0),
+
+  breakEvenTime: timestamp("break_even_time", { withTimezone: true }),
+  maxAdverseExcursion: numeric("max_adverse_excursion", { precision: 10, scale: 2 }),
+  maxFavorableExcursion: numeric("max_favorable_excursion", { precision: 10, scale: 2 }),
+
+  session: varchar("session"),
+  volatilityLevel: varchar("volatility_level"),
+
+  // --- Added 2026-08-27 by migrations/2026-08-27_outcome_validation_repair.sql ---
+  // Corrections from window-anchored 5-minute replay. Originals above are preserved
+  // so the size of the validation error stays provable.
+  correctedOutcome: text("corrected_outcome"),
+  correctedOutcomePrice: numeric("corrected_outcome_price"),
+  correctedOutcomeTime: timestamp("corrected_outcome_time", { withTimezone: true }),
+  correctedProfitLossPips: numeric("corrected_profit_loss_pips"),
+  // Excursions in R units (R = |entry - stop_loss|), measured across the FULL window
+  // regardless of when the trade resolved — this is what decides whether TP2 (4R) and
+  // TP3 (6R) were ever reachable.
+  correctedMfeR: numeric("corrected_mfe_r"),
+  correctedMaeR: numeric("corrected_mae_r"),
+  validationMethod: text("validation_method"),
+  // Throttle marker for the window-replay validator. Persisted rather than in-memory
+  // because Render's free tier restarts constantly — the same reason the old in-memory
+  // daily-trade counter never actually enforced its limit.
+  lastValidatedAt: timestamp("last_validated_at", { withTimezone: true }),
+  // Outcome-window candles live here so `candles` can stay the pre-signal window.
+  outcomeCandles: jsonb("outcome_candles"),
+}, (t) => ({
+  symbolIdx: index("idx_signal_history_symbol").on(t.symbol),
+  createdAtIdx: index("idx_signal_history_created_at").on(t.createdAt),
+  outcomeIdx: index("idx_signal_history_outcome").on(t.outcome),
+  dataQualityIdx: index("idx_signal_history_data_quality").on(t.dataQuality),
+  onePendingPerSymbol: uniqueIndex("signal_history_one_pending_per_symbol")
+    .on(t.symbol, t.type)
+    .where(sql`outcome = 'PENDING' AND data_quality = 'production'`),
+}));
+
+export type SignalHistoryRow = typeof signalHistory.$inferSelect;
+export type InsertSignalHistory = typeof signalHistory.$inferInsert;
 
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,

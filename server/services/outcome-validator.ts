@@ -78,6 +78,9 @@ export class OutcomeValidator {
     }
 
     try {
+      // 0. Backstop first — close anything unresolvable before it can block a symbol.
+      await this.closeUnresolvableSignals();
+
       // 1. Fetch all PENDING signals
       const pendingSignals = await this.fetchPendingSignals();
 
@@ -99,20 +102,32 @@ export class OutcomeValidator {
 
       for (const signal of pendingSignals) {
         try {
-          // Check if signal expired (48 hours)
-          if (new Date() > new Date(signal.expires_at)) {
-            await this.markAsExpired(signal);
-            expired++;
-            continue;
-          }
-
-          // Check if TP or SL hit using candle HIGH/LOW extremes
+          // NOTE: there is deliberately NO wall-clock expiry check here.
+          //
+          // The previous implementation asked "is this past 48h RIGHT NOW?" and, if so,
+          // marked it EXPIRED and `continue`d — so the candle scan was unreachable and the
+          // question "did price hit TP or SL during those 48 hours?" was never asked.
+          // Combined with the weekend gate (validation skipped Fri 22:00 → Sun 22:00 UTC),
+          // any signal created Wed–Fri could expire while the gate was shut and be recorded
+          // EXPIRED regardless of what price actually did.
+          //
+          // checkOutcomeFromCandles now scans the FULL created_at → expires_at window and
+          // only returns EXPIRED when the window has both elapsed AND produced no touch.
           const result = await this.checkOutcomeFromCandles(signal);
 
+          // Stamp the attempt BEFORE acting on the result, so a signal that repeatedly
+          // fails to resolve still advances the throttle and cannot be re-fetched every
+          // 5 minutes forever.
+          await this.markValidationAttempt(signal.signal_id);
+
           if (result) {
-            await this.updateSignalOutcome(signal, result.outcome, result.outcomePrice);
-            updated++;
+            await this.updateSignalOutcome(
+              signal, result.outcome, result.outcomePrice, result.outcomeTime,
+              result.mfeR, result.maeR
+            );
+            if (result.outcome === 'EXPIRED') expired++; else updated++;
           }
+          // result === null means genuinely still open — leave it PENDING.
         } catch (signalError) {
           console.error(`❌ Error processing signal ${signal.signal_id}:`, signalError);
           // Continue processing remaining signals even if one fails
@@ -132,6 +147,33 @@ export class OutcomeValidator {
    * Fetch all signals with PENDING outcome
    */
   private async fetchPendingSignals(): Promise<PendingSignal[]> {
+    // THROTTLE — this is a hard quota constraint, not an optimisation.
+    //
+    // Each signal now costs one UNCACHED Twelve Data call per check (the window replay
+    // cannot reuse the generator's shared cache, because every window is different).
+    // Unthrottled that is (pending signals) x 288 runs/day on a 5-minute cron:
+    //   3 concurrent signals  -> 864 calls/day, already over the 800/day free tier
+    //  24 concurrent (steady state at a 4h cooldown with 48h expiry) -> ~6,900/day
+    // And quota exhaustion degrades SILENTLY — twelve-data.ts falls back to stale cache
+    // with no maximum age, so a signal would be resolved against days-old prices.
+    //
+    // With this throttle the cost is ~13 calls per signal over its whole 48h life
+    // (12 periodic + 1 final), i.e. roughly 150/day at current signal rates.
+    //
+    // A signal is checked when it has never been checked, or when the interval has elapsed.
+    //
+    // NOTE: an earlier draft added `OR expires_at <= NOW()` to guarantee a final check.
+    // That reintroduced the exact bug this throttle exists to prevent: an expired signal
+    // that cannot be resolved (no candle data for its window — a weekend or a market
+    // holiday) satisfies that clause on EVERY cycle forever, burning one uncached API call
+    // every 5 minutes indefinitely. The bypass is unnecessary anyway: expiry is 48h and the
+    // throttle is 4h, so a signal is checked ~12 times over its life and the first check
+    // after `expires_at` resolves it definitively.
+    const VALIDATION_INTERVAL_MINUTES = 240;
+
+    // ORDER BY expires_at ASC — oldest-expiring first, NOT newest-first. With `LIMIT 20`,
+    // ordering by `created_at DESC` would let a backlog of fresh signals permanently starve
+    // the oldest ones, which are precisely the trades waiting on a final resolution.
     const result = await db.execute(sql`
       SELECT
         id, signal_id, user_id, symbol, type,
@@ -139,191 +181,294 @@ export class OutcomeValidator {
         tier, trade_live, created_at, expires_at
       FROM signal_history
       WHERE outcome = 'PENDING'
-      ORDER BY created_at DESC
+        AND data_quality = 'production'
+        AND (
+          last_validated_at IS NULL
+          OR last_validated_at < NOW() - (${VALIDATION_INTERVAL_MINUTES} || ' minutes')::interval
+        )
+      ORDER BY expires_at ASC
+      LIMIT 20
     `);
 
     return result as any[];
   }
 
   /**
-   * Check if signal hit TP1 or Stop Loss using candle HIGH/LOW extremes (industry standard)
+   * BACKSTOP: force-close signals that can never resolve.
    *
-   * Fetches 1H candles from Twelve Data (already cached by signal generator),
-   * then scans each candle after the signal's creation time for TP/SL touches.
+   * Deleting markAsExpired() removed the only GUARANTEED terminal transition out of
+   * PENDING. Every remaining path requires fetchCandlesInWindow to return a non-empty
+   * array — so a 429, a 5xx, a symbol with no free-tier history for that date range, or a
+   * malformed datetime leaves the row PENDING *forever*, retried every interval in
+   * perpetuity.
    *
-   * This correctly detects intraday excursions that a close-price poll would miss.
+   * That is not merely wasteful. The signal generator's dedup selects
+   * `outcome = 'PENDING' AND data_quality = 'production'` with no age bound, so ONE stuck
+   * row permanently suppresses every future signal for that symbol. With only EUR/USD and
+   * USD/CHF live, two stuck rows silently shut the entire system down while every health
+   * check stays green.
+   *
+   * Anything still PENDING a week past its 48-hour expiry is unresolvable by definition.
+   * Close it, mark it so it is excluded from win-rate maths, and never notify — these are
+   * bookkeeping closures, not trade outcomes.
+   */
+  private async closeUnresolvableSignals(): Promise<void> {
+    try {
+      const result = await db.execute(sql`
+        UPDATE signal_history
+        SET outcome = 'EXPIRED',
+            outcome_time = expires_at,
+            validation_method = 'unresolvable-backstop',
+            updated_at = NOW()
+        WHERE outcome = 'PENDING'
+          AND expires_at < NOW() - INTERVAL '7 days'
+        RETURNING signal_id
+      `);
+      const rows = result as any[];
+      if (rows.length > 0) {
+        console.warn(`🧹 Backstop closed ${rows.length} unresolvable PENDING signal(s): ${rows.map(r => r.signal_id).join(', ')}`);
+      }
+    } catch (e) {
+      console.error('⚠️  Unresolvable-signal backstop failed:', e);
+    }
+  }
+
+  /**
+   * Stamp a signal as checked, so the throttle above can see it.
+   * Written even when the signal does not resolve — that is the entire point.
+   */
+  private async markValidationAttempt(signalId: string): Promise<void> {
+    try {
+      await db.execute(sql`
+        UPDATE signal_history SET last_validated_at = NOW() WHERE signal_id = ${signalId}
+      `);
+    } catch (e) {
+      console.error(`⚠️  Could not stamp last_validated_at for ${signalId}:`, e);
+    }
+  }
+
+  /**
+   * Resolve a signal's outcome by replaying the EXACT trade window on 5-minute candles.
+   *
+   * Replaces the previous implementation, which was unreliable in four separate ways.
+   * Each is fixed here deliberately — do not "simplify" any of them back:
+   *
+   *  1. WINDOW ANCHORING. The old code fetched "the most recent 200 1H candles" and
+   *     filtered `timestamp > created_at`. Those bars are not tied to the trade at all,
+   *     so for an old signal it scanned bars from long AFTER expiry, and — combined with
+   *     datetimes parsed as host-local rather than UTC — could scan PRE-signal action as
+   *     though it were post-signal. Verified consequence: USD/CHF LONG 2026-06-19 was
+   *     recorded STOP_HIT at 0.80473 five minutes after creation, when across the whole
+   *     48h window price never went below 0.80537. The loss never happened.
+   *     Now: `fetchCandlesInWindow(created_at → min(now, expires_at))`, explicit UTC.
+   *
+   *  2. ENTRY BAR. The old filter used `>`, excluding the signal's own bar and hiding up
+   *     to 59 minutes of post-entry action. That loss was ASYMMETRIC: the stop sits at
+   *     ~half TP1's distance, so what went missing was mostly stop-outs. The window start
+   *     is now floored to the bar boundary so the entry bar is included.
+   *
+   *  3. GRANULARITY. 1H bars make TP-and-SL-in-one-bar common. 5-minute bars make a
+   *     4.5×ATR ambiguous range rare (the "bar magnifier" approach).
+   *
+   *  4. AMBIGUITY RULE. When one bar touches both levels, the old code guessed from
+   *     candle body direction (`close >= open`) — which scores a bar that dipped to the
+   *     stop, reversed and closed up as a WIN, and contradicted this file's own header.
+   *     Now: STOP FIRST, always. It is the only assumption that cannot flatter the record.
+   *
+   * Returns null when the trade is genuinely still open (window not yet elapsed, no touch).
+   * Returns EXPIRED only after the FULL window has been scanned and elapsed.
    */
   private async checkOutcomeFromCandles(
     signal: PendingSignal
-  ): Promise<{ outcome: 'TP1_HIT' | 'STOP_HIT'; outcomePrice: number } | null> {
+  ): Promise<{
+    outcome: 'TP1_HIT' | 'STOP_HIT' | 'EXPIRED';
+    outcomePrice: number;
+    outcomeTime: Date;
+    mfeR: number;
+    maeR: number;
+  } | null> {
     try {
-      // Fetch 1H candles — these are cached by signal generator (30-min TTL)
-      // so this costs 0 additional API credits in the common case
-      const candles = await twelveDataAPI.fetchHistoricalCandles(signal.symbol, '1h', 200);
+      const createdAt = new Date(signal.created_at);
+      const expiresAt = new Date(signal.expires_at);
+      const now = new Date();
+
+      // Floor to the 5-minute boundary so the ENTRY BAR is included.
+      const windowStart = new Date(Math.floor(createdAt.getTime() / 300_000) * 300_000);
+      const windowEnd = new Date(Math.min(now.getTime(), expiresAt.getTime()));
+      const fullyElapsed = now.getTime() >= expiresAt.getTime();
+
+      if (windowEnd.getTime() <= windowStart.getTime()) return null;
+
+      const candles = await twelveDataAPI.fetchCandlesInWindow(
+        signal.symbol, '5min', windowStart, windowEnd
+      );
 
       if (!candles || candles.length === 0) {
-        console.warn(`⚠️  No candle data for ${signal.symbol} — cannot validate ${signal.signal_id}`);
+        // Empty window is normal over a weekend/gap. Only conclude EXPIRED once the
+        // window has elapsed AND we still have no data — never on a wall-clock check alone.
+        if (fullyElapsed) {
+          console.warn(`⚠️  ${signal.signal_id}: window elapsed with no candle data — cannot resolve honestly`);
+        }
         return null;
       }
 
-      const signalCreatedAt = new Date(signal.created_at).getTime();
+      const isLong = signal.type === 'LONG';
+      const entry = Number(signal.entry_price);
+      const stop = Number(signal.stop_loss);
+      const target = Number(signal.tp1);
+      const R = Math.abs(entry - stop);
 
-      // Only check candles that opened STRICTLY AFTER the signal was created
-      // Using > (not >=) to exclude the signal's own candle, which pre-dates the entry
-      const relevantCandles = candles.filter(c => new Date(c.timestamp).getTime() > signalCreatedAt);
+      // Excursions are tracked across the WHOLE window, not just up to resolution, so
+      // they answer "how far could this have run" — which is what decides whether TP2 (4R)
+      // and TP3 (6R) are reachable at all. (Neither has ever been recorded, because the
+      // old implementation could only ever emit TP1_HIT or STOP_HIT.)
+      let mfeR = 0;
+      let maeR = 0;
+      let resolved: { outcome: 'TP1_HIT' | 'STOP_HIT'; outcomePrice: number; outcomeTime: Date } | null = null;
 
-      if (relevantCandles.length === 0) {
-        return null; // No completed candles since signal creation yet
-      }
+      for (const c of candles) {
+        // Twelve Data's end_date is INCLUSIVE, so the bar opening exactly at expires_at
+        // comes back in the window. Without this guard a stop touched up to 4:59 AFTER
+        // expiry would be recorded as STOP_HIT instead of EXPIRED.
+        if (c.timestamp.getTime() >= expiresAt.getTime()) break;
 
-      for (const candle of relevantCandles) {
-        const tpHit = signal.type === 'LONG'
-          ? candle.high >= signal.tp1
-          : candle.low <= signal.tp1;
-
-        const slHit = signal.type === 'LONG'
-          ? candle.low <= signal.stop_loss
-          : candle.high >= signal.stop_loss;
-
-        if (tpHit && slHit) {
-          // Both TP and SL within same candle — infer order from candle body direction
-          // Bullish candle (close >= open): price moved up first → TP hit first for LONG, SL for SHORT
-          // Bearish candle (close < open): price moved down first → SL hit first for LONG, TP for SHORT
-          const candleIsBullish = candle.close >= candle.open;
-          let outcome: 'TP1_HIT' | 'STOP_HIT';
-          let outcomePrice: number;
-          if (signal.type === 'LONG') {
-            outcome = candleIsBullish ? 'TP1_HIT' : 'STOP_HIT';
-            outcomePrice = candleIsBullish ? signal.tp1 : signal.stop_loss;
-          } else {
-            outcome = candleIsBullish ? 'STOP_HIT' : 'TP1_HIT';
-            outcomePrice = candleIsBullish ? signal.stop_loss : signal.tp1;
-          }
-          console.log(`⚠️  ${signal.signal_id}: ambiguous candle → inferring ${outcome} from candle body direction`);
-          return { outcome, outcomePrice };
+        const favourable = isLong ? c.high - entry : entry - c.low;
+        const adverse = isLong ? entry - c.low : c.high - entry;
+        if (R > 0) {
+          if (favourable / R > mfeR) mfeR = favourable / R;
+          if (adverse / R > maeR) maeR = adverse / R;
         }
 
-        if (tpHit) {
-          return { outcome: 'TP1_HIT', outcomePrice: signal.tp1 };
-        }
+        if (resolved) continue; // keep measuring excursions, stop deciding
 
+        const slHit = isLong ? c.low <= stop : c.high >= stop;
+        const tpHit = isLong ? c.high >= target : c.low <= target;
+
+        // CONSERVATIVE: stop first on an ambiguous bar. Never flatter the record.
         if (slHit) {
-          return { outcome: 'STOP_HIT', outcomePrice: signal.stop_loss };
+          // Record the price actually AVAILABLE, not the level. On a weekend or news gap
+          // through the stop, the bar opens beyond it and the real fill is that open —
+          // recording `stop` understates the loss, which is precisely the "never flatter
+          // the record" principle the ambiguity rule above invokes.
+          const fill = isLong ? Math.min(stop, c.open) : Math.max(stop, c.open);
+          resolved = { outcome: 'STOP_HIT', outcomePrice: fill, outcomeTime: c.timestamp };
+          if (fill !== stop) {
+            console.log(`⚠️  ${signal.signal_id}: gapped through stop — filled ${fill} vs level ${stop}`);
+          }
+          if (tpHit) {
+            console.log(`⚠️  ${signal.signal_id}: ambiguous bar (both levels touched) → STOP_HIT (conservative)`);
+          }
+        } else if (tpHit) {
+          // Symmetric treatment, but a favourable gap can only help — cap at the level so a
+          // gap beyond TP is not counted as extra profit we would not reliably capture.
+          const fill = isLong ? Math.max(target, c.open) : Math.min(target, c.open);
+          resolved = { outcome: 'TP1_HIT', outcomePrice: fill, outcomeTime: c.timestamp };
         }
       }
 
-      return null; // Neither TP nor SL hit yet
+      if (resolved) {
+        return { ...resolved, mfeR, maeR };
+      }
+
+      // Neither level touched. Only now is EXPIRED a truthful answer — and only if the
+      // window has actually elapsed. Use the real closing price, not the entry price:
+      // an expired trade closed at SOME market price, and asserting it ended flat
+      // destroys information that cannot be recovered later.
+      if (fullyElapsed) {
+        const lastCandle = candles[candles.length - 1];
+        return {
+          outcome: 'EXPIRED',
+          outcomePrice: lastCandle.close,
+          outcomeTime: expiresAt,
+          mfeR,
+          maeR,
+        };
+      }
+
+      return null; // still genuinely open
 
     } catch (error) {
-      console.error(`❌ Error checking candle outcome for ${signal.signal_id}:`, error);
+      console.error(`❌ Error resolving outcome for ${signal.signal_id}:`, error);
+      return null; // fail closed — never guess an outcome
+    }
+  }
+
+  /**
+   * Fetch the candles that actually cover the trade, entry → exit.
+   *
+   * REWRITTEN 2026-08-27. Despite its name, the previous version did NOT fetch the trade's
+   * window: it called `fetchHistoricalCandles(symbol, interval, N)` — "the most recent N
+   * bars" — and then `.slice(-200)`. For a trade resolved days earlier the returned bars
+   * could overlap the trade barely or not at all. That is the same "not anchored to the
+   * trade" defect that made outcome validation fabricate losses, and it silently fed both
+   * the winning-trades chart and the MAE/MFE calculation.
+   *
+   * It also derived `outputsize` from the trade's duration, producing a near-unique cache
+   * key per signal (`EUR/USD-15min-102`, `-106`, …) now that outputsize is part of the key —
+   * a guaranteed cache miss every time plus unbounded key growth in node-persist.
+   *
+   * Returns null (NOT []) on failure, so callers can distinguish "no data" from "empty
+   * result" — `??` does not treat [] as absent.
+   */
+  private async fetchTradeDurationCandles(
+    signal: PendingSignal,
+    resolutionTime: Date
+  ): Promise<any[] | null> {
+    try {
+      const createdAt = new Date(signal.created_at);
+      const windowStart = new Date(Math.floor(createdAt.getTime() / 300_000) * 300_000);
+      // Clamp to the trade's own expiry so a long-unresolved signal cannot pull in
+      // unbounded post-trade history.
+      const expiresAt = new Date(signal.expires_at);
+      const windowEnd = new Date(Math.min(resolutionTime.getTime(), expiresAt.getTime()));
+
+      if (!(windowEnd.getTime() > windowStart.getTime())) return null;
+
+      // 15min keeps a 48h window to ~192 bars — enough resolution for a chart without
+      // paying for 576 five-minute bars.
+      const candles = await twelveDataAPI.fetchCandlesInWindow(
+        signal.symbol, '15min', windowStart, windowEnd
+      );
+
+      if (candles && candles.length > 0) {
+        console.log(`✅ Fetched ${candles.length} trade-window candles for ${signal.signal_id}`);
+        return candles;
+      }
+
+      console.warn(`⚠️  No trade-window candles for ${signal.symbol} (${signal.signal_id})`);
+      return null;
+
+    } catch (error) {
+      console.error(`❌ Error fetching trade-window candles:`, error);
       return null;
     }
   }
 
-  /**
-   * Fetch candles covering the actual trade duration (entry → exit)
-   * This fixes the data mismatch where old candles don't align with trade prices
-   */
-  private async fetchTradeDurationCandles(signal: PendingSignal, outcomePrice: number): Promise<any[]> {
-    try {
-      // Calculate trade duration in hours
-      const createdAt = new Date(signal.created_at);
-      const now = new Date();
-      const durationMs = now.getTime() - createdAt.getTime();
-      const durationHours = Math.ceil(durationMs / (1000 * 60 * 60));
-
-      console.log(`📊 Fetching ${durationHours}h of candles for ${signal.symbol} (${signal.signal_id})`);
-
-      // Determine optimal timeframe based on trade duration
-      // For 0-12h trades: use 15min candles (48 candles)
-      // For 12-48h trades: use 15min candles (192 candles)
-      // For 48h+ trades: use 1h candles (up to 200 candles)
-      let interval: string;
-      let candleCount: number;
-
-      if (durationHours <= 12) {
-        interval = '15min';
-        candleCount = Math.max(50, durationHours * 4 + 10); // Extra padding
-      } else if (durationHours <= 48) {
-        interval = '15min';
-        candleCount = Math.max(100, durationHours * 4 + 10);
-      } else {
-        interval = '1h';
-        candleCount = Math.max(100, Math.min(200, durationHours + 20));
-      }
-
-      // Fetch from Twelve Data API (cached — low credit usage)
-      const candles = await twelveDataAPI.fetchHistoricalCandles(signal.symbol, interval, candleCount);
-
-      if (candles && candles.length > 0) {
-        console.log(`✅ Fetched ${candles.length} ${interval} candles from Twelve Data`);
-        return candles.slice(-200); // Keep last 200 for consistency
-      }
-
-      // API returned no data — return empty array (no data is better than synthetic data in production)
-      console.warn(`⚠️  Twelve Data API returned no candles for ${signal.symbol} — skipping candle update`);
-      return [];
-
-    } catch (error) {
-      console.error(`❌ Error fetching trade duration candles:`, error);
-      // Return empty array — no data is better than synthetic data stored permanently in DB
-      return [];
-    }
-  }
-
-  /**
-   * Generate demo candles covering trade duration (fallback when API unavailable)
-   * Ensures candles include both entry and exit prices with realistic market movement
-   */
-  private generateDemoCandles(signal: PendingSignal, durationHours: number, outcomePrice: number): any[] {
-    const candles = [];
-    const startPrice = signal.entry_price;
-    const endPrice = outcomePrice; // Use actual outcome price (TP or SL)
-
-    const priceStep = (endPrice - startPrice) / (durationHours * 4); // 15-min candles
-    const volatility = Math.abs(endPrice - startPrice) * 0.30; // 30% volatility
-    const trendStrength = 0.7;
-
-    const numCandles = Math.min(durationHours * 4, 200); // 15-min candles, max 200
-
-    for (let i = 0; i < numCandles; i++) {
-      const time = new Date(new Date(signal.created_at).getTime() + i * 15 * 60 * 1000);
-      const basePrice = startPrice + (priceStep * i);
-
-      const trendMove = priceStep * trendStrength;
-      const randomMove = (Math.random() - 0.5) * volatility * (1 - trendStrength);
-
-      const open = basePrice + (Math.random() - 0.5) * volatility * 0.5;
-      const close = open + trendMove + randomMove;
-
-      const wickSize = volatility * (0.3 + Math.random() * 0.4);
-      const high = Math.max(open, close) + wickSize * Math.random();
-      const low = Math.min(open, close) - wickSize * Math.random();
-
-      candles.push({
-        date: time.toISOString(),
-        timestamp: time,
-        open: parseFloat(open.toFixed(signal.symbol.includes('JPY') ? 3 : 5)),
-        high: parseFloat(high.toFixed(signal.symbol.includes('JPY') ? 3 : 5)),
-        low: parseFloat(low.toFixed(signal.symbol.includes('JPY') ? 3 : 5)),
-        close: parseFloat(close.toFixed(signal.symbol.includes('JPY') ? 3 : 5))
-      });
-    }
-
-    console.log(`✅ Generated ${candles.length} demo candles (${startPrice} → ${endPrice})`);
-    return candles;
-  }
+  // generateDemoCandles() was REMOVED on 2026-08-27.
+  //
+  // It fabricated a random price path walking from signal.entry_price to the KNOWN
+  // outcomePrice, and wrote it into the `candles` column. Any row resolved while it was the
+  // active fallback (2025-12-03 `275282f` -> 2026-02-22 `b6f13cb`) therefore has a candle
+  // series that literally encodes its own outcome. Running indicators over that data is
+  // reading the answer key, which is one reason no backtest from this repo can be trusted.
+  //
+  // It was already unreachable at HEAD. Deleted so it can never be wired back in.
+  // (Note: server/routes/signals.ts has a SEPARATE generateDemoCandles() used for
+  // hardcoded demo rows — that one is unrelated and still in use.)
 
   /**
    * Update signal with outcome
    */
   private async updateSignalOutcome(
     signal: PendingSignal,
-    outcome: 'TP1_HIT' | 'STOP_HIT',
-    outcomePrice: number
+    outcome: 'TP1_HIT' | 'STOP_HIT' | 'EXPIRED',
+    outcomePrice: number,
+    outcomeTime: Date,
+    mfeR: number,
+    maeR: number
   ): Promise<void> {
     // Calculate profit/loss in pips
-    // 🔧 FIX: JPY pairs use 0.01 for 1 pip, all other pairs use 0.0001
+    // JPY pairs use 0.01 for 1 pip, all other pairs use 0.0001
     const pipValue = signal.symbol.includes('JPY') ? 0.01 : 0.0001;
     let profitLossPips: number;
 
@@ -332,19 +477,30 @@ export class OutcomeValidator {
     } else {
       profitLossPips = (signal.entry_price - outcomePrice) / pipValue;
     }
+    // EXPIRED now carries REAL P&L, computed from the actual closing price rather than being
+    // left NULL. The old code passed entry_price as the outcome — asserting the trade ended
+    // flat — and never wrote pips at all, destroying information that cannot be recovered
+    // later because the candle window was overwritten too.
 
-    // 🎯 FIX: Fetch fresh candles covering the actual trade duration
-    // This ensures the winning trade chart shows candles from entry → exit
-    const updatedCandles = await this.fetchTradeDurationCandles(signal, outcomePrice);
+    // Trade-window candles for the winning-trades chart. Written to `outcome_candles`, NOT
+    // to `candles`. `candles` holds the 200 bars BEFORE the signal — exactly what a
+    // backtester needs — and overwriting it at outcome time is what destroyed the
+    // backtester's inputs. (Between 2025-12-03 and 2026-02-22 the fallback wrote SYNTHETIC
+    // candles interpolated from entry to the known exit, which literally encode the answer.)
+    // Pass the resolution time so the window ends where the trade did, not "now".
+    const outcomeCandles = await this.fetchTradeDurationCandles(signal, outcomeTime);
 
     await db.execute(sql`
       UPDATE signal_history
       SET
         outcome = ${outcome},
         outcome_price = ${outcomePrice},
-        outcome_time = NOW(),
+        outcome_time = ${outcomeTime.toISOString()},
         profit_loss_pips = ${profitLossPips},
-        candles = ${JSON.stringify(updatedCandles)},
+        outcome_candles = ${outcomeCandles ? JSON.stringify(outcomeCandles) : null},
+        corrected_mfe_r = ${mfeR},
+        corrected_mae_r = ${maeR},
+        validation_method = 'window-5min-v1',
         updated_at = NOW()
       WHERE signal_id = ${signal.signal_id}
     `);
@@ -358,32 +514,18 @@ export class OutcomeValidator {
     await this.updatePerformanceMetrics(signal);
   }
 
-  /**
-   * Mark signal as expired
-   */
-  private async markAsExpired(signal: PendingSignal): Promise<void> {
-    // 🎯 FIX: Fetch fresh candles for expired signals too
-    // Use current entry price as "outcome" price for expired trades
-    const updatedCandles = await this.fetchTradeDurationCandles(signal, signal.entry_price);
-
-    await db.execute(sql`
-      UPDATE signal_history
-      SET
-        outcome = 'EXPIRED',
-        outcome_time = NOW(),
-        candles = ${JSON.stringify(updatedCandles)},
-        updated_at = NOW()
-      WHERE signal_id = ${signal.signal_id}
-    `);
-
-    console.log(`⏰ Signal ${signal.signal_id} expired (48 hours passed)`);
-
-    // Send ArgoFX Telegram expiry notification (non-blocking)
-    await this.sendOutcomeNotification(signal, 'EXPIRED', signal.entry_price, 0);
-
-    // Update performance metrics
-    await this.updatePerformanceMetrics(signal);
-  }
+  // markAsExpired() was REMOVED on 2026-08-27.
+  //
+  // It was the mechanism behind the fabricated-expiry problem. It was called from the main
+  // loop on a wall-clock check ALONE, before any candle was examined, and it:
+  //   - never wrote profit_loss_pips (left NULL forever, unrecoverable);
+  //   - passed entry_price as the outcome price, asserting the trade ended flat;
+  //   - overwrote the `candles` column, destroying the pre-signal window;
+  //   - stamped outcome_time = NOW() rather than the expiry instant.
+  //
+  // EXPIRED is now produced by checkOutcomeFromCandles ONLY after the full window has been
+  // scanned and elapsed, and is written through updateSignalOutcome like any other outcome —
+  // with a real closing price, real pips, and the true expiry timestamp.
 
   /**
    * Send ArgoFX Telegram outcome notification.

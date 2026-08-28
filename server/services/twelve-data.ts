@@ -42,6 +42,39 @@ interface CacheEntry {
   timestamp: number;
 }
 
+/**
+ * Parse a Twelve Data `datetime` string as UTC.
+ *
+ * Twelve Data returns intraday timestamps as "YYYY-MM-DD HH:MM:SS" with no zone
+ * designator. Per ECMA-262 that non-ISO form is parsed as LOCAL time, so on any host
+ * that is not UTC every candle silently shifts by the host offset while `created_at`
+ * stays true UTC — corrupting outcome validation with no error.
+ *
+ * Daily/weekly bars return "YYYY-MM-DD", which the spec already treats as UTC.
+ */
+function parseTwelveDataUTC(datetime: string): Date {
+  if (typeof datetime !== 'string' || !datetime.trim()) {
+    throw new Error(`Twelve Data returned an empty datetime: ${JSON.stringify(datetime)}`);
+  }
+
+  const s = datetime.trim().replace(' ', 'T');
+
+  // Only append 'Z' when there is no zone designator already. An earlier version appended it
+  // unconditionally, so a value that already carried one — "2026-06-19T07:20:00Z" or
+  // "...+00:00" — became "...ZZ" and parsed as Invalid Date. That NaN then flowed into
+  // outcomeTime and threw RangeError at .toISOString(), leaving the signal permanently
+  // PENDING. Unreachable under Twelve Data's documented format today, which is exactly why
+  // it would be missed if the API ever changed.
+  const hasZone = /[Zz]$/.test(s) || /[+-]\d{2}:?\d{2}$/.test(s);
+  const iso = hasZone ? s : (s.length <= 10 ? `${s}T00:00:00Z` : `${s}Z`);
+
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) {
+    throw new Error(`Unparseable Twelve Data datetime: "${datetime}" (as "${iso}")`);
+  }
+  return d;
+}
+
 export class TwelveDataAPI {
   private baseUrl: string;
   private apiKey: string;
@@ -175,7 +208,11 @@ export class TwelveDataAPI {
     // Ensure cache is initialized before using it
     await this.cacheInitialized;
 
-    const cacheKey = `${symbol}-${interval}`;
+    // NOTE: outputsize is part of the key on purpose. Without it the 5-minute outcome
+    // validator (200 bars) and the 15-minute signal generator (1440 bars) collided on the
+    // same key, so the generator silently analysed 200 candles where it asked for 1440 —
+    // and the `length < 100` guard passed, so it failed silently.
+    const cacheKey = `${symbol}-${interval}-${outputsize}`;
 
     // Get interval-specific cache TTL (longer for higher timeframes)
     const cacheTTL = this.getCacheTTL(interval);
@@ -206,7 +243,9 @@ export class TwelveDataAPI {
       }
       this.lastApiCallTime = Date.now();
 
-      const url = `${this.baseUrl}/time_series?symbol=${symbol}&interval=${interval}&outputsize=${outputsize}&apikey=${this.apiKey}`;
+      // timezone=UTC is required — without it Twelve Data returns exchange-local datetimes
+      // with no zone designator, which JS then parses as host-local. (Case-sensitive.)
+      const url = `${this.baseUrl}/time_series?symbol=${symbol}&interval=${interval}&outputsize=${outputsize}&timezone=UTC&apikey=${this.apiKey}`;
 
       const response = await fetch(url);
 
@@ -255,7 +294,7 @@ export class TwelveDataAPI {
       // Convert to our candle format (Twelve Data returns newest first, so reverse)
       const candles: Candle[] = data.values
         .map((item: TwelveDataCandle) => ({
-          timestamp: new Date(item.datetime),
+          timestamp: parseTwelveDataUTC(item.datetime),
           open: parseFloat(item.open),
           high: parseFloat(item.high),
           low: parseFloat(item.low),
@@ -280,6 +319,71 @@ export class TwelveDataAPI {
       console.error(`❌ Error fetching historical candles for ${symbol}:`, error);
       throw error;
     }
+  }
+
+  /**
+   * Fetch candles for an EXACT time window, anchored by date.
+   *
+   * This is the correct primitive for outcome validation. `fetchHistoricalCandles` returns
+   * "the most recent N bars", which is not tied to the trade at all — a trade resolved days
+   * ago may not overlap the returned window whatsoever.
+   *
+   * Deliberately NOT cached: every call is a different window, so a cache would only grow
+   * without ever being hit, and stale data here silently produces wrong outcomes.
+   *
+   * @param startUtc inclusive window start (the signal's created_at)
+   * @param endUtc   inclusive window end (min(now, expires_at))
+   * @returns candles ascending by time, or [] when the window holds no bars (weekend/gap)
+   */
+  async fetchCandlesInWindow(
+    symbol: string,
+    interval: string,
+    startUtc: Date,
+    endUtc: Date
+  ): Promise<Candle[]> {
+    // Twelve Data wants "YYYY-MM-DD HH:MM:SS"; it interprets it in the `timezone` we pass.
+    const fmt = (d: Date) => d.toISOString().slice(0, 19).replace('T', ' ');
+
+    // Global rate limiter — shared with every other caller (free tier: 8 calls/min)
+    const sinceLast = Date.now() - this.lastApiCallTime;
+    if (this.lastApiCallTime > 0 && sinceLast < this.API_CALL_DELAY_MS) {
+      await new Promise(r => setTimeout(r, this.API_CALL_DELAY_MS - sinceLast));
+    }
+    this.lastApiCallTime = Date.now();
+
+    const url =
+      `${this.baseUrl}/time_series?symbol=${encodeURIComponent(symbol)}` +
+      `&interval=${interval}` +
+      `&start_date=${encodeURIComponent(fmt(startUtc))}` +
+      `&end_date=${encodeURIComponent(fmt(endUtc))}` +
+      `&timezone=UTC&order=asc&apikey=${this.apiKey}`;
+
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Twelve Data window fetch failed for ${symbol}: HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (data.status === 'error') {
+      // "no data" for an empty window is a normal answer, not a failure.
+      if (/no data/i.test(data.message || '')) return [];
+      throw new Error(data.message || 'Twelve Data window fetch error');
+    }
+
+    await this.incrementUsageCounter();
+
+    if (!data.values || !Array.isArray(data.values)) return [];
+
+    // order=asc means Twelve Data already returns oldest-first — do NOT reverse.
+    return data.values.map((item: TwelveDataCandle) => ({
+      timestamp: parseTwelveDataUTC(item.datetime),
+      open: parseFloat(item.open),
+      high: parseFloat(item.high),
+      low: parseFloat(item.low),
+      close: parseFloat(item.close),
+      volume: item.volume ? parseFloat(item.volume) : 1000,
+    }));
   }
 
   /**

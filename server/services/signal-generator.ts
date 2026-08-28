@@ -1239,18 +1239,44 @@ export class SignalGenerator {
           continue;
         }
 
-        // 🔒 DEDUPLICATION: Skip if there is already a PENDING signal for this symbol
-        // Prevents duplicate signals from BB pullback (fires every 15 min while condition holds)
-        // and EMA crossover (fires multiple times per crossover event via cache reuse)
-        const existingPending = await db.execute(sql`
-          SELECT signal_id FROM signal_history
+        // 🔒 DEDUPLICATION + COOLDOWN
+        //
+        // The PENDING check alone does NOT stop the duplicates that actually occurred.
+        // It only blocks two CONCURRENT open signals. The real pattern is SEQUENTIAL
+        // re-entry: a signal resolves (usually STOP_HIT), its PENDING row disappears, and
+        // 15 minutes later the next cron run re-analyses the SAME 1H candle array — the
+        // 1H cache TTL is 30 minutes — so every gate that passed still passes. Same EMAs,
+        // same FVG, same price. The system re-entered the trade that had just stopped out,
+        // repeatedly.
+        //
+        // Measured consequence: 303 raw production rows collapse to 70 real trades (4.3x),
+        // and because the repeats cluster on losers the RAW win rate (16.3%) is LOWER than
+        // the deduplicated one (22.4%). Those re-entries were real signals sent to real
+        // Telegram subscribers. On 2026-08-27 the live system fired the same USD/CHF SHORT
+        // three times in 30 minutes, and all three were recorded as stop-outs.
+        //
+        // The DB-level partial unique index (signal_history_one_pending_per_symbol) already
+        // exists and is powerless here for the same reason — there is only ever one PENDING
+        // row at a time. A time-based cooldown is the fix.
+        const SIGNAL_COOLDOWN_MINUTES = 240; // 4h — must exceed the 30-min 1H cache TTL by a wide margin
+
+        const recentSignal = await db.execute(sql`
+          SELECT signal_id, outcome, created_at FROM signal_history
           WHERE symbol = ${symbol}
-            AND outcome = 'PENDING'
             AND data_quality = 'production'
+            AND (
+              outcome = 'PENDING'
+              OR created_at > NOW() - (${SIGNAL_COOLDOWN_MINUTES} || ' minutes')::interval
+            )
+          ORDER BY created_at DESC
           LIMIT 1
         `);
-        if ((existingPending as any[]).length > 0) {
-          console.log(`⏭️  Skipping ${symbol} - active PENDING signal exists (dedup)`);
+        if ((recentSignal as any[]).length > 0) {
+          const r = (recentSignal as any[])[0];
+          const reason = r.outcome === 'PENDING'
+            ? 'active PENDING signal exists'
+            : `cooldown — last signal ${new Date(r.created_at).toISOString()} (${SIGNAL_COOLDOWN_MINUTES}min window)`;
+          console.log(`⏭️  Skipping ${symbol} — ${reason}`);
           continue;
         }
 

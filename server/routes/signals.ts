@@ -793,7 +793,10 @@ export function registerSignalRoutes(app: Express) {
           entry_price: trade.entry_price,
           stop_loss: trade.stop_loss,
           symbol: trade.symbol,
-          candles: trade.candles
+          // Prefer the trade-window candles (`outcome_candles`, written from 2026-08-27).
+          // `candles` now holds the PRE-signal window, so computing MAE/MFE from it would
+          // measure the wrong period entirely. Fall back for pre-migration rows.
+          candles: ((trade as any).outcome_candles?.length ? (trade as any).outcome_candles : trade.candles)
         });
       } else {
         maeMfe = {
@@ -832,6 +835,11 @@ export function registerSignalRoutes(app: Express) {
       // Build enhanced trade response
       const enhancedTrade = {
         ...trade,
+        // Trade-window candles moved to `outcome_candles` on 2026-08-27 so that `candles`
+        // could go back to holding the PRE-signal window (which is what a backtester needs;
+        // overwriting it at outcome time is what destroyed the backtester's inputs).
+        // Fall back to `candles` for rows resolved before the migration.
+        candles: ((trade as any).outcome_candles?.length ? (trade as any).outcome_candles : (trade as any).candles),
         mae: maeMfe.mae,
         mfe: maeMfe.mfe,
         maePercent: maeMfe.maePercent,
