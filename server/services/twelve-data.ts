@@ -89,7 +89,12 @@ function parseTwelveDataUTC(datetime: string): Date {
  *   - 2 of 67 recorded outcomes were STOP_HIT resolved on a Sunday: fabricated losses
  * (Trend gates proved robust — daily/4H/1H direction flipped 0 times.)
  *
- * The forex week runs Sunday ~21:00 UTC to Friday ~21:00 UTC.
+ * The forex week runs Sunday 17:00 to Friday 17:00 NEW YORK time. It is expressed in New York
+ * time on purpose, not UTC: the boundary is 21:00 UTC under EDT but 22:00 UTC under EST, so a
+ * hardcoded UTC hour drops real Friday-evening bars all winter and keeps fake Sunday-evening
+ * ones. Caught by cross-checking against Dukascopy, which publishes a bar only when the market
+ * actually traded: a fixed 21:00 UTC rule flagged 853 genuine bars per pair over four years,
+ * every one of them a Friday 21:00 bar in November-March.
  *
  * DAILY bars need no special case despite Twelve Data labelling them by the date they END:
  * a bar labelled Saturday spans Fri 21:00 -> Sat 21:00 (entirely shut) and one labelled Monday
@@ -98,12 +103,20 @@ function parseTwelveDataUTC(datetime: string): Date {
  * WEEKLY and MONTHLY are never filtered — one bar spans a whole period, so its label says
  * nothing about whether the market was open, and 1week measured 0/52 affected anyway.
  */
+const NY_PARTS = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'America/New_York', weekday: 'short', hour: 'numeric', hour12: false,
+});
+const DOW_INDEX: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+
 export function isMarketClosed(d: Date): boolean {
-  const dow = d.getUTCDay();
-  const h = d.getUTCHours();
-  return dow === 6                     // Saturday
-      || (dow === 0 && h < 21)         // Sunday before the open
-      || (dow === 5 && h >= 21);       // Friday after the close
+  const parts = NY_PARTS.formatToParts(d);
+  const dow = DOW_INDEX[parts.find(p => p.type === 'weekday')!.value];
+  // Intl renders midnight as "24" under hour12:false; normalise it to 0.
+  const hour = Number(parts.find(p => p.type === 'hour')!.value) % 24;
+
+  return dow === 6                      // Saturday
+      || (dow === 0 && hour < 17)       // Sunday before the 17:00 NY open
+      || (dow === 5 && hour >= 17);     // Friday from the 17:00 NY close
 }
 
 /** Intervals whose bars carry a meaningful open/closed timestamp. */
