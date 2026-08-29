@@ -9,3 +9,5 @@ vite.config.ts.*
 .env.local
 .env.*.local
 .node-persist
+# Backtest 5-min candle cache — regenerable from Twelve Data, never source of truth
+.backtest-cache/
