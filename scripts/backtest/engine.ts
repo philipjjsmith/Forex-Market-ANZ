@@ -77,8 +77,16 @@ export interface EngineConfig {
   maxTradesPerDay: number;
   cooldownMinutes: number;
   expiryHours: number;
-  /** 'until-resolved' matches production. 'instant' is the optimistic extreme, run for contrast. */
-  cooldownMode: 'until-resolved' | 'instant';
+  /**
+   * Production blocks a symbol while its trade is PENDING, and only unblocks when the THROTTLED
+   * validator marks it resolved — later than the true touch. The true latency was never logged,
+   * so the honest treatment is to bracket it and report the spread (harness design note):
+   *   'instant'          — free after the 4h cooldown alone. Optimistic bound.
+   *   'until-resolved'   — free at the true touch time. Middle, and closest to intent.
+   *   'until-expiry'     — free only at the 48h expiry. Pessimistic bound.
+   * A materially different result across these means the record is latency-driven, not edge-driven.
+   */
+  cooldownMode: 'instant' | 'until-resolved' | 'until-expiry';
 }
 
 export const DEFAULT_CONFIG: EngineConfig = {
