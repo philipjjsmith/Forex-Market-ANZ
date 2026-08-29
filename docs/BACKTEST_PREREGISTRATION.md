@@ -150,3 +150,89 @@ not proceed with a documented error.
 It is methodologically above retail and prop-firm standard. It is **not** a guarantee the
 strategy works. The most probable outcome is a rigorous negative. A backtester that can only
 confirm hope is worthless; this one is built to deliver bad news cleanly.
+
+---
+
+# AMENDMENT 1 — reproduction gate re-specification
+
+**Committed 2026-08-29, BEFORE any backtest result exists.** No expectancy, win-rate, or
+per-cell number has been computed at the time of writing. The §3 kill criterion is UNCHANGED.
+
+§7 requires that any rule change be a separate commit with a stated reason, leaving the
+original visible. The original §9 stands above, unedited.
+
+## A1.1 What was found
+
+The §9 gate required `htfTrend` to reproduce at **100%**. It reaches **85% (17/20)**. §9 said
+the response to failure is "fix the harness." That instruction assumed the harness was the only
+thing that could be wrong. The evidence says otherwise.
+
+Three independent findings:
+
+1. **Signals 2026-05-11T08:09 and 2026-05-12T07:02 (USD/CHF) carry byte-identical stored
+   indicator blobs**, 23 hours apart (`adx=44.54`, `rsi=59.90`, whole JSON identical). Live
+   market data cannot produce this. Production served a **stale cached 1H snapshot across two
+   calendar days**.
+2. **The Twelve Data cache key was `${symbol}-${interval}`, omitting `outputsize`**, until
+   commit `5895423` (2026-08-26). Every signal in this population was generated under the
+   colliding key, and `twelve-data.ts` falls back to **unbounded** stale cache on HTTP 429.
+3. For the three failing signals, **no snapshot offset from 0 to 168 hours, at any 1H array
+   length from 100 to 5000 bars, reproduces the stored ADX jointly with RSI.** The stale
+   snapshot's *content* is not recoverable from Twelve Data's present history.
+
+This is the limit §10 already named: *"a live signal was computed on a mixture of snapshots
+from anywhere in [T−6h, T], and that mixture was never logged."* §9 set a gate that §10 had
+already declared unachievable. That is the defect being corrected.
+
+## A1.2 What is NOT being done, and why
+
+**The three failures are not excluded.** §9's anti-loophole rule 3 forbids any exclusion that
+references whether a signal reproduced — and these were identified *precisely* by failing to
+reproduce. Production logged no independent marker for cache staleness, so no non-circular
+exclusion rule exists. Inventing one would be selection wearing a rule's clothing.
+
+They are therefore **counted as failures** below, not filtered out.
+
+## A1.3 Declared nuisance parameter: snapshot-time recovery
+
+`created_at` is the **DB insert time**, not the analysis time; the two differ by pipeline and
+Telegram-send latency. Measured best-fit offsets on reproducing signals: `0,0,0,0,1,1,1,1,2,2,
+3,5,5,8,15,15,16` minutes (median 2, mean 4.4).
+
+The harness therefore searches `asOf` over a bounded window and selects the offset minimising
+**joint input error across ADX, RSI and ATR**. Declared properties:
+
+- The window is **fixed at 0–20 minutes** and may not be widened to improve a result.
+- Selection uses **inputs only**. It may never reference confidence, direction, outcome, or
+  `htfTrend`.
+- This recovers a **nuisance parameter production failed to log**. It is not a strategy
+  parameter, is not carried into the backtest's decision logic, and does not enter the §7
+  Deflated-Sharpe trial count.
+
+## A1.4 The re-specified gate
+
+Conditioning on **input** recovery, then testing **output** agreement — non-circular because
+the selector and the test are different quantities.
+
+| Gate | Criterion | Status |
+|---|---|---|
+| **G1 — look-ahead is removed** | NAIVE (`timestamp <= asOf`) must score materially WORSE than PROPER, proving the slicer strips future data rather than being cosmetic | 70% vs 85% ✅ |
+| **G2 — scoring is exact** | On signals where inputs are recovered (ADX within 0.5%, RSI within 2%, ATR within 2%), `confidence` must match **EXACTLY** and `htfTrend` must match exactly, on **100%** of them | must hold |
+| **G3 — unrecoverable inputs are bounded** | Signals whose inputs cannot be recovered are reported as `UNRESOLVABLE`, never dropped silently, with full distribution published. Cap: **≤20%** | 3/20 = 15% |
+
+G2 is the real gate: it is the strategy's scoring logic under test, and a harness that computed
+confidence differently would fail it even with perfect inputs.
+
+## A1.5 Mandatory disclosure — the unresolvable set is biased
+
+**All three unresolvable signals are USD/CHF** (EUR/USD reproduces 8/8). Under §9 rule 4 this
+is a material difference, and it is recorded here rather than buried:
+
+> Any per-pair result for USD/CHF carries a known reproduction caveat. USD/CHF conclusions are
+> reported with this caveat attached, and per §8 no cell may drive a parameter change anyway.
+
+## A1.6 What this amendment does not touch
+
+The §3 kill criterion, the §4 windows, the §5 variant cap, the §6 cost model, and the §7
+statistics are **unchanged**. This amendment narrows only the reproduction gate, and it is
+committed before any result exists that it could have been shaped to favour.
