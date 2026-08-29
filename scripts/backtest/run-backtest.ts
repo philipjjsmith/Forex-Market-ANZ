@@ -41,6 +41,7 @@ import {
   isMarketOpen, isInKillZone, resolveTrade, costTrade, pipSize,
   DEFAULT_CONFIG, type EngineConfig, type Trade,
 } from './engine';
+import { randomArm, trendOnlyArm, makeRng, summarise, type ArmName } from './control-arms';
 
 /** Production's own array order. Gate 3 is order-dependent — do NOT sort this. */
 const PRODUCTION_ORDER = ['EUR/USD', 'USD/CHF', 'USD/JPY', 'GBP/USD', 'AUD/USD'];
@@ -100,8 +101,14 @@ export interface BacktestResult {
   blocked: { cooldown: number; dailyCap: number; belowThreshold: number; noSignal: number };
 }
 
+/**
+ * `arm` selects what produces signals. Everything else — gates, cooldown, daily cap, fill, costs,
+ * resolution — is held IDENTICAL across arms, which is the only way the comparison means
+ * anything. A control arm that got easier gates would not be a control.
+ */
 export async function runBacktest(
-  pairs: string[], from: string, to: string, windowFrom: Date, windowTo: Date, cfg: EngineConfig
+  pairs: string[], from: string, to: string, windowFrom: Date, windowTo: Date, cfg: EngineConfig,
+  arm: 'strategy' | ArmName = 'strategy', seed = 20260829
 ): Promise<BacktestResult> {
   const data: Record<string, PairData> = {};
   for (const p of pairs) {
@@ -128,6 +135,7 @@ export async function runBacktest(
   const perDay: Record<number, number> = {};
   const blocked = { cooldown: 0, dailyCap: 0, belowThreshold: 0, noSignal: 0 };
   let analyzeCalls = 0, unresolved = 0;
+  const rng = makeRng(seed);
 
   for (const ms of decisionPoints) {
     const now = new Date(ms);
@@ -142,19 +150,37 @@ export async function runBacktest(
 
       if ((blockedUntil[symbol] ?? 0) > ms) { blocked.cooldown++; continue; }
 
-      const sig: any = await strat.analyze(
-        sliceTrueOpen(d.w1, now, d.m5, PRODUCTION_SIZES.weekly),
-        sliceTrueOpen(d.d1, now, d.m5, PRODUCTION_SIZES.daily),
-        sliceTrueOpen(d.h4, now, d.m5, PRODUCTION_SIZES.fourHour),
-        sliceTrueOpen(d.h1, now, d.m5, PRODUCTION_SIZES.oneHour),
-        symbol, { asOf: now, approvedParams: null }
-      );
+      const wk = sliceTrueOpen(d.w1, now, d.m5, PRODUCTION_SIZES.weekly);
+      const dy = sliceTrueOpen(d.d1, now, d.m5, PRODUCTION_SIZES.daily);
+      const h4 = sliceTrueOpen(d.h4, now, d.m5, PRODUCTION_SIZES.fourHour);
+      const h1 = sliceTrueOpen(d.h1, now, d.m5, PRODUCTION_SIZES.oneHour);
+
+      // Only the SIGNAL SOURCE varies between arms. Gates, cooldown, cap, fill, costs and
+      // resolution are identical, or the comparison would measure the harness, not the edge.
+      let sig: any = null;
+      if (arm === 'strategy') {
+        sig = await strat.analyze(wk, dy, h4, h1, symbol, { asOf: now, approvedParams: null });
+      } else {
+        const a = arm === 'random'
+          ? randomArm(h1 as any, rng)
+          : trendOnlyArm(dy as any, h4 as any, h1 as any);
+        if (a) {
+          const px = (h1[h1.length - 1] as any).close;
+          sig = {
+            type: a.type, confidence: a.confidence, tier: a.tier, entry: px,
+            stop: a.type === 'LONG' ? px - a.stopDist : px + a.stopDist,
+            targets: [a.type === 'LONG' ? px + a.targetDist : px - a.targetDist],
+          };
+        }
+      }
       analyzeCalls++;
       // Gate 4 (confidence >= 70) is enforced INSIDE analyze(), which returns null below the
       // threshold. So a null here means "no entry OR below 70" and the two cannot be separated
       // from the outside. Kept as a defensive check rather than a counter that can never fire.
       if (!sig) { blocked.noSignal++; continue; }
-      if (sig.confidence < 70) { blocked.belowThreshold++; continue; }
+      // Gate 4 applies to the strategy only. Control arms carry confidence 0 by construction and
+      // must not be filtered by a threshold they were never scored against.
+      if (arm === 'strategy' && sig.confidence < 70) { blocked.belowThreshold++; continue; }
 
       // --- fill: next bar's open + half spread (§6) ---
       const fi = lastIndexAtOrBefore(d.m5, ms) + 1;
