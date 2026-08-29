@@ -537,7 +537,11 @@ export class MACrossoverStrategy {
   // v2.2.0: Fixed HTF trend lag with acceleration filter
   // v2.1.0: Added mandatory ADX/RSI filters
   // v1.0.0: Basic MA crossover
-  version = '3.3.0';
+  // 3.4.0 (2026-08-29): Twelve Data's market-closed filler bars are now dropped before
+  // analysis. Measured over 1020 real kill-zone moments, this changes 6.3% of fire/do-not-fire
+  // decisions and shifts confidence by a median of 3 points, so 3.3.0 and 3.4.0 signals are NOT
+  // comparable and must stay distinguishable in signal_history.
+  version = '3.4.0';
 
   async analyze(
     weeklyCandles: Candle[],

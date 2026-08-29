@@ -38,9 +38,21 @@ const LIMIT = Number(process.argv.find(a => a.startsWith('--limit='))?.split('='
 const pipOf = (sym: string) => (sym.includes('JPY') ? 0.01 : 0.0001);
 
 (async () => {
+  // Only rows produced by the CURRENT strategy version are comparable. The harness replays
+  // using today's code, and v3.4.0 (2026-08-29) drops Twelve Data's market-closed filler bars
+  // before analysis — so a v3.3.0 row's recorded arrays contain bars the current fetcher will
+  // never return, and its hashes cannot match. That is a version difference, not a harness
+  // fault, and silently mixing the two would make the gate meaningless.
+  const strat0 = new MACrossoverStrategy();
   const rows: any[] = await sql`
     SELECT analyzed_at, symbol, strategy_version, produced, confidence, rejection_reason, inputs, cache_meta
-    FROM signal_provenance ORDER BY analyzed_at DESC LIMIT ${LIMIT}`;
+    FROM signal_provenance
+    WHERE strategy_version = ${strat0.version}
+    ORDER BY analyzed_at DESC LIMIT ${LIMIT}`;
+
+  const [older]: any = await sql`
+    SELECT count(*)::int AS n FROM signal_provenance WHERE strategy_version <> ${strat0.version}`;
+  if (older?.n) console.log(`(${older.n} row(s) from earlier strategy versions excluded — not comparable to current code)`);
 
   if (rows.length === 0) {
     console.log('No provenance rows yet. Run scripts/backtest/provenance-probe.ts first.');

@@ -75,6 +75,42 @@ function parseTwelveDataUTC(datetime: string): Date {
   return d;
 }
 
+/**
+ * Is this bar timestamped inside hours when the forex market is SHUT?
+ *
+ * Twelve Data returns a continuous 24/7 forex series. Verified 2026-08-29 against live
+ * production fetches: 28.5% of 1H bars, 28.6% of 4H and 29.0% of DAILY bars land in closed
+ * hours, and NONE of them are flat — Saturday 2026-08-22 carries 288 five-minute bars spanning
+ * 11.5 pips and opening exactly at Friday's close. They are not traded prices.
+ *
+ * Measured harm, over 1020 real kill-zone moments:
+ *   - 6.3% of fire / do-not-fire decisions change once they are removed
+ *   - confidence shifts by a median of 3 points
+ *   - 2 of 67 recorded outcomes were STOP_HIT resolved on a Sunday: fabricated losses
+ * (Trend gates proved robust — daily/4H/1H direction flipped 0 times.)
+ *
+ * The forex week runs Sunday ~21:00 UTC to Friday ~21:00 UTC.
+ *
+ * DAILY bars need no special case despite Twelve Data labelling them by the date they END:
+ * a bar labelled Saturday spans Fri 21:00 -> Sat 21:00 (entirely shut) and one labelled Monday
+ * spans Sun 21:00 -> Mon 21:00 (the real Monday session), so the same rule keeps the right bars.
+ *
+ * WEEKLY and MONTHLY are never filtered — one bar spans a whole period, so its label says
+ * nothing about whether the market was open, and 1week measured 0/52 affected anyway.
+ */
+export function isMarketClosed(d: Date): boolean {
+  const dow = d.getUTCDay();
+  const h = d.getUTCHours();
+  return dow === 6                     // Saturday
+      || (dow === 0 && h < 21)         // Sunday before the open
+      || (dow === 5 && h >= 21);       // Friday after the close
+}
+
+/** Intervals whose bars carry a meaningful open/closed timestamp. */
+function isFilterableInterval(interval: string): boolean {
+  return !/week|month/i.test(interval);
+}
+
 export class TwelveDataAPI {
   /** cacheKey -> how the most recent read of that key was satisfied. Used for provenance. */
   static lastFetchMeta = new Map<string, { source: 'live' | 'cache' | 'stale-cache'; ageMinutes: number; at: number }>();
@@ -261,7 +297,15 @@ export class TwelveDataAPI {
 
       // timezone=UTC is required — without it Twelve Data returns exchange-local datetimes
       // with no zone designator, which JS then parses as host-local. (Case-sensitive.)
-      const url = `${this.baseUrl}/time_series?symbol=${symbol}&interval=${interval}&outputsize=${outputsize}&timezone=UTC&apikey=${this.apiKey}`;
+      // Over-request, because ~28.5% of what Twelve Data returns is market-closed filler that
+      // is about to be dropped. Without this the caller silently receives ~1030 real bars where
+      // it asked for 1440 — and array LENGTH is load-bearing: ema() seeds from the SMA of the
+      // first `period` elements and iterates the whole array, so a short array changes every
+      // indicator. Costs no extra API call, only a larger payload on the same request.
+      const requestSize = isFilterableInterval(interval)
+        ? Math.min(5000, Math.ceil(outputsize / 0.7))
+        : outputsize;
+      const url = `${this.baseUrl}/time_series?symbol=${symbol}&interval=${interval}&outputsize=${requestSize}&timezone=UTC&apikey=${this.apiKey}`;
 
       const response = await fetch(url);
 
@@ -321,18 +365,33 @@ export class TwelveDataAPI {
         }))
         .reverse(); // Oldest first for strategy analysis
 
+      // Drop market-closed bars, then hand back exactly what the caller asked for.
+      const realCandles = isFilterableInterval(interval)
+        ? candles.filter(c => !isMarketClosed(c.timestamp))
+        : candles;
+      const trimmed = realCandles.length > outputsize
+        ? realCandles.slice(realCandles.length - outputsize)
+        : realCandles;
+      if (isFilterableInterval(interval)) {
+        const dropped = candles.length - realCandles.length;
+        if (dropped > 0) {
+          console.log(`🧹 ${symbol} ${interval}: dropped ${dropped} market-closed bars, returning ${trimmed.length}/${outputsize}`);
+        }
+      }
+
       // Track API usage
       await this.incrementUsageCounter();
 
-      // Store in persistent file-based cache
+      // Cache the FILTERED array. Caching the raw one would reintroduce the market-closed bars
+      // on every subsequent cache hit, which is most reads.
       await storage.setItem(cacheKey, {
-        candles,
+        candles: trimmed,
         timestamp: Date.now(),
       });
 
       recordMeta('live', 0);
-      console.log(`✅ Fetched ${candles.length} real candles for ${symbol} (saved to persistent cache)`);
-      return candles;
+      console.log(`✅ Fetched ${trimmed.length} real candles for ${symbol} (saved to persistent cache)`);
+      return trimmed;
 
     } catch (error) {
       console.error(`❌ Error fetching historical candles for ${symbol}:`, error);
@@ -395,7 +454,13 @@ export class TwelveDataAPI {
     if (!data.values || !Array.isArray(data.values)) return [];
 
     // order=asc means Twelve Data already returns oldest-first — do NOT reverse.
-    return data.values.map((item: TwelveDataCandle) => ({
+    //
+    // Market-closed bars are dropped here too, and this is not cosmetic: the outcome validator
+    // scans this series for stop/target touches, so a synthetic Saturday bar can book a
+    // STOP_HIT that never happened. Measured: 2 of 67 resolved outcomes were stop-outs dated to
+    // a Sunday, both losses, no fabricated wins — the same asymmetry as the validator bug fixed
+    // in 5895423.
+    const windowCandles = data.values.map((item: TwelveDataCandle) => ({
       timestamp: parseTwelveDataUTC(item.datetime),
       open: parseFloat(item.open),
       high: parseFloat(item.high),
@@ -403,6 +468,10 @@ export class TwelveDataAPI {
       close: parseFloat(item.close),
       volume: item.volume ? parseFloat(item.volume) : 1000,
     }));
+
+    return isFilterableInterval(interval)
+      ? windowCandles.filter((c: Candle) => !isMarketClosed(c.timestamp))
+      : windowCandles;
   }
 
   /**
