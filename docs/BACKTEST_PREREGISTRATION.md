@@ -236,3 +236,88 @@ is a material difference, and it is recorded here rather than buried:
 The §3 kill criterion, the §4 windows, the §5 variant cap, the §6 cost model, and the §7
 statistics are **unchanged**. This amendment narrows only the reproduction gate, and it is
 committed before any result exists that it could have been shaped to favour.
+
+
+---
+
+# AMENDMENT 2 — data source for the backtest, measured before any result
+
+**Committed 2026-08-29, BEFORE any backtest result exists.** No expectancy, win-rate, or
+per-cell number has been computed. The §3 kill criterion is UNCHANGED.
+
+## A2.1 Decision
+
+The 4-year backtest will use **Dukascopy** (via `dukascopy-node`: no API key, no rate limit,
+m5 back to the 1990s). **Production stays on Twelve Data**, so the `signal_provenance`
+reproduction evidence keeps accumulating uncontaminated.
+
+Twelve Data's free tier is 800 calls/day and was fully exhausted on 2026-08-29 by backfilling
+5-minute data for two pairs over four months. A 4-year, 5-pair replay is not reachable through
+it. This is a capacity decision, not a search for a friendlier dataset.
+
+## A2.2 The validity gap, measured rather than assumed
+
+Backtesting on one feed while trading on another is a transfer risk. Measured over 7 days of
+m5 bars, EUR/USD and USD/CHF, against the already-cached Twelve Data series:
+
+| Comparison | EUR/USD median abs err | USD/CHF median abs err | signed bias |
+|---|---|---|---|
+| TD vs Dukascopy **bid** | 0.60 pips | 0.80 pips | −0.49 / −0.80 pips |
+| TD vs Dukascopy **ask** | 0.40 pips | 0.50 pips | −0.05 / +0.38 pips |
+| TD vs Dukascopy **mid** | **0.45 pips** | **0.45 pips** | **−0.27 / −0.21 pips** |
+
+**Conclusion: Twelve Data forex is effectively MID.** The backtest must synthesise mid from
+Dukascopy bid+ask, never use raw bid. Residual divergence is ~0.45 pips median, p95 1.7–1.9 —
+roughly 3% of a 13-pip stop. Reported as a known limit, not corrected for.
+
+## A2.3 Observed spread — recorded, NOT adopted
+
+Dukascopy's own ask−bid: **median 0.30 pips EUR/USD, 0.80 USD/CHF** (p95 0.9 / 1.7; max 11.5 /
+30.1 at rollover and news).
+
+> [!danger] These are NOT the costs to model.
+> Dukascopy is an ECN feed quoting near-interbank. The5ers is where these trades would actually
+> execute. Adopting a 0.30-pip spread because it is the number we happen to have measured would
+> flatter the backtest by ~0.05R per trade against a measured −0.079R expectancy — it could
+> manufacture the entire result. **§6's conservative assumptions stand** (1.0 EUR/USD, 1.5
+> USD/CHF) until The5ers' real spreads are obtained. The measured floor is recorded only to
+> bound how optimistic any future revision may be.
+
+The rollover/news maxima (11.5 and 30.1 pips) are retained as evidence that spread must be
+modelled as a distribution, since a 48h hold crosses at least one rollover.
+
+## A2.4 Twelve Data emits synthetic bars while the market is closed
+
+Verified on 39,428 cached EUR/USD m5 bars (2026-04-15 → 2026-08-29):
+
+- Twelve Data returns a **continuous 24/7 series with no weekend gaps** — ~288 bars every day
+  including Saturdays. Real trading over that span would yield ~27,900 bars; TD returns 39,428.
+- **28.5% of bars fall in market-closed hours**, and **none are flat** — Saturday 2026-08-22 has
+  288 bars spanning 11.5 pips, opening exactly at Friday's close. These are not traded prices.
+
+**Consequence for the live system**, measured at real kill-zone moments (n=551 per pair), as the
+percentage by which ATR(14) changes when the closed-market bars are removed:
+
+| | Mon | Tue | Wed | Thu | Fri |
+|---|---|---|---|---|---|
+| EUR/USD | +2.8% (max 49.5) | +0.5% | +0.1% | 0.0% | 0.0% |
+| USD/CHF | **+16.0%** (max 68.4) | +2.8% | +0.4% | +0.1% | 0.0% |
+
+Since stop distance is 1.5×ATR, **Monday stops are set too tight**, decaying to no effect by
+midweek. Dukascopy omits weekends correctly, so the backtest does not inherit this — which is a
+further reason the two feeds are not interchangeable, and a reason the backtest may not
+reproduce production's Monday behaviour.
+
+## A2.5 What this does NOT license
+
+The obvious next move — check whether Mondays lose more — was run and **does not confirm the
+mechanism**. Corrected, deduplicated outcomes by weekday: Mon 26.7% (n=15), Tue 50.0% (n=8),
+**Wed 7.1% (n=14)**, Thu 50.0% (n=14), Fri 53.8% (n=13), against 35.8% overall.
+
+Monday is below average, consistent with the ATR defect. But **Wednesday is far worse and has
+essentially zero ATR distortion**, so something else dominates. At 8–15 trades per cell
+(SE ≈ 13pp) this sample cannot attribute causes at all.
+
+**Per §8, no weekday cell may drive a parameter change, a pair drop, or a filter.** The ATR
+finding is recorded as a measured production defect to be fixed on its own merits, not as an
+explanation for the loss record, and not as a new variant.
