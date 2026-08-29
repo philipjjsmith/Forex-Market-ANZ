@@ -76,6 +76,14 @@ function parseTwelveDataUTC(datetime: string): Date {
 }
 
 export class TwelveDataAPI {
+  /** cacheKey -> how the most recent read of that key was satisfied. Used for provenance. */
+  static lastFetchMeta = new Map<string, { source: 'live' | 'cache' | 'stale-cache'; ageMinutes: number; at: number }>();
+
+  /** Provenance accessor: how was the last read of this exact series satisfied? */
+  static getFetchMeta(symbol: string, interval: string, outputsize: number) {
+    return TwelveDataAPI.lastFetchMeta.get(`${symbol}-${interval}-${outputsize}`) ?? null;
+  }
+
   private baseUrl: string;
   private apiKey: string;
   private cacheInitialized: Promise<void>;
@@ -214,6 +222,13 @@ export class TwelveDataAPI {
     // and the `length < 100` guard passed, so it failed silently.
     const cacheKey = `${symbol}-${interval}-${outputsize}`;
 
+    // Provenance: record HOW this array was obtained. Cache age was previously invisible, and
+    // it is the mechanism behind unreproducible signals — two signals 23h apart once carried
+    // byte-identical indicators because a stale 1H snapshot was served across days.
+    const recordMeta = (source: 'live' | 'cache' | 'stale-cache', ageMs: number) => {
+      TwelveDataAPI.lastFetchMeta.set(cacheKey, { source, ageMinutes: Math.round(ageMs / 60000), at: Date.now() });
+    };
+
     // Get interval-specific cache TTL (longer for higher timeframes)
     const cacheTTL = this.getCacheTTL(interval);
 
@@ -221,6 +236,7 @@ export class TwelveDataAPI {
     const cached = await storage.getItem(cacheKey) as CacheEntry | undefined;
     if (cached && Date.now() - cached.timestamp < cacheTTL) {
       const cacheAgeMinutes = Math.round((Date.now() - cached.timestamp) / (60 * 1000));
+      recordMeta('cache', Date.now() - cached.timestamp);
       console.log(`✅ Cache hit for ${cacheKey} (age: ${cacheAgeMinutes}min, TTL: ${Math.round(cacheTTL / (60 * 1000))}min)`);
 
       // Deserialize Date objects from JSON
@@ -254,6 +270,7 @@ export class TwelveDataAPI {
         console.warn(`⚠️  HTTP 429 rate limit for ${symbol}. Attempting stale cache...`);
         if (cached && cached.candles.length > 0) {
           const cacheAgeMinutes = Math.round((Date.now() - cached.timestamp) / (60 * 1000));
+          recordMeta('stale-cache', Date.now() - cached.timestamp);
           console.log(`✅ Using stale cache for ${cacheKey} (age: ${cacheAgeMinutes}min) due to HTTP 429`);
           return cached.candles.map(c => ({ ...c, timestamp: new Date(c.timestamp) }));
         }
@@ -277,7 +294,8 @@ export class TwelveDataAPI {
 
           if (cached && cached.candles.length > 0) {
             const cacheAgeMinutes = Math.round((Date.now() - cached.timestamp) / (60 * 1000));
-            console.log(`✅ Using stale cache for ${cacheKey} (age: ${cacheAgeMinutes}min) due to rate limit`);
+            recordMeta('stale-cache', Date.now() - cached.timestamp);
+          console.log(`✅ Using stale cache for ${cacheKey} (age: ${cacheAgeMinutes}min) due to rate limit`);
             return cached.candles.map(c => ({ ...c, timestamp: new Date(c.timestamp) }));
           } else {
             // No cache available at all
@@ -312,6 +330,7 @@ export class TwelveDataAPI {
         timestamp: Date.now(),
       });
 
+      recordMeta('live', 0);
       console.log(`✅ Fetched ${candles.length} real candles for ${symbol} (saved to persistent cache)`);
       return candles;
 

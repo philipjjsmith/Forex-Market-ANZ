@@ -9,6 +9,7 @@ import { sessionAnalyzer } from './session-analyzer';
 import { telegramNotifier } from './telegram-notifier';
 import { ctraderExecutor } from './ctrader-executor';
 import { getSignalNumber } from './signal-stats';
+import { recordAnalysis, linkProvenanceToSignal } from './provenance';
 
 /**
  * Automated Signal Generator Service
@@ -560,14 +561,22 @@ export class MACrossoverStrategy {
       asOf?: Date;
       /** Inject approved parameters instead of hitting the DB (required for replay). */
       approvedParams?: { fastMA?: number; slowMA?: number; version?: string; atrMultiplier?: number } | null;
+      /**
+       * Collects the reason a bar did NOT produce a signal. Production previously discarded
+       * this, so `signal_history` recorded only the fires — the did-not-fires were
+       * unrecoverable, which is half of the confusion matrix the backtest gate needs.
+       */
+      trace?: string[];
     }
   ): Promise<Signal | null> {
     const adxThreshold = options?.adxThreshold || 25;
     const diagnosticMode = options?.diagnosticMode || false;
     const asOf = options?.asOf ?? new Date();
+    const trace = options?.trace;
     // Need minimum candles for reliable analysis
     if (weeklyCandles.length < 26 || dailyCandles.length < 50 ||
         fourHourCandles.length < 50 || oneHourCandles.length < 100) {
+      trace?.push(`INSUFFICIENT_CANDLES w=${weeklyCandles.length} d=${dailyCandles.length} 4h=${fourHourCandles.length} 1h=${oneHourCandles.length}`);
       return null;
     }
 
@@ -648,6 +657,7 @@ export class MACrossoverStrategy {
       if (diagnosticMode) {
         console.log(`└─ ❌ REJECTED: ADX ${adx?.adx.toFixed(2) || 'N/A'} < ${adxThreshold} (ranging market)\n`);
       }
+      trace?.push(`ADX_BELOW_THRESHOLD adx=${adx?.adx.toFixed(2) ?? 'null'} < ${adxThreshold}`);
       return null; // Block trade - market is ranging, not trending
     }
 
@@ -729,6 +739,7 @@ export class MACrossoverStrategy {
           console.log(`└─ ❌ REJECTED LONG: MACD histogram falling (${prevDailyMACD.histogram.toFixed(4)} → ${dailyMACD.histogram.toFixed(4)})`);
           console.log(`   Bearish momentum increasing - avoiding entry\n`);
         }
+        trace?.push(`MACD_HISTOGRAM_FALLING_BLOCKS_LONG ${prevDailyMACD.histogram.toFixed(5)}->${dailyMACD.histogram.toFixed(5)}`);
         return null;
       }
 
@@ -738,6 +749,7 @@ export class MACrossoverStrategy {
           console.log(`└─ ❌ REJECTED SHORT: MACD histogram rising (${prevDailyMACD.histogram.toFixed(4)} → ${dailyMACD.histogram.toFixed(4)})`);
           console.log(`   Bullish momentum increasing - avoiding entry\n`);
         }
+        trace?.push(`MACD_HISTOGRAM_RISING_BLOCKS_SHORT ${prevDailyMACD.histogram.toFixed(5)}->${dailyMACD.histogram.toFixed(5)}`);
         return null;
       }
     }
@@ -1071,6 +1083,9 @@ export class MACrossoverStrategy {
           console.log(`└─ ❌ REJECTED: Confidence ${confidence} < 70 (minimum threshold)\n`);
         }
       }
+      trace?.push(!signalType
+        ? `NO_ENTRY_SIGNAL W:${weeklyTrend} D:${dailyTrend} 4H:${fourHourTrend} bullCross=${bullishCross} bearCross=${bearishCross}`
+        : `CONFIDENCE_BELOW_70 confidence=${confidence}`);
       return null; // Must be at least 70/100 points (70% minimum)
     }
 
@@ -1340,7 +1355,30 @@ export class SignalGenerator {
           console.log(`✅ ${symbol}: Weekly ${weeklyCandles.length}, Daily ${dailyCandles.length}, 4H ${fourHourCandles.length}, 1H ${oneHourCandles.length}, 15min ${fifteenMinCandles.length} candles`);
 
           // Analyze with multi-timeframe strategy (🧠 AI-ENHANCED + 🎯 MILESTONE 3C)
-          const signal = await strategy.analyze(weeklyCandles, dailyCandles, fourHourCandles, oneHourCandles, symbol);
+          //
+          // `asOf` is captured HERE and passed in explicitly. Previously analyze() stamped its
+          // own `new Date()`, so the analysis instant was never recorded anywhere — and
+          // signal_history.created_at is the INSERT time, which lags it by pipeline latency
+          // (measured 0-16 min). That gap is why historical signals could not be replayed.
+          const analyzedAt = new Date();
+          const trace: string[] = [];
+          const signal = await strategy.analyze(
+            weeklyCandles, dailyCandles, fourHourCandles, oneHourCandles, symbol,
+            { asOf: analyzedAt, trace }
+          );
+
+          // Provenance: record EVERY analysis attempt, fired or not. The did-not-fires are the
+          // false-positive arm of the reproduction gate's confusion matrix, and were previously
+          // discarded entirely.
+          await recordAnalysis({
+            analyzedAt,
+            symbol,
+            strategyVersion: strategy.version,
+            produced: !!signal,
+            confidence: signal?.confidence ?? null,
+            rejectionReason: signal ? null : (trace[0] ?? 'UNKNOWN'),
+            series: { weekly: weeklyCandles, daily: dailyCandles, fourHour: fourHourCandles, oneHour: oneHourCandles },
+          });
 
           // ✅ v3.1.0 ICT 3-Timeframe: Accept both HIGH (85-100) and MEDIUM (70-84) tier signals
           // MEDIUM tier = Practice signals, HIGH tier = Live trading
@@ -1352,6 +1390,7 @@ export class SignalGenerator {
             try {
               // Store 15-min candles for chart visualization (better granularity than 1H)
               await this.trackSignal(signal, symbol, exchangeRate, fifteenMinCandles);
+              await linkProvenanceToSignal(analyzedAt, symbol, signal.id);
               signalsTracked++;
               const tierBadge = signal.tier === 'HIGH' ? '🟢 HIGH' : '🟡 MEDIUM';
               console.log(`✅ Tracked ${symbol} signal ${tierBadge} (${signal.confidence}/100 points)`);

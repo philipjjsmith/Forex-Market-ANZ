@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
-  pgTable, text, varchar, timestamp, jsonb, integer, boolean, numeric, index, uniqueIndex,
+  pgTable, text, varchar, timestamp, jsonb, integer, boolean, numeric, index, uniqueIndex, bigserial,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -153,3 +153,40 @@ export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 export type SavedSignal = typeof savedSignals.$inferSelect;
 export type InsertSavedSignal = z.infer<typeof insertSavedSignalSchema>;
+
+/**
+ * Exact inputs to each analyze() call — including bars that did NOT fire.
+ *
+ * Added 2026-08-29. The backtest reproduction gate topped out at 80-85% because production
+ * recorded results but never inputs: `created_at` is the INSERT time (lagging analysis by a
+ * measured 0-16 min), the Twelve Data cache key omitted `outputsize` until 5895423, and the
+ * fetcher falls back to UNBOUNDED stale cache on HTTP 429 — two signals 23h apart once carried
+ * byte-identical indicators. With this table, reproduction is verifiable rather than inferred.
+ *
+ * Mirrors db/manual/2026-08-29_signal_provenance.sql. Do NOT run `db:push` against this — the
+ * SQL file is the source of truth (push is destructive on numeric precision elsewhere).
+ */
+export const signalProvenance = pgTable("signal_provenance", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+
+  /** The asOf handed to analyze(). This is what created_at failed to be. */
+  analyzedAt: timestamp("analyzed_at", { withTimezone: true }).notNull(),
+  symbol: text("symbol").notNull(),
+  strategyVersion: text("strategy_version").notNull(),
+
+  produced: boolean("produced").notNull(),
+  signalId: text("signal_id"),                        // by convention -> signal_history.signal_id
+  confidence: integer("confidence"),
+  rejectionReason: text("rejection_reason"),          // ADX_BELOW_THRESHOLD, NO_ENTRY_SIGNAL, ...
+
+  /** Per timeframe: {count, firstTs, lastTs, last:{o,h,l,c}, sha256} over the ordered array. */
+  inputs: jsonb("inputs").notNull(),
+  /** Per timeframe: {source: live|cache|stale-cache, ageMinutes}. */
+  cacheMeta: jsonb("cache_meta"),
+
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+  symbolTimeIdx: index("idx_signal_provenance_symbol_time").on(t.symbol, t.analyzedAt),
+  signalIdIdx: index("idx_signal_provenance_signal_id").on(t.signalId),
+  producedIdx: index("idx_signal_provenance_produced").on(t.produced, t.analyzedAt),
+}));
