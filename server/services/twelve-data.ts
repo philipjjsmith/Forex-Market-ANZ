@@ -119,6 +119,22 @@ export function isMarketClosed(d: Date): boolean {
       || (dow === 5 && hour >= 17);     // Friday from the 17:00 NY close
 }
 
+/**
+ * Cache namespace. **Bump this whenever the MEANING of a cached array changes.**
+ *
+ * The cache lives on disk at `.node-persist/twelve-data`. Whether that survives a deploy is a
+ * property of the host, not of this code — Render mounts no disk here today, but that is a
+ * dashboard setting nobody should have to remember. A stale entry written before v3.4.0 holds
+ * the market-closed filler bars this module now removes, so reading one would silently
+ * reintroduce the exact defect the filter exists to fix, on every cache hit, for the TTL.
+ *
+ * Bumping the namespace makes old entries unreachable by construction, which is deterministic
+ * where "the container probably restarted" is not.
+ *
+ * v2 (2026-08-29): market-closed bars are filtered out before caching.
+ */
+const CACHE_SCHEMA_VERSION = 'v2';
+
 /** Intervals whose bars carry a meaningful open/closed timestamp. */
 function isFilterableInterval(interval: string): boolean {
   return !/week|month/i.test(interval);
@@ -130,7 +146,9 @@ export class TwelveDataAPI {
 
   /** Provenance accessor: how was the last read of this exact series satisfied? */
   static getFetchMeta(symbol: string, interval: string, outputsize: number) {
-    return TwelveDataAPI.lastFetchMeta.get(`${symbol}-${interval}-${outputsize}`) ?? null;
+    // MUST match the key recordMeta() writes under, namespace included, or provenance
+    // cache_meta silently goes null for every row.
+    return TwelveDataAPI.lastFetchMeta.get(`${CACHE_SCHEMA_VERSION}-${symbol}-${interval}-${outputsize}`) ?? null;
   }
 
   private baseUrl: string;
@@ -269,7 +287,7 @@ export class TwelveDataAPI {
     // validator (200 bars) and the 15-minute signal generator (1440 bars) collided on the
     // same key, so the generator silently analysed 200 candles where it asked for 1440 —
     // and the `length < 100` guard passed, so it failed silently.
-    const cacheKey = `${symbol}-${interval}-${outputsize}`;
+    const cacheKey = `${CACHE_SCHEMA_VERSION}-${symbol}-${interval}-${outputsize}`;
 
     // Provenance: record HOW this array was obtained. Cache age was previously invisible, and
     // it is the mechanism behind unreproducible signals — two signals 23h apart once carried
