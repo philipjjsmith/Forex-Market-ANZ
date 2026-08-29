@@ -321,3 +321,63 @@ essentially zero ATR distortion**, so something else dominates. At 8–15 trades
 **Per §8, no weekday cell may drive a parameter change, a pair drop, or a filter.** The ATR
 finding is recorded as a measured production defect to be fixed on its own merits, not as an
 explanation for the loss record, and not as a new variant.
+
+
+---
+
+# AMENDMENT 3 — the §5 baseline is impossible; redefining it
+
+**Committed 2026-08-29, BEFORE any backtest result exists.** No expectancy, win-rate or per-cell
+number has been computed. The §3 kill criterion is UNCHANGED.
+
+## A3.1 Why the original baseline cannot be run
+
+§5 variant 1 defines the baseline as **"v3.3.0 exactly as deployed."** That is no longer merely
+inconvenient — it is **not constructible**.
+
+v3.3.0 computed every indicator on Twelve Data arrays in which **28.5% of 1H bars, 28.6% of 4H
+and 29.0% of daily bars were market-closed filler** — bars carrying invented price movement for
+hours when forex was shut (Saturday 2026-08-22: 288 five-minute bars spanning 11.5 pips, opening
+exactly at Friday's close). Amendment 2 §A2.4 records the verification.
+
+Dukascopy — the backtest's data source under Amendment 2 — **publishes a bar only when the
+market actually traded.** Those filler bars do not exist in it and cannot be reconstructed from
+it: their values were never real prices, so there is nothing to recover them from. Reproducing
+v3.3.0 would require Twelve Data, whose 800-call/day free tier cannot serve a 4-year, 5-pair
+replay. That was the original reason for Amendment 2.
+
+Production has also since moved to **v3.4.0**, which filters those bars out.
+
+## A3.2 The redefined baseline
+
+> **Baseline = v3.4.0 on Dukascopy mid prices.**
+
+This **replaces** §5 variant 1. It does **not** consume an additional variant slot: the cap of
+three stands, and "weekly fix" and the reserved slot are untouched.
+
+**Deliberately preserved from the original baseline:** the **weekly EMA(50)-over-52-candles
+defect**. It is worth a measured 10 confidence points and crosses the MEDIUM/HIGH tier boundary,
+and §5 variant 2 exists precisely to test removing it. Keeping it means variant 2 still measures
+what it was written to measure. `PRODUCTION_SIZES` therefore stays at 52/200/360/1440.
+
+## A3.3 What this costs, stated plainly
+
+1. **The backtest no longer replays the system that produced the live 2026 record.** It replays
+   its corrected successor. The ~70 live trades and any backtest result are therefore
+   **not the same system** and must never be pooled or compared directly.
+2. **Monday behaviour will differ.** The filler bars deflated ATR by a median +16.0% on Mondays
+   for USD/CHF (max +68.4%), decaying to ~0 by midweek (§A2.4). Stop distance is 1.5×ATR, so
+   v3.3.0's Monday stops were tighter than v3.4.0's will be. Backtested Mondays cannot be read
+   as evidence about live Mondays.
+3. **The 6.3% decision divergence is the size of the gap.** Measured over 1020 real kill-zone
+   moments, that is how often v3.3.0 and v3.4.0 disagree on whether to fire.
+
+## A3.4 What is unchanged
+
+§3 kill criterion, §4 windows, the §5 cap of three variants and both control arms (random entry,
+trend-only), §6 cost model — including that Dukascopy's observed spread is **recorded but not
+adopted** (§A2.3) — §7 statistics with DSR trial count N ≥ 15, and §8's rule that no per-cell
+result may drive a parameter change.
+
+The reproduction gate (Amendment 1) continues to run against **Twelve Data** provenance, since
+its purpose is proving the harness reproduces *production*, which still runs on Twelve Data.
