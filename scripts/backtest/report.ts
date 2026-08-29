@@ -22,7 +22,7 @@ import 'dotenv/config';
 import { runBacktest } from './run-backtest';
 import { DEFAULT_CONFIG, type EngineConfig, type Trade } from './engine';
 import { summarise } from './control-arms';
-import { blockBootstrap, deflatedSharpe, walkForward, sharpeOf } from './statistics';
+import { blockBootstrap, deflatedSharpe, walkForward, sharpeOf, bootstrapDifference } from './statistics';
 
 const arg = (k: string, d: string) => process.argv.find(a => a.startsWith(`--${k}=`))?.split('=')[1] ?? d;
 const pct = (x: number) => (100 * x).toFixed(1) + '%';
@@ -80,13 +80,22 @@ async function arm(
       `[${sgn(a.boot.lo, 3)}, ${sgn(a.boot.hi, 3)}]`
     );
   }
-  const beatsRandom = strategy.s.expectancyR > random.s.expectancyR;
-  const beatsTrend = strategy.s.expectancyR > trend.s.expectancyR;
-  console.log(`\n  strategy beats RANDOM     : ${beatsRandom ? 'yes' : 'NO'}`);
-  console.log(`  strategy beats TREND-ONLY : ${beatsTrend ? 'yes' : 'NO'}`);
+  // Comparing two point estimates is NOT a test. Both carry wide intervals that may overlap
+  // almost entirely, so a higher number can be pure noise. Bootstrap the DIFFERENCE instead,
+  // resampling the SAME days for both arms so shared market-regime variance cancels.
+  const vsRandom = bootstrapDifference(strategy.res.trades, random.res.trades, 10000);
+  const vsTrend  = bootstrapDifference(strategy.res.trades, trend.res.trades, 10000);
+  console.log(`\n  difference in expectancy (block bootstrap on the DIFFERENCE, paired by day):`);
+  console.log(`    STRATEGY - RANDOM     : ${sgn(vsRandom.diff)} R   95% CI [${sgn(vsRandom.lo,3)}, ${sgn(vsRandom.hi,3)}]   ${vsRandom.excludesZero ? 'EXCLUDES zero' : 'includes zero'}`);
+  console.log(`    STRATEGY - TREND-ONLY : ${sgn(vsTrend.diff)} R   95% CI [${sgn(vsTrend.lo,3)}, ${sgn(vsTrend.hi,3)}]   ${vsTrend.excludesZero ? 'EXCLUDES zero' : 'includes zero'}`);
+  const beatsRandom = vsRandom.diff > 0 && vsRandom.excludesZero;
+  const beatsTrend  = vsTrend.diff  > 0 && vsTrend.excludesZero;
+  console.log(`\n  strategy beats RANDOM     : ${beatsRandom ? 'yes, significantly' : vsRandom.diff > 0 ? 'higher, but NOT significant' : 'NO'}`);
+  console.log(`  strategy beats TREND-ONLY : ${beatsTrend ? 'yes, significantly' : vsTrend.diff > 0 ? 'higher, but NOT significant' : 'NO'}`);
   if (!beatsRandom || !beatsTrend) {
-    console.log(`  -> The ICT machinery is not demonstrably contributing. Any expectancy below is a`);
-    console.log(`     property of the stop/target geometry and kill-zone timing, not of the signal logic.`);
+    console.log(`  -> Not demonstrably contributing. A higher point estimate whose interval spans`);
+    console.log(`     zero is not evidence: on this sample the ICT machinery cannot be distinguished`);
+    console.log(`     from the stop/target geometry and kill-zone timing alone.`);
   }
 
   // --- the pre-registered decision ---

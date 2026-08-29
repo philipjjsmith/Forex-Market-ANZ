@@ -211,3 +211,61 @@ export const sharpeOf = (returns: number[]) => {
   const s = sd(returns);
   return s > 0 ? mean(returns) / s : 0;
 };
+
+export interface DiffResult {
+  diff: number; lo: number; hi: number; pLessEqualZero: number; excludesZero: boolean;
+}
+
+/**
+ * Block bootstrap on the DIFFERENCE in mean R between two arms.
+ *
+ * Comparing two point estimates and declaring the larger one "better" is not a test — it ignores
+ * that both carry wide intervals which may overlap almost entirely. The strategy scoring
+ * -0.083R against a random arm's -0.110R looks like a win until you notice the two confidence
+ * intervals share most of their range.
+ *
+ * Resamples the SAME day sample for both arms on each iteration, so a day that was good for the
+ * market is good for both. That pairing removes shared market-regime variance and is what makes
+ * the difference interval meaningfully tighter than differencing two independent intervals.
+ */
+export function bootstrapDifference(
+  a: Trade[], b: Trade[], iterations = 10000, seed = 20260829
+): DiffResult {
+  const byDay = (ts: Trade[]) => {
+    const m = new Map<string, number[]>();
+    for (const t of ts) {
+      if (t.r == null) continue;
+      const k = t.openedAt.toISOString().slice(0, 10);
+      if (!m.has(k)) m.set(k, []);
+      m.get(k)!.push(t.r);
+    }
+    return m;
+  };
+  const ma = byDay(a), mb = byDay(b);
+  const days = [...new Set([...ma.keys(), ...mb.keys()])];
+  if (!days.length) return { diff: 0, lo: 0, hi: 0, pLessEqualZero: 1, excludesZero: false };
+
+  const rng = makeRng(seed);
+  const diffs: number[] = [];
+  for (let i = 0; i < iterations; i++) {
+    let sa = 0, na = 0, sb = 0, nb = 0;
+    for (let d = 0; d < days.length; d++) {
+      const day = days[(rng() * days.length) | 0];
+      for (const r of ma.get(day) ?? []) { sa += r; na++; }
+      for (const r of mb.get(day) ?? []) { sb += r; nb++; }
+    }
+    if (na && nb) diffs.push(sa / na - sb / nb);
+  }
+  if (!diffs.length) return { diff: 0, lo: 0, hi: 0, pLessEqualZero: 1, excludesZero: false };
+  diffs.sort((x, y) => x - y);
+  const at = (q: number) => diffs[Math.min(diffs.length - 1, Math.max(0, Math.floor(q * (diffs.length - 1))))];
+  const flat = (m: Map<string, number[]>) => [...m.values()].flat();
+  const meanOf = (v: number[]) => (v.length ? v.reduce((s, x) => s + x, 0) / v.length : 0);
+  const lo = at(0.025), hi = at(0.975);
+  return {
+    diff: meanOf(flat(ma)) - meanOf(flat(mb)),
+    lo, hi,
+    pLessEqualZero: diffs.filter(d => d <= 0).length / diffs.length,
+    excludesZero: lo > 0 || hi < 0,
+  };
+}
