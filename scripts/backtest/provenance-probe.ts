@@ -25,7 +25,27 @@ import { sql } from 'drizzle-orm';
 
 const SYMBOLS = ['EUR/USD', 'USD/CHF', 'USD/JPY', 'GBP/USD', 'AUD/USD'];
 
+/**
+ * Kill zones: 07:00-09:59 and 12:00-14:59 UTC — the only hours generateSignals() trades.
+ *
+ * The probe shares cache keys with production (same symbol/interval/outputsize), so a probe run
+ * inside a kill zone could warm the cache and change which snapshot production then analyses.
+ * That would make the probe an observer that alters what it observes. With `--avoid-kill-zones`
+ * it stands down and lets production own those hours; production records its own provenance.
+ *
+ * Checked in UTC so it is correct regardless of machine timezone or DST.
+ */
+function inKillZone(d = new Date()): boolean {
+  const h = d.getUTCHours();
+  return (h >= 7 && h < 10) || (h >= 12 && h < 15);
+}
+
 (async () => {
+  if (process.argv.includes('--avoid-kill-zones') && inKillZone()) {
+    console.log(`${new Date().toISOString()} — inside a kill zone; standing down so production owns the cache.`);
+    process.exit(0);
+  }
+
   const strategy = new MACrossoverStrategy();
   let fired = 0, recorded = 0;
 
