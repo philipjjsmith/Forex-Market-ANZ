@@ -1,13 +1,14 @@
+import 'dotenv/config';
 /**
  * TEST SCRIPT - Correct Connection String from Supabase
- * Testing: postgresql://postgres.bgfucdqnncvanznvcste:11Carlyrosa%21@aws-1-us-east-1.pooler.supabase.com:5432/postgres
+ * Testing: postgresql://postgres.bgfucdqnncvanznvcste:<redacted>@aws-1-us-east-1.pooler.supabase.com:5432/postgres
  * KEY CHANGE: aws-0 → aws-1, port 6543 → 5432
  */
 
 import postgres from 'postgres';
 
 // CORRECT connection string from Supabase dashboard
-const client = postgres('postgresql://postgres.bgfucdqnncvanznvcste:11Carlyrosa%21@aws-1-us-east-1.pooler.supabase.com:5432/postgres', {
+const client = postgres(process.env.DATABASE_URL, {
   ssl: 'require',
   connect_timeout: 10,
 });

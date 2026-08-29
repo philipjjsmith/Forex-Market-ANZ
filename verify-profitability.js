@@ -1,8 +1,9 @@
+import 'dotenv/config';
 // COMPREHENSIVE PROFITABILITY VERIFICATION
 // Analyzing real trading performance since 3.0x ATR deployment (Jan 3, 2026)
 import postgres from 'postgres';
 
-const sql = postgres('postgresql://postgres.bgfucdqnncvanznvcste:11Carlyrosa%21@aws-0-us-east-1.pooler.supabase.com:6543/postgres');
+const sql = postgres(process.env.DATABASE_URL);
 
 const DEPLOYMENT_DATE = '2026-01-03 01:44:10'; // When 3.0x ATR went live
 

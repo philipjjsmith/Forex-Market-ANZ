@@ -1,0 +1,22 @@
+#!/bin/sh
+# Block commits that add a database connection string with an inline password.
+#
+# A live Supabase credential sat in 16 tracked files on this PUBLIC repo. Rotating the
+# password fixes the leak; this hook stops the next one. Scans STAGED content only.
+#
+# Bypass (only for a deliberate placeholder): git commit --no-verify
+
+if git diff --cached --name-only --diff-filter=ACM -z \
+   | xargs -0 -r git diff --cached -U0 -- \
+   | grep -nE '^\+.*(postgres(ql)?|mysql|mongodb(\+srv)?)://[A-Za-z0-9._%-]+:[^@/\$<>[:space:]]{6,}@' >/dev/null 2>&1; then
+  echo ""
+  echo "BLOCKED: a connection string with an inline password is staged."
+  echo ""
+  git diff --cached -U0 \
+    | grep -nE '^\+.*(postgres(ql)?|mysql|mongodb(\+srv)?)://[A-Za-z0-9._%-]+:[^@/\$<>[:space:]]{6,}@' \
+    | sed -E 's#(://[^:]*:)[^@]*(@)#\1********\2#'
+  echo ""
+  echo "Use process.env.DATABASE_URL instead. This repo is public."
+  exit 1
+fi
+exit 0

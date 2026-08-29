@@ -1,7 +1,8 @@
+import 'dotenv/config';
 // Verification script to check if 3.0x ATR is deployed in production
 import postgres from 'postgres';
 
-const sql = postgres('postgresql://postgres.bgfucdqnncvanznvcste:11Carlyrosa%21@aws-0-us-east-1.pooler.supabase.com:6543/postgres');
+const sql = postgres(process.env.DATABASE_URL);
 
 async function verifyProduction() {
   console.log('🔍 PRODUCTION DEPLOYMENT VERIFICATION\n');

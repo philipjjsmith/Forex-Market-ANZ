@@ -1,6 +1,7 @@
+import 'dotenv/config';
 import postgres from 'postgres';
 
-const DB_URL = 'postgresql://postgres.bgfucdqnncvanznvcste:11Carlyrosa%21@aws-1-us-east-1.pooler.supabase.com:5432/postgres';
+const DB_URL = process.env.DATABASE_URL;
 
 const sql = postgres(DB_URL, {
   ssl: 'require',

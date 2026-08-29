@@ -1,7 +1,8 @@
+import 'dotenv/config';
 // Temporary script to investigate trading performance issue
 import postgres from 'postgres';
 
-const sql = postgres('postgresql://postgres.bgfucdqnncvanznvcste:11Carlyrosa%21@aws-0-us-east-1.pooler.supabase.com:6543/postgres');
+const sql = postgres(process.env.DATABASE_URL);
 
 async function investigate() {
   console.log('🔍 INVESTIGATING TRADING PERFORMANCE ISSUE\n');

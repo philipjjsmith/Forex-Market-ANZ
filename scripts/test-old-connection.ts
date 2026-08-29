@@ -1,3 +1,4 @@
+import 'dotenv/config';
 /**
  * TEST SCRIPT - Test OLD Connection String (aws-0:6543)
  * Testing if the old connection string that's in .env actually works
@@ -6,7 +7,7 @@
 import postgres from 'postgres';
 
 // OLD connection string from current .env file
-const oldClient = postgres('postgresql://postgres.bgfucdqnncvanznvcste:11Carlyrosa%21@aws-0-us-east-1.pooler.supabase.com:6543/postgres', {
+const oldClient = postgres(process.env.DATABASE_URL, {
   ssl: 'require',
   connect_timeout: 10,
 });

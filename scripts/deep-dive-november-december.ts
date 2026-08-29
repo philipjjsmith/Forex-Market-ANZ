@@ -1,3 +1,4 @@
+import 'dotenv/config';
 /**
  * DEEP DIVE: November 17 (100% win rate) vs December (0% win rate)
  * Find out what was different
@@ -5,7 +6,7 @@
 
 import postgres from 'postgres';
 
-const db = postgres('postgresql://postgres.bgfucdqnncvanznvcste:11Carlyrosa%21@aws-1-us-east-1.pooler.supabase.com:5432/postgres', {
+const db = postgres(process.env.DATABASE_URL, {
   ssl: 'require',
   connect_timeout: 10,
 });

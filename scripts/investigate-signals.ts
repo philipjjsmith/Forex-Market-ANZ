@@ -1,3 +1,4 @@
+import 'dotenv/config';
 /**
  * INVESTIGATION SCRIPT - Why No Signals Since Jan 3?
  * Deep dive into signal generation status
@@ -5,7 +6,7 @@
 
 import postgres from 'postgres';
 
-const client = postgres('postgresql://postgres.bgfucdqnncvanznvcste:11Carlyrosa%21@aws-1-us-east-1.pooler.supabase.com:5432/postgres', {
+const client = postgres(process.env.DATABASE_URL, {
   ssl: 'require',
   connect_timeout: 10,
 });

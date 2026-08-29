@@ -1,3 +1,4 @@
+import 'dotenv/config';
 /**
  * DIAGNOSTIC SCRIPT - Test Signal Generation with Production Settings
  * This will tell us EXACTLY why no signals are being generated
@@ -6,7 +7,7 @@
 import postgres from 'postgres';
 
 // Use CORRECT connection string
-const db = postgres('postgresql://postgres.bgfucdqnncvanznvcste:11Carlyrosa%21@aws-1-us-east-1.pooler.supabase.com:5432/postgres', {
+const db = postgres(process.env.DATABASE_URL, {
   ssl: 'require',
   connect_timeout: 10,
 });

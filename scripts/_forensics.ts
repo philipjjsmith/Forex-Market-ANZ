@@ -1,6 +1,7 @@
+import 'dotenv/config';
 import postgres from 'postgres';
 
-const DB = 'postgresql://postgres.bgfucdqnncvanznvcste:11Carlyrosa%21@aws-1-us-east-1.pooler.supabase.com:5432/postgres';
+const DB = process.env.DATABASE_URL;
 const db = postgres(DB, { ssl: 'require', connect_timeout: 15 });
 
 async function main() {
