@@ -64,7 +64,7 @@ interface Signal {
 }
 
 // Import indicators and strategy (server-side compatible)
-class Indicators {
+export class Indicators {
   static ema(data: number[], period: number): number | null {
     if (data.length < period) return null;
     const k = 2 / (period + 1);
