@@ -130,8 +130,25 @@ data does not definitively prove failure, not that the strategy works.
    is why the paired result carries the weight.
 3. **Data gaps remain**: 7,070–14,080 market-open minutes per pair, worst hole 2,245 min. Dukascopy
    serves different bar sets for bid and ask, and mid needs both. Not invented to fill.
-4. **This is `until-resolved` cooldown only.** The other two bounds held the sign on the previous
-   data set but have not been re-run on the merged data.
+4. ~~This is `until-resolved` cooldown only.~~ **RESOLVED — all three bounds run on merged data:**
+
+   | cooldown | trades | win rate | net pips | expectancy |
+   |---|---|---|---|---|
+   | instant (optimistic) | 743 | 31.0% | −1676.4 | −0.0626 R |
+   | until-resolved | 687 | 31.0% | −1218.0 | −0.0551 R |
+   | until-expiry (pessimistic) | 486 | 32.1% | −776.5 | −0.0321 R |
+
+   The sign holds at every bound. Trade count varies 1.5x and net pips 2.2x, but expectancy stays
+   inside a 0.031 R band and never crosses zero — the design note's test for whether the record is
+   latency-driven rather than edge-driven. It is not.
+
+   Note `until-expiry` is both the least-bad bound AND the most production-faithful one: its trade
+   count best matches what production actually generated, consistent with the throttled validator
+   holding signals PENDING. Even there it is negative.
+
+   The monotonic gradient (longer cooldown -> better expectancy) has now appeared three times. It
+   plausibly reflects avoiding trades opened while a correlated loser is still running. **§8
+   forbids acting on it.** Recorded as a hypothesis for a future PRE-REGISTERED test, not a tweak.
 
 ## §8 still applies
 
