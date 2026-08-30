@@ -140,6 +140,29 @@ function isFilterableInterval(interval: string): boolean {
   return !/week|month/i.test(interval);
 }
 
+/**
+ * How stale a cached series may be before it must be refused outright.
+ *
+ * The stale-cache fallback exists to survive a transient rate limit. It had NO upper bound, and
+ * provenance caught it serving a 1H array whose newest bar was TWO DAYS old (ageMinutes: 1200),
+ * analysed as if current. `entry`, `stop` and all three TPs derive from oneHourCloses[last]
+ * (signal-generator.ts:683, 1151-1165), so that publishes a Telegram alert — and can place a
+ * cTrader order — at a price that has not existed for two days, with no error raised.
+ *
+ * Refusing beats guessing: a skipped symbol produces NO signal, while a stale one produces a
+ * WRONG signal indistinguishable from a good one. 1H is the tightest bound because it sets the
+ * entry price; higher timeframes only inform trend, which moves slowly.
+ */
+function maxStaleMs(interval: string): number {
+  switch (interval) {
+    case '1week': case '1w': return 72 * 60 * 60 * 1000;
+    case '1day':  case '1d': return 24 * 60 * 60 * 1000;
+    case '4h':               return  8 * 60 * 60 * 1000;
+    case '1h':               return  2 * 60 * 60 * 1000;   // 4x its 30-min TTL
+    default:                 return  1 * 60 * 60 * 1000;   // 5min / 15min
+  }
+}
+
 export class TwelveDataAPI {
   /** cacheKey -> how the most recent read of that key was satisfied. Used for provenance. */
   static lastFetchMeta = new Map<string, { source: 'live' | 'cache' | 'stale-cache'; ageMinutes: number; at: number }>();
@@ -302,7 +325,15 @@ export class TwelveDataAPI {
     // Check persistent cache first
     const cached = await storage.getItem(cacheKey) as CacheEntry | undefined;
     if (cached && Date.now() - cached.timestamp < cacheTTL) {
-      const cacheAgeMinutes = Math.round((Date.now() - cached.timestamp) / (60 * 1000));
+      const staleMs = Date.now() - cached.timestamp;
+      const cacheAgeMinutes = Math.round(staleMs / (60 * 1000));
+      if (staleMs > maxStaleMs(interval)) {
+        // Refuse rather than hand back a price that may be days old.
+        throw new Error(
+          `Stale cache REFUSED for ${cacheKey}: ${cacheAgeMinutes}min old, limit ` +
+          `${Math.round(maxStaleMs(interval) / 60000)}min. No signal is better than a wrong price.`
+        );
+      }
       recordMeta('cache', Date.now() - cached.timestamp);
       console.log(`✅ Cache hit for ${cacheKey} (age: ${cacheAgeMinutes}min, TTL: ${Math.round(cacheTTL / (60 * 1000))}min)`);
 
@@ -344,7 +375,15 @@ export class TwelveDataAPI {
       if (response.status === 429) {
         console.warn(`⚠️  HTTP 429 rate limit for ${symbol}. Attempting stale cache...`);
         if (cached && cached.candles.length > 0) {
-          const cacheAgeMinutes = Math.round((Date.now() - cached.timestamp) / (60 * 1000));
+          const staleMs = Date.now() - cached.timestamp;
+          const cacheAgeMinutes = Math.round(staleMs / (60 * 1000));
+          if (staleMs > maxStaleMs(interval)) {
+            // Refuse rather than hand back a price that may be days old.
+            throw new Error(
+              `Stale cache REFUSED for ${cacheKey}: ${cacheAgeMinutes}min old, limit ` +
+              `${Math.round(maxStaleMs(interval) / 60000)}min. No signal is better than a wrong price.`
+            );
+          }
           recordMeta('stale-cache', Date.now() - cached.timestamp);
           console.log(`✅ Using stale cache for ${cacheKey} (age: ${cacheAgeMinutes}min) due to HTTP 429`);
           return cached.candles.map(c => ({ ...c, timestamp: new Date(c.timestamp) }));
@@ -368,7 +407,15 @@ export class TwelveDataAPI {
           console.warn(`⚠️  API rate limit reached for ${symbol}. Attempting to use cached data...`);
 
           if (cached && cached.candles.length > 0) {
-            const cacheAgeMinutes = Math.round((Date.now() - cached.timestamp) / (60 * 1000));
+            const staleMs = Date.now() - cached.timestamp;
+            const cacheAgeMinutes = Math.round(staleMs / (60 * 1000));
+            if (staleMs > maxStaleMs(interval)) {
+              // Refuse rather than hand back a price that may be days old.
+              throw new Error(
+                `Stale cache REFUSED for ${cacheKey}: ${cacheAgeMinutes}min old, limit ` +
+                `${Math.round(maxStaleMs(interval) / 60000)}min. No signal is better than a wrong price.`
+              );
+            }
             recordMeta('stale-cache', Date.now() - cached.timestamp);
           console.log(`✅ Using stale cache for ${cacheKey} (age: ${cacheAgeMinutes}min) due to rate limit`);
             return cached.candles.map(c => ({ ...c, timestamp: new Date(c.timestamp) }));
