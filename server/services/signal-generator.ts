@@ -1430,6 +1430,7 @@ export class SignalGenerator {
                 targets: signal.targets,
                 confidence: signal.confidence,
                 tier: signal.tier,
+                positionSizePercent: signal.positionSizePercent,
               });
             } catch (error) {
               console.error(`❌ Failed to track ${symbol} signal:`, error);

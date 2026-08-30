@@ -17,7 +17,30 @@ import tls from 'tls';
 import { EventEmitter } from 'events';
 
 const LIVE_HOST = 'live.ctraderapi.com';
+const DEMO_HOST = 'demo.ctraderapi.com';
 const LIVE_PORT = 5036; // JSON port — official docs: "JSON always requires port 5036 (and only this port)"
+
+/**
+ * THREE independent switches must ALL be set before a real order can be placed.
+ *
+ * This file previously hardcoded the LIVE host, filtered accounts to `isLive === true`, threw if
+ * no live account existed, and — worst of all — printed a log line telling the operator to set
+ * the three credential variables. Setting them was the ONLY remaining gate: credentials present
+ * meant live orders, immediately, with no confirmation step.
+ *
+ * The standing instruction for this project is demo only, never real money. One env var should
+ * never be able to cross that line, and "I set the credentials to test the connection" should
+ * never place a trade.
+ *
+ *   CTRADER_ENABLED=true     — arms the executor at all. Absent, nothing connects.
+ *   CTRADER_MODE=live        — anything else (or unset) uses the DEMO host and demo accounts.
+ *   CTRADER_ALLOW_LIVE=true  — a second, deliberate confirmation for real money.
+ *
+ * Credentials alone now do nothing.
+ */
+const ctraderEnabled  = () => process.env.CTRADER_ENABLED === 'true';
+const ctraderLiveMode = () =>
+  process.env.CTRADER_MODE === 'live' && process.env.CTRADER_ALLOW_LIVE === 'true';
 
 // cTrader Open API payload type numbers (decoded from protobuf binary)
 const PT = {
@@ -43,6 +66,8 @@ export interface ExecuteSignalParams {
   targets: number[];
   confidence: number;
   tier: 'HIGH' | 'MEDIUM';
+  /** Percent of balance to risk. MEDIUM signals carry 0 — practice only. */
+  positionSizePercent?: number;
 }
 
 class CTraderExecutor {
@@ -63,6 +88,10 @@ class CTraderExecutor {
   get isConfigured(): boolean {
     return !!(this.clientId && this.clientSecret && this.refreshToken);
   }
+
+  /** Demo unless BOTH CTRADER_MODE=live and CTRADER_ALLOW_LIVE=true are set. */
+  get isLiveMode(): boolean { return ctraderLiveMode(); }
+  private get host(): string { return this.isLiveMode ? LIVE_HOST : DEMO_HOST; }
 
   // ─── Token management ────────────────────────────────────────────────────
 
@@ -92,7 +121,8 @@ class CTraderExecutor {
 
   private openConnection(): Promise<{ socket: tls.TLSSocket; emitter: EventEmitter }> {
     return new Promise((resolve, reject) => {
-      const socket = tls.connect({ host: LIVE_HOST, port: LIVE_PORT, rejectUnauthorized: true });
+      // MUST use this.host, not LIVE_HOST — otherwise demo mode still dials the live server.
+      const socket = tls.connect({ host: this.host, port: LIVE_PORT, rejectUnauthorized: true });
       const emitter = new EventEmitter();
       emitter.setMaxListeners(20);
       let buf = Buffer.alloc(0);
@@ -166,8 +196,13 @@ class CTraderExecutor {
 
   // ─── Position sizing ──────────────────────────────────────────────────────
 
-  private calcVolume(symbol: string, slPips: number): number {
-    const riskUsd        = this.accountBalance * 0.01; // 1% risk
+  private calcVolume(symbol: string, slPips: number, positionSizePercent = 1.0): number {
+    // Honour the signal's own sizing. This was hardcoded to 1%, so if the HIGH-tier guard were
+    // ever relaxed a MEDIUM signal (positionSizePercent = 0, practice only) would have been
+    // sized as a full live trade.
+    const pct = Number.isFinite(positionSizePercent) ? Math.max(0, positionSizePercent) : 1.0;
+    if (pct <= 0) return 0;
+    const riskUsd        = this.accountBalance * (pct / 100);
     const pipValuePerLot = symbol.includes('JPY') ? 9 : 10; // USD value per pip per standard lot
     const lots = Math.min(10, Math.max(0.01,
       Math.round((riskUsd / (slPips * pipValuePerLot)) * 100) / 100
@@ -181,10 +216,20 @@ class CTraderExecutor {
     // Only HIGH tier trades live — MEDIUM is practice only
     if (signal.tier !== 'HIGH') return;
 
-    if (!this.isConfigured) {
-      console.log('[cTrader] Skipping — add CTRADER_CLIENT_ID, CTRADER_CLIENT_SECRET, CTRADER_REFRESH_TOKEN, CTRADER_ACCOUNT_BALANCE to Render env vars');
+    // Arming switch first, so credentials alone can never place an order.
+    if (!ctraderEnabled()) {
+      console.log('[cTrader] DISABLED (CTRADER_ENABLED is not "true"). No order placed.');
       return;
     }
+
+    if (!this.isConfigured) {
+      // Deliberately does NOT tell the operator which variables to set. Setting them used to be
+      // the only gate between a signal and a real trade.
+      console.log('[cTrader] Enabled but not configured — credentials missing. No order placed.');
+      return;
+    }
+
+    console.log(`[cTrader] mode=${this.isLiveMode ? 'LIVE (REAL MONEY)' : 'DEMO'} host=${this.host}`);
 
     let socket: tls.TLSSocket | null = null;
     try {
@@ -207,9 +252,15 @@ class CTraderExecutor {
       this.send(socket, PT.GET_ACCOUNTS_REQ, { accessToken });
       const accountsMsg = await this.waitFor(emitter, PT.GET_ACCOUNTS_RES);
       const allAccounts: any[] = accountsMsg.payload?.ctidTraderAccount ?? [];
-      const liveAccounts = allAccounts.filter((a: any) => a.isLive === true);
-      if (!liveAccounts.length) throw new Error(`No live accounts found. All accounts: ${JSON.stringify(allAccounts)}`);
-      const accountId = liveAccounts[0].ctidTraderAccountId;
+      // Select the account matching the CURRENT mode. Previously this filtered to isLive===true
+      // unconditionally and threw when no live account existed, so a demo-only user could not
+      // run the executor at all — and anyone who added a live account was trading real money.
+      const wantLive = this.isLiveMode;
+      const matching = allAccounts.filter((a: any) => (a.isLive === true) === wantLive);
+      if (!matching.length) {
+        throw new Error(`No ${wantLive ? 'LIVE' : 'DEMO'} accounts found (mode=${wantLive ? 'live' : 'demo'}). Accounts seen: ${allAccounts.map((a: any) => `${a.ctidTraderAccountId}:${a.isLive ? 'live' : 'demo'}`).join(', ') || 'none'}`);
+      }
+      const accountId = matching[0].ctidTraderAccountId;
       console.log(`[cTrader] Account ID: ${accountId} ✅`);
 
       // Step 3 — Authenticate the specific account
@@ -251,7 +302,11 @@ class CTraderExecutor {
       // Step 6 — Calculate position size (1% risk)
       const pipFactor = signal.symbol.includes('JPY') ? 100 : 10000;
       const slPips    = Math.abs(signal.entry - signal.stop) * pipFactor;
-      const volume    = this.calcVolume(signal.symbol, slPips);
+      const volume    = this.calcVolume(signal.symbol, slPips, signal.positionSizePercent ?? 1.0);
+      if (volume <= 0) {
+        console.log(`[cTrader] positionSizePercent=${signal.positionSizePercent} -> zero volume. No order placed.`);
+        return;
+      }
       const lots      = volume / 100;
 
       // Step 7 — Place market order with SL + TP1
