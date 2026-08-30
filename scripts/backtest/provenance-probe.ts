@@ -20,6 +20,7 @@ import 'dotenv/config';
 import { MACrossoverStrategy } from '../../server/services/signal-generator';
 import { twelveDataAPI, TwelveDataAPI } from '../../server/services/twelve-data';
 import { recordAnalysis } from '../../server/services/provenance';
+import { isMarketOpen } from './engine';
 import { db } from '../../server/db';
 import { sql } from 'drizzle-orm';
 
@@ -41,6 +42,15 @@ function inKillZone(d = new Date()): boolean {
 }
 
 (async () => {
+  // The probe previously ran whenever the scheduler fired, including weekends. Every one of the
+  // 38 rows it wrote landed outside market hours, one of them a HIGH-tier `produced=true` on
+  // SUNDAY data. Analysing a shut market produces a synthetic result that looks exactly like a
+  // live one, so refuse outright.
+  if (!isMarketOpen(new Date())) {
+    console.log(`${new Date().toISOString()} — market closed; nothing to probe.`);
+    process.exit(0);
+  }
+
   if (process.argv.includes('--avoid-kill-zones') && inKillZone()) {
     console.log(`${new Date().toISOString()} — inside a kill zone; standing down so production owns the cache.`);
     process.exit(0);
@@ -77,6 +87,7 @@ function inKillZone(d = new Date()): boolean {
         produced: !!signal,
         confidence: signal?.confidence ?? null,
         rejectionReason: signal ? null : (trace[0] ?? 'UNKNOWN'),
+        source: 'probe',
         series: { weekly, daily, fourHour, oneHour },
       });
       recorded++;

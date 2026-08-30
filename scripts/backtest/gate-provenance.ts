@@ -49,11 +49,15 @@ const pipOf = (sym: string) => (sym.includes('JPY') ? 0.01 : 0.0001);
     SELECT analyzed_at, symbol, strategy_version, produced, confidence, rejection_reason, inputs, cache_meta
     FROM signal_provenance
     WHERE strategy_version = ${strat0.version}
+      AND source = 'production'   -- probe rows are synthetic; never evidence
     ORDER BY analyzed_at DESC LIMIT ${LIMIT}`;
 
-  const [older]: any = await sql`
-    SELECT count(*)::int AS n FROM signal_provenance WHERE strategy_version <> ${strat0.version}`;
-  if (older?.n) console.log(`(${older.n} row(s) from earlier strategy versions excluded — not comparable to current code)`);
+  const [excl]: any = await sql`
+    SELECT count(*) FILTER (WHERE strategy_version <> ${strat0.version})::int AS oldver,
+           count(*) FILTER (WHERE source <> 'production')::int AS probe
+    FROM signal_provenance`;
+  if (excl?.oldver) console.log(`(${excl.oldver} row(s) from earlier strategy versions excluded — not comparable to current code)`);
+  if (excl?.probe)  console.log(`(${excl.probe} probe row(s) excluded — synthetic, not production evidence)`);
 
   if (rows.length === 0) {
     console.log('No provenance rows yet. Run scripts/backtest/provenance-probe.ts first.');

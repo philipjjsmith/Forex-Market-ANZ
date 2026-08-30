@@ -1273,6 +1273,20 @@ export class SignalGenerator {
       let signalsTracked = 0;
 
       for (const quote of quotes) {
+        // RE-CHECK the portfolio-wide cap on EVERY iteration.
+        //
+        // It was previously evaluated ONCE before this loop, which then iterated all five pairs
+        // and could insert five signals in a single pass. With cTrader armed and all five HIGH
+        // tier that is 5 x 1% risk against a 5% max drawdown — a same-run account failure.
+        // updateDailyTracker() bumps an in-memory counter that nothing inside the loop consulted.
+        //
+        // maxTradesReached() reads the DATABASE and each signal is INSERTed before the next
+        // iteration, so this sees the run's own signals and survives a Render restart.
+        if (await propFirmService.maxTradesReached()) {
+          console.log(`⚠️ [PropFirm] Daily cap reached mid-run — stopping before ${quote.symbol}.`);
+          break;
+        }
+
         const { symbol, exchangeRate } = quote;
 
         // GBP/USD skip REMOVED 2026-08-28. It was disabled for a "19.6% win rate" measured

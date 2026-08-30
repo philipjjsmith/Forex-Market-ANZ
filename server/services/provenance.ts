@@ -91,6 +91,12 @@ export interface AnalysisProvenance {
   signalId?: string | null;
   confidence?: number | null;
   rejectionReason?: string | null;
+  /**
+   * 'production' = written by generateSignals(); 'probe' = provenance-probe.ts.
+   * Any reproduction gate MUST filter to production, or synthetic probe runs — including
+   * market-closed ones — count as live evidence.
+   */
+  source?: 'production' | 'probe';
   series: { weekly: Candle[]; daily: Candle[]; fourHour: Candle[]; oneHour: Candle[] };
 }
 
@@ -116,11 +122,11 @@ export async function recordAnalysis(p: AnalysisProvenance): Promise<void> {
 
     await db.execute(sql`
       INSERT INTO signal_provenance
-        (analyzed_at, symbol, strategy_version, produced, signal_id, confidence, rejection_reason, inputs, cache_meta)
+        (analyzed_at, symbol, strategy_version, produced, signal_id, confidence, rejection_reason, inputs, cache_meta, source)
       VALUES (
         ${p.analyzedAt.toISOString()}, ${p.symbol}, ${p.strategyVersion}, ${p.produced},
         ${p.signalId ?? null}, ${p.confidence ?? null}, ${p.rejectionReason ?? null},
-        ${JSON.stringify(inputs)}::jsonb, ${JSON.stringify(cacheMeta)}::jsonb
+        ${JSON.stringify(inputs)}::jsonb, ${JSON.stringify(cacheMeta)}::jsonb, ${p.source ?? 'production'}
       )
     `);
   } catch (err) {
