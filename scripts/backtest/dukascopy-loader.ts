@@ -35,6 +35,7 @@
 import fs from 'fs';
 import path from 'path';
 import { getHistoricalRates } from 'dukascopy-node';
+import { isMarketOpen } from './engine';
 
 const CACHE_DIR = path.resolve('.backtest-cache');
 
@@ -55,15 +56,53 @@ export const PAIRS: Record<string, string> = {
 const arg = (k: string, d: string) => process.argv.find(a => a.startsWith(`--${k}=`))?.split('=')[1] ?? d;
 const fmt = (d: Date) => d.toISOString().slice(0, 10);
 
+/**
+ * Fetch one side, in CHUNKS.
+ *
+ * A single call spanning four years silently loses whole days. Verified against the source:
+ * usdchf 2022-10-04 (285 bars) and audusd 2025-11-10/11 (288 bars each) are all served fine by
+ * Dukascopy when requested directly, yet were absent from a 4-year single-call download. Across
+ * five pairs that was ~126,000 market-open minutes — roughly 87 trading days — missing from the
+ * backtest, with holes up to 70 hours.
+ *
+ * Chunking bounds the blast radius of any one failed sub-request, and the caller verifies
+ * coverage afterwards rather than trusting the result.
+ */
+const CHUNK_DAYS = 90;
+
 async function fetchSide(instrument: string, from: Date, to: Date, tf: string, priceType: 'bid' | 'ask') {
-  const rows: any = await getHistoricalRates({
-    instrument: instrument as any,
-    dates: { from, to },
-    timeframe: tf as any,
-    priceType: priceType as any,
-    format: 'json' as any,
-  });
-  return rows as any[];
+  const out: any[] = [];
+  let cursor = new Date(from);
+  while (cursor < to) {
+    const end = new Date(Math.min(+cursor + CHUNK_DAYS * 86400_000, +to));
+    let attempt = 0;
+    for (;;) {
+      try {
+        const rows: any = await getHistoricalRates({
+          instrument: instrument as any,
+          dates: { from: cursor, to: end },
+          timeframe: tf as any,
+          priceType: priceType as any,
+          format: 'json' as any,
+        });
+        out.push(...(rows as any[]));
+        break;
+      } catch (e: any) {
+        // A silently-swallowed chunk failure is exactly how the days went missing. Retry, and
+        // if it still fails, say so loudly rather than returning a quietly short series.
+        if (++attempt >= 3) {
+          console.warn(`      ! ${instrument} ${priceType} ${cursor.toISOString().slice(0, 10)}..${end.toISOString().slice(0, 10)} FAILED after 3 tries: ${e?.message?.slice(0, 60)}`);
+          break;
+        }
+        await new Promise(r => setTimeout(r, 2000 * attempt));
+      }
+    }
+    cursor = end;
+  }
+  // De-duplicate on timestamp: chunk boundaries overlap by one bar.
+  const seen = new Map<number, any>();
+  for (const b of out) seen.set(b.timestamp, b);
+  return [...seen.values()].sort((a, b) => a.timestamp - b.timestamp);
 }
 
 /**
@@ -103,6 +142,23 @@ export async function loadDukascopy(
       volume: b.volume ?? 0,
       spread: a.close - b.close,
     });
+  }
+
+  // Verify coverage before trusting the file. A silent short series is the failure mode that
+  // cost ~87 trading days last time, and it is invisible unless explicitly checked.
+  let missingOpenMin = 0, worst = 0;
+  for (let i = 1; i < out.length; i++) {
+    const gap = (out[i].timestamp - out[i - 1].timestamp) / 60_000;
+    if (gap <= 5) continue;
+    let closed = 0;
+    for (let t = out[i - 1].timestamp; t < out[i].timestamp; t += 300_000) {
+      if (!isMarketOpen(new Date(t))) closed += 5;
+    }
+    const openGap = gap - closed;
+    if (openGap > 30) { missingOpenMin += openGap; worst = Math.max(worst, openGap); }
+  }
+  if (missingOpenMin > 0) {
+    console.log(`      ! ${symbol}: ${Math.round(missingOpenMin)} market-open minutes still missing (worst hole ${Math.round(worst)} min)`);
   }
 
   fs.writeFileSync(file, JSON.stringify(out));

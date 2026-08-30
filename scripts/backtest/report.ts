@@ -91,36 +91,60 @@ async function arm(
   console.log(`\n  difference in expectancy (block bootstrap on the DIFFERENCE, paired by day):`);
   console.log(`    STRATEGY - RANDOM     : ${sgn(vsRandom.diff)} R   95% CI [${sgn(vsRandom.lo,3)}, ${sgn(vsRandom.hi,3)}]   ${vsRandom.excludesZero ? 'EXCLUDES zero' : 'includes zero'}`);
   console.log(`    STRATEGY - TREND-ONLY : ${sgn(vsTrend.diff)} R   95% CI [${sgn(vsTrend.lo,3)}, ${sgn(vsTrend.hi,3)}]   ${vsTrend.excludesZero ? 'EXCLUDES zero' : 'includes zero'}`);
-  // MATCHED COMPARISON — the full-sample gap above is a composition artifact.
+  // STRATIFIED COMPARISON — the full-sample gap is a composition artifact.
   //
   // The 3/day cap is portfolio-wide and the symbol loop is fixed to PRODUCTION_ORDER, so an arm
-  // that fires on every symbol at every decision point burns all three slots on the first three
-  // pairs at the first kill-zone hour, every day. RANDOM's n is exactly 3 x 520 trading days: it
-  // is cap-saturated by construction, and 94% of its trades sit on three pairs at 07:00 UTC.
-  // That is not 'the strategy's conditions with a coin flip'.
+  // firing on every symbol at every decision point burns all three slots on the first three pairs
+  // at the earliest kill-zone hour, every day. RANDOM's n is exactly 3 x 520 trading days: it is
+  // cap-saturated by construction, with ~94% of its trades on three pairs at 07:00 UTC against
+  // the strategy's ~65%.
   //
-  // Restricting every arm to the (symbol, hour) cells the STRATEGY actually traded removes the
-  // composition difference and compares like with like.
+  // NOTE: filtering to the strategy's (symbol, hour) CELLS does nothing — every arm trades the
+  // same 30 cells (5 symbols x 6 kill-zone hours). The difference is the WEIGHT of each cell, so
+  // the controls must be RE-WEIGHTED to the strategy's cell distribution, not merely filtered.
   const cellOf = (t: Trade) => `${t.symbol}|${t.openedAt.getUTCHours()}`;
-  const strategyCells = new Set(strategy.res.trades.map(cellOf));
-  const inCells = (ts: Trade[]) => ts.filter(t => strategyCells.has(cellOf(t)));
-  const mS = inCells(strategy.res.trades), mR = inCells(random.res.trades), mT = inCells(trend.res.trades);
-  const sm = summarise(mS), rm = summarise(mR), tm = summarise(mT);
-  const dR = bootstrapDifference(mS, mR, 10000);
-  const dT = bootstrapDifference(mS, mT, 10000);
-  console.log(`\n  MATCHED to the strategy's own (symbol, hour) cells:`);
-  console.log(`    STRATEGY   n=${String(sm.n).padStart(4)}  expectancy ${sgn(sm.expectancyR)} R`);
-  console.log(`    RANDOM     n=${String(rm.n).padStart(4)}  expectancy ${sgn(rm.expectancyR)} R   diff ${sgn(dR.diff)} [${sgn(dR.lo,3)}, ${sgn(dR.hi,3)}]`);
-  console.log(`    TREND-ONLY n=${String(tm.n).padStart(4)}  expectancy ${sgn(tm.expectancyR)} R   diff ${sgn(dT.diff)} [${sgn(dT.lo,3)}, ${sgn(dT.hi,3)}]`);
+  const cellWeights = new Map<string, number>();
+  for (const t of strategy.res.trades) if (t.r != null) cellWeights.set(cellOf(t), (cellWeights.get(cellOf(t)) ?? 0) + 1);
+  const totalW = [...cellWeights.values()].reduce((a, b) => a + b, 0);
 
-  // Do the two arms actually disagree, or just fire at different times? On shared decision
-  // points, identical direction means the machinery selects WHICH bars fire, not what happens.
+  /** Expectancy the arm would have shown under the strategy's own cell mix. */
+  const reweighted = (ts: Trade[]) => {
+    const byCell = new Map<string, number[]>();
+    for (const t of ts) if (t.r != null) {
+      const c = cellOf(t);
+      if (!byCell.has(c)) byCell.set(c, []);
+      byCell.get(c)!.push(t.r);
+    }
+    let acc = 0, used = 0;
+    for (const [cell, w] of cellWeights) {
+      const rs = byCell.get(cell);
+      if (!rs || !rs.length) continue;                 // cell the control never traded
+      acc += (w / totalW) * (rs.reduce((a, b) => a + b, 0) / rs.length);
+      used += w;
+    }
+    return { r: used ? acc * (totalW / used) : NaN, coverage: used / totalW };
+  };
+
+  const rwS = reweighted(strategy.res.trades);
+  const rwR = reweighted(random.res.trades);
+  const rwT = reweighted(trend.res.trades);
+  console.log(`\n  RE-WEIGHTED to the strategy's (symbol, hour) mix:`);
+  console.log(`    STRATEGY   ${sgn(rwS.r)} R`);
+  console.log(`    RANDOM     ${sgn(rwR.r)} R   diff ${sgn(rwS.r - rwR.r)}   (cell coverage ${(100 * rwR.coverage).toFixed(0)}%)`);
+  console.log(`    TREND-ONLY ${sgn(rwT.r)} R   diff ${sgn(rwS.r - rwT.r)}   (cell coverage ${(100 * rwT.coverage).toFixed(0)}%)`);
+
+  // Do the arms actually disagree, or merely fire at different times? Identical direction on
+  // shared decision points means the machinery selects WHICH bars fire, not what happens on them.
   const key = (t: Trade) => `${t.symbol}|${+t.openedAt}`;
   const tMap = new Map(trend.res.trades.map(t => [key(t), t]));
   const shared = strategy.res.trades.filter(t => tMap.has(key(t)));
   const sameDir = shared.filter(t => tMap.get(key(t))!.type === t.type).length;
   if (shared.length) {
-    console.log(`    on ${shared.length} shared (symbol, time) points STRATEGY and TREND-ONLY agree on direction ${(100*sameDir/shared.length).toFixed(1)}% of the time`);
+    const paired = shared.map(t => (t.r ?? 0) - (tMap.get(key(t))!.r ?? 0));
+    const pm = paired.reduce((a, b) => a + b, 0) / paired.length;
+    const psd = Math.sqrt(paired.reduce((a, x) => a + (x - pm) ** 2, 0) / Math.max(1, paired.length - 1));
+    console.log(`    on ${shared.length} shared (symbol, time) points STRATEGY and TREND-ONLY agree on direction ${(100 * sameDir / shared.length).toFixed(1)}%`);
+    console.log(`    paired R difference on those points: ${sgn(pm)} +/- ${(1.96 * psd / Math.sqrt(paired.length)).toFixed(4)} (95%)`);
   }
 
   const beatsRandom = vsRandom.diff > 0 && vsRandom.excludesZero;
