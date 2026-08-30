@@ -132,6 +132,20 @@ async function arm(
       ? 'negative, but the CI does not exclude zero — criterion NOT met.'
       : 'expectancy is not negative — criterion not met.'}`);
 
+  // Persist every trade from every arm so the result can be audited WITHOUT re-running the
+  // 6-minute replay, and so any re-analysis works from the exact same trade set rather than a
+  // fresh run that might differ.
+  const save = arg('save', '');
+  if (save) {
+    const fs = await import('fs');
+    fs.writeFileSync(save, JSON.stringify({
+      window: { from: from.toISOString(), to: to.toISOString() }, pairs, cooldown: cfg.cooldownMode,
+      config: cfg,
+      arms: Object.fromEntries(arms.map(a => [a.name, a.res.trades])),
+    }));
+    console.log(`\ntrades written to ${save}`);
+  }
+
   console.log(`\n${rule()}`);
   console.log(`runtime ${((Date.now() - t0) / 60000).toFixed(1)} min`);
   console.log(`Per-cell figures are for honesty, not decisions (§8): no cell may drive a parameter`);
