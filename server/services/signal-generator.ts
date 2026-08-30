@@ -1101,8 +1101,9 @@ export class MACrossoverStrategy {
     // Determine tier and trading mode
     // 🎯 CONFLUENCE SCALE v1.0 - Tier determination
     // Max Score: 130 points (Trend: 75 + Entry: 25 + Confluence: 30)
-    // HIGH tier: 85+ points = Strong multi-factor confluence
-    // MEDIUM tier: 70-84 points = Practice only
+    // HIGH tier: 90+ points = strong multi-factor confluence (see the check below)
+    // MEDIUM tier: 70-89 points = practice only.  S-TIER at 115+.
+    // (This comment said 85/70-84 — the v3.1.0 values from the old 100-point scale.)
     let tier: 'HIGH' | 'MEDIUM';
     let tradeLive: boolean;
     let positionSizePercent: number;

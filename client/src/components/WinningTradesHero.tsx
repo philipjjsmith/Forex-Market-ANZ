@@ -52,7 +52,14 @@ interface BasicWinningTrade {
   duration: string;
 }
 
-async function fetchWinningTrades(limit: number = 5): Promise<BasicWinningTrade[]> {
+/**
+ * The API sets `isDemo` when it has substituted fabricated example trades because no real
+ * winners exist for the week. This previously discarded that flag and rendered the fixtures as
+ * genuine wins. Carry it through so the UI can never present invented trades as real.
+ */
+interface WinningTradesResponse { trades: BasicWinningTrade[]; isDemo: boolean }
+
+async function fetchWinningTrades(limit: number = 5): Promise<WinningTradesResponse> {
   const token = getToken();
   const response = await fetch(`${getApiBaseUrl()}/api/signals/winning-trades-week?limit=${limit}`, {
     headers: {
@@ -66,7 +73,7 @@ async function fetchWinningTrades(limit: number = 5): Promise<BasicWinningTrade[
   }
 
   const data = await response.json();
-  return data.trades || [];
+  return { trades: data.trades || [], isDemo: !!data.isDemo };
 }
 
 export default function EnhancedWinningTradesHero() {
@@ -76,12 +83,15 @@ export default function EnhancedWinningTradesHero() {
   const [selectedTradeId, setSelectedTradeId] = useState<string | null>(null);
 
   // Fetch basic winning trades list
-  const { data: trades, isLoading, error } = useQuery<BasicWinningTrade[]>({
+  const { data: payload, isLoading, error } = useQuery<WinningTradesResponse>({
     queryKey: ['winning-trades-week'],
     queryFn: () => fetchWinningTrades(5),
     staleTime: 5 * 60 * 1000,
     refetchInterval: 15 * 60 * 1000, // Refresh every 15 min
   });
+
+  const trades = payload?.trades;
+  const isDemo = payload?.isDemo ?? false;
 
   // Auto-select first trade when trades load
   useEffect(() => {
@@ -192,9 +202,13 @@ export default function EnhancedWinningTradesHero() {
             <Trophy className="h-6 w-6 text-emerald-400" />
           </div>
           <div>
-            <h2 className="text-2xl font-bold text-white">Winning Trades This Week</h2>
+            <h2 className="text-2xl font-bold text-white">
+              {isDemo ? 'Example Trades (Illustrative)' : 'Winning Trades This Week'}
+            </h2>
             <p className="text-sm text-slate-300">
-              {trades.length} {trades.length === 1 ? 'win' : 'wins'} • Enhanced analysis
+              {isDemo
+                ? 'Not real results — no winning trades were recorded this week'
+                : `${trades.length} ${trades.length === 1 ? 'win' : 'wins'} • Enhanced analysis`}
             </p>
           </div>
         </div>

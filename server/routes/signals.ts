@@ -21,6 +21,16 @@ function parseNumericFields(obj: any, fields: string[]): any {
   return parsed;
 }
 
+/**
+ * HIGH tier threshold, mirroring signal-generator.ts:1113 on the 130-point scale.
+ *
+ * These fallbacks previously hardcoded 85, which is the v3.1.0 value from the old 100-point
+ * scale. On the current scale a signal scoring 85-89 is MEDIUM (practice only), but the stale
+ * constant marked it HIGH, tradeLive=true and positionSizePercent=1.00 — a real-money path
+ * driven by an out-of-date number.
+ */
+const HIGH_TIER_MIN = 90;
+
 // Generate demo/example winning trades when no real trades are available
 function generateDemoWinningTrades(count: number = 3): any[] {
   const now = new Date();
@@ -226,9 +236,9 @@ export function registerSignalRoutes(app: Express) {
           ${signal.symbol},
           ${signal.type},
           ${signal.confidence},
-          ${signal.tier || (signal.confidence >= 85 ? 'HIGH' : 'MEDIUM')},
-          ${signal.tradeLive !== undefined ? signal.tradeLive : (signal.confidence >= 85)},
-          ${signal.positionSizePercent !== undefined ? signal.positionSizePercent : (signal.confidence >= 85 ? 1.00 : 0.00)},
+          ${signal.tier || (signal.confidence >= HIGH_TIER_MIN ? 'HIGH' : 'MEDIUM')},
+          ${signal.tradeLive !== undefined ? signal.tradeLive : (signal.confidence >= HIGH_TIER_MIN)},
+          ${signal.positionSizePercent !== undefined ? signal.positionSizePercent : (signal.confidence >= HIGH_TIER_MIN ? 1.00 : 0.00)},
           ${signal.entry},
           ${signal.currentPrice},
           ${signal.stop},
@@ -556,7 +566,11 @@ export function registerSignalRoutes(app: Express) {
     try {
       const userId = req.userId!;
       const limit = Math.min(parseInt(req.query.limit as string) || 5, 10);
-      const includeDemo = req.query.includeDemo !== 'false'; // Default to true
+      // OPT-IN ONLY. This previously defaulted to TRUE, so any week with no real winners
+      // silently served fabricated +90-pip TP3 trades — and the client discards the isDemo
+      // flag, so they rendered as real. With a ~30% win rate and a 3-trade/day cap, winnerless
+      // weeks are normal, which made the dashboard show invented wins routinely.
+      const includeDemo = req.query.includeDemo === 'true'; // default FALSE
 
       if (!userId) {
         return res.status(401).json({ message: "Must be logged in" });
