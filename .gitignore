@@ -14,3 +14,6 @@ vite.config.ts.*
 
 # Probe run log
 logs/
+
+# Audit agent scratch files
+_audit_*
