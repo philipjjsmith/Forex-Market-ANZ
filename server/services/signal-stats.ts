@@ -20,7 +20,7 @@ import { sql } from 'drizzle-orm';
 export async function getMonthWinCount(): Promise<number> {
   const result = await db.execute(sql`
     SELECT COUNT(*)::int AS count
-    FROM signal_history
+    FROM signal_history_deduped
     WHERE (
       outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT')
       OR (outcome = 'MANUALLY_CLOSED' AND profit_loss_pips > 0)
@@ -41,7 +41,7 @@ export async function getMonthWinCount(): Promise<number> {
 export async function getMonthLossCount(): Promise<number> {
   const result = await db.execute(sql`
     SELECT COUNT(*)::int AS count
-    FROM signal_history
+    FROM signal_history_deduped
     WHERE (
       outcome = 'STOP_HIT'
       OR (outcome = 'MANUALLY_CLOSED' AND profit_loss_pips < 0)
@@ -63,7 +63,7 @@ export async function getMonthLossCount(): Promise<number> {
 export async function getMonthNetPips(): Promise<number> {
   const result = await db.execute(sql`
     SELECT COALESCE(SUM(profit_loss_pips), 0)::float AS net_pips
-    FROM signal_history
+    FROM signal_history_deduped
     WHERE (
       outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'STOP_HIT')
       OR outcome = 'MANUALLY_CLOSED'
@@ -87,7 +87,7 @@ export async function getMonthNetPips(): Promise<number> {
 export async function getCurrentStreak(): Promise<number> {
   const result = await db.execute(sql`
     SELECT outcome, profit_loss_pips
-    FROM signal_history
+    FROM signal_history_deduped
     WHERE (
       outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'STOP_HIT')
       OR outcome = 'MANUALLY_CLOSED'
@@ -130,11 +130,11 @@ export async function getCurrentStreak(): Promise<number> {
 export async function getSignalNumber(signalId: string): Promise<number> {
   const result = await db.execute(sql`
     SELECT COUNT(*)::int AS signal_number
-    FROM signal_history
+    FROM signal_history_deduped
     WHERE data_quality = 'production'
       AND created_at <= (
         SELECT created_at
-        FROM signal_history
+        FROM signal_history_deduped
         WHERE signal_id = ${signalId}
         LIMIT 1
       )
@@ -176,7 +176,7 @@ export async function getWeekStats(): Promise<{
         ),
         0
       )::float AS net_pips
-    FROM signal_history
+    FROM signal_history_deduped
     WHERE data_quality = 'production'
       AND outcome_time >= DATE_TRUNC('week', NOW() AT TIME ZONE 'UTC')
       AND (
@@ -203,7 +203,7 @@ export async function getWeekStats(): Promise<{
 export async function getTotalSignalCount(): Promise<number> {
   const result = await db.execute(sql`
     SELECT COUNT(*)::int AS total
-    FROM signal_history
+    FROM signal_history_deduped
     WHERE data_quality = 'production'
   `);
   return ((result as any)[0]?.total as number) ?? 0;
@@ -229,7 +229,7 @@ export async function getDayStats(): Promise<{
   // Signals that closed today (including manually closed)
   const resolvedResult = await db.execute(sql`
     SELECT symbol, type, outcome, profit_loss_pips
-    FROM signal_history
+    FROM signal_history_deduped
     WHERE data_quality = 'production'
       AND (
         outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'STOP_HIT', 'EXPIRED')
@@ -242,7 +242,7 @@ export async function getDayStats(): Promise<{
   // New signals generated today (regardless of outcome)
   const newResult = await db.execute(sql`
     SELECT COUNT(*)::int AS count
-    FROM signal_history
+    FROM signal_history_deduped
     WHERE data_quality = 'production'
       AND created_at >= DATE_TRUNC('day', NOW() AT TIME ZONE 'UTC')
   `);

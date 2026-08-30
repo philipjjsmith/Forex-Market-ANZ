@@ -31,7 +31,7 @@ export function registerAIRoutes(app: Express) {
             NULLIF(COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'STOP_HIT')), 0),
             2
           ) as win_rate
-        FROM signal_history
+        FROM signal_history_deduped
       `);
 
       const stats = (statsResult as any)[0];
@@ -89,7 +89,7 @@ export function registerAIRoutes(app: Express) {
           outcome,
           profit_loss_pips,
           created_at
-        FROM signal_history
+        FROM signal_history_deduped
         WHERE symbol = ${symbol}
           AND outcome != 'PENDING'
         ORDER BY created_at DESC
@@ -272,7 +272,7 @@ export function registerAIRoutes(app: Express) {
             COUNT(*),
             2
           ) as win_rate
-        FROM signal_history
+        FROM signal_history_deduped
         WHERE symbol = ${symbol}
           AND outcome != 'PENDING'
           AND indicators->>'rsi' != 'N/A'
@@ -295,7 +295,7 @@ export function registerAIRoutes(app: Express) {
             COUNT(*),
             2
           ) as win_rate
-        FROM signal_history
+        FROM signal_history_deduped
         WHERE symbol = ${symbol}
           AND outcome != 'PENDING'
           AND indicators->>'adx' != 'N/A'
@@ -432,7 +432,7 @@ export function registerAIRoutes(app: Express) {
           AVG(CASE WHEN outcome = 'STOP_HIT' THEN ABS(profit_loss_pips) END) as avg_loss_pips,
           MIN(created_at) as first_signal_date,
           MAX(created_at) as last_signal_date
-        FROM signal_history
+        FROM signal_history_deduped
         ${whereClause}
       `)) as any[];
 
@@ -472,7 +472,7 @@ export function registerAIRoutes(app: Express) {
       // ============================================================
       const allReturns = await db.execute(sql.raw(`
         SELECT profit_loss_pips, outcome, created_at
-        FROM signal_history
+        FROM signal_history_deduped
         ${completedWhereClause}
         ORDER BY created_at ASC
       `)) as any[];
@@ -606,7 +606,7 @@ export function registerAIRoutes(app: Express) {
           SUM(profit_loss_pips) as net_pips,
           AVG(CASE WHEN outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT') THEN profit_loss_pips END) as avg_win,
           AVG(CASE WHEN outcome = 'STOP_HIT' THEN ABS(profit_loss_pips) END) as avg_loss
-        FROM signal_history
+        FROM signal_history_deduped
         ${symbolWhereClause}
         GROUP BY symbol
         ORDER BY completed DESC
@@ -669,7 +669,7 @@ export function registerAIRoutes(app: Express) {
           END) as live_net_pips,
           AVG(CASE WHEN ${liveWhereBase} trade_live = true AND outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT') THEN profit_loss_pips END) as live_avg_win,
           AVG(CASE WHEN ${liveWhereBase} trade_live = true AND outcome = 'STOP_HIT' THEN ABS(profit_loss_pips) END) as live_avg_loss
-        FROM signal_history
+        FROM signal_history_deduped
       `)) as any[];
 
       const live = liveStats[0];

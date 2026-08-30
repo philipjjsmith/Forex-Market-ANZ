@@ -565,7 +565,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           COUNT(DISTINCT DATE(created_at)) as trading_days,
           MIN(created_at) as first_signal_date,
           MAX(created_at) as last_signal_date
-        FROM signal_history
+        FROM signal_history_deduped
         WHERE strategy_version >= '3.1.0'
           AND trade_live = true
           ${dateFilterSQL}

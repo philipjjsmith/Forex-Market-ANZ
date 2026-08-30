@@ -307,6 +307,8 @@ export function registerSignalRoutes(app: Express) {
           created_at,
           expires_at,
           indicators
+        -- RAW table on purpose: this lists live PENDING signals, and deduplicating by
+        -- (date, symbol, direction) would hide a second active signal on the same day.
         FROM signal_history
         WHERE (
           user_id = ${userId}
@@ -386,7 +388,7 @@ export function registerSignalRoutes(app: Express) {
           ) as win_rate,
           AVG(profit_loss_pips) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT')) as avg_win_pips,
           AVG(ABS(profit_loss_pips)) FILTER (WHERE outcome = 'STOP_HIT') as avg_loss_pips
-        FROM signal_history
+        FROM signal_history_deduped
         WHERE user_id = ${userId}
           AND outcome != 'PENDING'
       `);
@@ -465,6 +467,7 @@ export function registerSignalRoutes(app: Express) {
 
       // Get signal details
       const signalResult = await db.execute(sql`
+        -- RAW table on purpose: this resolves ONE specific signal_id in order to close it.
         SELECT type, entry_price, stop_loss, tp1, symbol, tier, trade_live, user_id, created_at
         FROM signal_history
         WHERE signal_id = ${signalId}
@@ -600,7 +603,7 @@ export function registerSignalRoutes(app: Express) {
           strategy_version,
           created_at,
           manually_closed_by_user
-        FROM signal_history
+        FROM signal_history_deduped
         WHERE user_id = ${userId}
           AND outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT')
           AND outcome_time >= NOW() - INTERVAL '30 days'
@@ -700,7 +703,7 @@ export function registerSignalRoutes(app: Express) {
       // Get total count for pagination
       const countResult = await db.execute(sql`
         SELECT COUNT(*) as total
-        FROM signal_history
+        FROM signal_history_deduped
         WHERE user_id = ${userId}
           AND outcome != 'PENDING'
           ${dateFilter}
@@ -727,7 +730,7 @@ export function registerSignalRoutes(app: Express) {
           profit_loss_pips,
           manually_closed_by_user,
           created_at
-        FROM signal_history
+        FROM signal_history_deduped
         WHERE user_id = ${userId}
           AND outcome != 'PENDING'
           ${dateFilter}
@@ -783,7 +786,7 @@ export function registerSignalRoutes(app: Express) {
 
       // Fetch base trade data
       const result = await db.execute(sql`
-        SELECT * FROM signal_history
+        SELECT * FROM signal_history_deduped
         WHERE signal_id = ${signalId}
           AND user_id = ${userId}
           AND outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT')
@@ -898,7 +901,7 @@ export function registerSignalRoutes(app: Express) {
       // Fetch all closed trades
       const result = await db.execute(sql`
         SELECT created_at, profit_loss_pips, symbol
-        FROM signal_history
+        FROM signal_history_deduped
         WHERE user_id = ${userId}
           AND outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'STOP_HIT', 'MANUALLY_CLOSED')
           AND outcome_time IS NOT NULL
@@ -947,7 +950,7 @@ export function registerSignalRoutes(app: Express) {
       // Get all trades for this strategy to calculate advanced statistics
       const result = await db.execute(sql`
         SELECT profit_loss_pips, outcome, created_at, outcome_time
-        FROM signal_history
+        FROM signal_history_deduped
         WHERE user_id = ${userId}
           AND strategy_name = ${strategyName}
           AND outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'STOP_HIT', 'MANUALLY_CLOSED')

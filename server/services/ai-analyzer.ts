@@ -310,7 +310,7 @@ export class AIAnalyzer {
         indicators,
         candles,
         created_at
-      FROM signal_history
+      FROM signal_history_deduped
       WHERE symbol = ${symbol}
         AND outcome != 'PENDING'
       ORDER BY created_at DESC
@@ -325,7 +325,7 @@ export class AIAnalyzer {
   private async getActiveSymbols(): Promise<string[]> {
     const result = await db.execute(sql`
       SELECT DISTINCT symbol
-      FROM signal_history
+      FROM signal_history_deduped
       ORDER BY symbol
     `) as any[];
 

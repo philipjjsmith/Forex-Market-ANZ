@@ -49,7 +49,7 @@ export class StrategyAnalyzer {
               outcome,
               created_at,
               outcome_time
-            FROM signal_history
+            FROM signal_history_deduped
             WHERE user_id = ${userId}
               AND strategy_name = ${strategyName}
               AND strategy_version = ${version}
@@ -63,7 +63,7 @@ export class StrategyAnalyzer {
               created_at,
               outcome_time,
               strategy_version
-            FROM signal_history
+            FROM signal_history_deduped
             WHERE user_id = ${userId}
               AND strategy_name = ${strategyName}
               AND outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'STOP_HIT', 'MANUALLY_CLOSED')
@@ -169,7 +169,7 @@ export class StrategyAnalyzer {
     // Calculate percentile (where does this trade rank?)
     const query = sql`
       SELECT profit_loss_pips
-      FROM signal_history
+      FROM signal_history_deduped
       WHERE user_id = ${userId}
         AND strategy_name = ${strategyName}
         AND outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'STOP_HIT', 'MANUALLY_CLOSED')
@@ -210,7 +210,7 @@ export class StrategyAnalyzer {
     try {
       const query = sql`
         SELECT DISTINCT strategy_name, strategy_version
-        FROM signal_history
+        FROM signal_history_deduped
         WHERE user_id = ${userId}
           AND outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'STOP_HIT', 'MANUALLY_CLOSED')
         ORDER BY strategy_name, strategy_version DESC
@@ -276,7 +276,7 @@ export class StrategyAnalyzer {
       // Get last 10 trades
       const recentQuery = sql`
         SELECT profit_loss_pips
-        FROM signal_history
+        FROM signal_history_deduped
         WHERE user_id = ${userId}
           AND strategy_name = ${strategyName}
           AND outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'STOP_HIT', 'MANUALLY_CLOSED')
@@ -299,7 +299,7 @@ export class StrategyAnalyzer {
       // Get historical average (excluding last 10)
       const historicalQuery = sql`
         SELECT profit_loss_pips
-        FROM signal_history
+        FROM signal_history_deduped
         WHERE user_id = ${userId}
           AND strategy_name = ${strategyName}
           AND outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'STOP_HIT', 'MANUALLY_CLOSED')
