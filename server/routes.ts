@@ -4,7 +4,7 @@ import { storage } from "./storage";
 import { exchangeRateAPI } from "./services/exchangerate-api";
 import { insertUserSchema } from "@shared/schema";
 import { generateToken } from "./jwt";
-import { requireAuth } from "./auth-middleware";
+import { requireAuth, requireCronSecret } from "./auth-middleware";
 import bcrypt from "bcrypt";
 import { registerSignalRoutes } from "./routes/signals";
 import { registerAdminRoutes } from "./routes/admin";
@@ -31,7 +31,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
    * Signal Generation Cron (every 15 minutes)
    * Triggered by: UptimeRobot every 5 minutes (rate-limited to 15min)
    */
-  app.get("/api/cron/generate-signals", async (req, res) => {
+  app.get("/api/cron/generate-signals", requireCronSecret, async (req, res) => {
     try {
       const lastRun = signalGenerator.getLastRunTime();
       const now = Date.now();
@@ -70,7 +70,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
    * Outcome Validation Cron (every 5 minutes)
    * Triggered by: UptimeRobot every 5 minutes
    */
-  app.get("/api/cron/validate-outcomes", async (req, res) => {
+  app.get("/api/cron/validate-outcomes", requireCronSecret, async (req, res) => {
     try {
       const lastRun = outcomeValidator.getLastRunTime();
       const now = Date.now();
@@ -109,7 +109,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
    * AI Analysis Cron (every 6 hours)
    * Triggered by: External cron service (cron-job.org) every 6 hours
    */
-  app.get("/api/cron/analyze-ai", async (req, res) => {
+  app.get("/api/cron/analyze-ai", requireCronSecret, async (req, res) => {
     try {
       const lastRun = aiAnalyzer.getLastRunTime();
       const now = Date.now();
@@ -149,7 +149,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
    * Triggered by: cron-job.org — schedule: 0 22 * * 5
    * Posts win/loss/pip stats to both ArgoFX Telegram channels.
    */
-  app.get("/api/cron/weekly-summary", async (req, res) => {
+  app.get("/api/cron/weekly-summary", requireCronSecret, async (req, res) => {
     try {
       const now = Date.now();
       const oneHour = 60 * 60 * 1000;
@@ -206,7 +206,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
    * Triggered by: cron-job.org — schedule: 0 22 * * *
    * Posts today's resolved signals + monthly scorecard to both ArgoFX Telegram channels.
    */
-  app.get("/api/cron/daily-summary", async (req, res) => {
+  app.get("/api/cron/daily-summary", requireCronSecret, async (req, res) => {
     try {
       const now = Date.now();
       const oneHour = 60 * 60 * 1000;
@@ -257,7 +257,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
    * Purpose: Continuously optimize parameters based on latest data
    * Industry Standard: Walk-forward optimization every 6 months (we do weekly for faster adaptation)
    */
-  app.get("/api/cron/backtest", async (req, res) => {
+  app.get("/api/cron/backtest", requireCronSecret, async (req, res) => {
     try {
       const lastRun = backtester.getLastRunTime();
       const now = Date.now();
@@ -303,7 +303,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
    * Triggered by: UptimeRobot every 24 hours
    * Analyzes historical signals and generates optimization recommendations
    */
-  app.get("/api/cron/run-backtesting", async (req, res) => {
+  app.get("/api/cron/run-backtesting", requireCronSecret, async (req, res) => {
     try {
       const lastRun = backtester.getLastRunTime();
       const now = Date.now();
@@ -1074,7 +1074,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
    * Allows manual signal generation for specific symbol
    * Uses ICT 3-Timeframe methodology with real Twelve Data candles
    */
-  app.post("/api/signals/analyze", async (req, res) => {
+  // requireAuth: this writes data_quality='production' rows while bypassing the cooldown,
+  // market-open check, kill zone, daily cap and provenance linking. Three unauthenticated calls
+  // could exhaust maxTradesReached() and shut down the real cron for the rest of the UTC day.
+  // The client declares this endpoint in config/api.ts but never invokes it.
+  app.post("/api/signals/analyze", requireAuth, async (req, res) => {
     try {
       const { symbol } = req.body;
 
