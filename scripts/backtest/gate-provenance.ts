@@ -30,6 +30,7 @@ import { MACrossoverStrategy } from '../../server/services/signal-generator';
 import { twelveDataAPI } from '../../server/services/twelve-data';
 import { describeSeries } from '../../server/services/provenance';
 import { sliceAsOf, sliceOneHourAsOf, lastN, PRODUCTION_SIZES, type Bar } from './candle-slicer';
+import { isMarketOpen } from './engine';
 import { loadHistory } from './history-loader';
 
 const sql = postgres(process.env.DATABASE_URL!, { ssl: 'require', max: 1 });
@@ -135,8 +136,15 @@ const pipOf = (sym: string) => (sym.includes('JPY') ? 0.01 : 0.0001);
     }
 
     // Publication lag: how long past a 1H bar's close before the NEXT bar was available.
+    //
+    // Only meaningful while the market is OPEN. A probe run on a Saturday sees a last bar from
+    // Friday's close and yields a "lag" of ~29 hours, which is the weekend, not Twelve Data being
+    // slow. Measuring that as publication lag produced a nonsense median of 1741 minutes.
     if (rec.oneHour?.lastTs) {
-      pubLagMin.push((+asOf - (+new Date(rec.oneHour.lastTs) + 3600_000)) / 60_000);
+      const barClose = +new Date(rec.oneHour.lastTs) + 3600_000;
+      if (isMarketOpen(asOf) && isMarketOpen(new Date(barClose))) {
+        pubLagMin.push((+asOf - barClose) / 60_000);
+      }
     }
 
     // --- P3: output, replayed at the RECORDED asOf ---
@@ -166,7 +174,9 @@ const pipOf = (sym: string) => (sym.includes('JPY') ? 0.01 : 0.0001);
   console.log(`      (ADX/ATR ignore this close; RSI does not — reported, not gated)`);
 
   console.log('\nP2b 1H publication lag (asOf minus the close of the newest available bar)');
-  console.log(`      median ${med(pubLagMin).toFixed(1)} min  max ${Math.max(...pubLagMin).toFixed(1)} min`);
+  console.log(pubLagMin.length
+    ? `      median ${med(pubLagMin).toFixed(1)} min  max ${Math.max(...pubLagMin).toFixed(1)} min   (n=${pubLagMin.length}, market-open only)`
+    : `      no market-open samples yet`);
   console.log('      (the backtest must model this: at 22:01 the 22:00 bar may not exist yet)');
 
   console.log('\nP3  output reproduces exactly (fired + confidence)');
@@ -174,9 +184,17 @@ const pipOf = (sym: string) => (sym.includes('JPY') ? 0.01 : 0.0001);
   console.log(`      -> ${p3ok === p3n ? 'PASS' : 'FAIL'}  (must be 100%)`);
   if (failures.length) { console.log('      failures:'); failures.slice(0, 12).forEach(f => console.log(f)); }
 
-  const pass = p1all && p3ok === p3n;
+  // A gate that says PASS on one row is worse than no gate: it manufactures false assurance.
+  // Below the minimum sample the honest verdict is INCONCLUSIVE, not PASS.
+  const MIN_SAMPLE = 10;
+  const enough = p3n >= MIN_SAMPLE;
+  const pass = p1all && p3ok === p3n && enough;
   console.log(`\n${'='.repeat(64)}`);
-  console.log(`GATE: ${pass ? 'PASS — inputs and outputs both reproduce exactly' : 'FAIL — fix the harness (§9)'}`);
+  console.log(`GATE: ${
+    pass ? 'PASS — inputs and outputs both reproduce exactly'
+    : !enough ? `INCONCLUSIVE — only ${p3n} evaluable row(s), need ${MIN_SAMPLE}. Checks that DID run: `
+        + `P1 ${p1all ? 'clean' : 'FAILED'}, P3 ${p3ok}/${p3n}. Not a pass.`
+    : 'FAIL — fix the harness (§9)'}`);
   console.log('='.repeat(64));
 
   await sql.end({ timeout: 5 });

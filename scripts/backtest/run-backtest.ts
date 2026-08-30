@@ -47,6 +47,11 @@ import { randomArm, trendOnlyArm, makeRng, summarise, type ArmName } from './con
 const PRODUCTION_ORDER = ['EUR/USD', 'USD/CHF', 'USD/JPY', 'GBP/USD', 'AUD/USD'];
 const CACHE_DIR = path.resolve('.backtest-cache');
 
+/** A fill more than one cron interval after the decision means the data had a hole. */
+const MAX_FILL_LAG_MIN = 15;
+/** Analysing on a slice older than this is analysing a different moment than the one claimed. */
+const MAX_STALE_MIN = 60;
+
 const arg = (k: string, d: string) => process.argv.find(a => a.startsWith(`--${k}=`))?.split('=')[1] ?? d;
 
 /** Index of the last bar with timestamp <= t, or -1. Binary search: called millions of times. */
@@ -98,7 +103,7 @@ export interface BacktestResult {
   unresolved: number;
   decisionPoints: number;
   analyzeCalls: number;
-  blocked: { cooldown: number; dailyCap: number; belowThreshold: number; noSignal: number };
+  blocked: { cooldown: number; dailyCap: number; belowThreshold: number; noSignal: number; staleData: number; staleFill: number };
 }
 
 /**
@@ -133,7 +138,7 @@ export async function runBacktest(
   const trades: Trade[] = [];
   const blockedUntil: Record<string, number> = {};   // symbol -> ms; PENDING-or-cooldown
   const perDay: Record<number, number> = {};
-  const blocked = { cooldown: 0, dailyCap: 0, belowThreshold: 0, noSignal: 0 };
+  const blocked = { cooldown: 0, dailyCap: 0, belowThreshold: 0, noSignal: 0, staleData: 0, staleFill: 0 };
   let analyzeCalls = 0, unresolved = 0;
   const rng = makeRng(seed);
 
@@ -149,6 +154,15 @@ export async function runBacktest(
       const d = data[symbol];
 
       if ((blockedUntil[symbol] ?? 0) > ms) { blocked.cooldown++; continue; }
+
+      // A pair can have a multi-hour Dukascopy hole while others trade on. decisionPoints is the
+      // UNION across pairs, so without this guard the pair with the hole is analysed on a stale
+      // slice — measured up to 38h old on AUD/USD — with no warning at all.
+      const freshIdx = lastIndexAtOrBefore(d.m5, ms - 1);
+      if (freshIdx < 0 || (ms - +d.m5[freshIdx].timestamp) > MAX_STALE_MIN * 60_000) {
+        blocked.staleData++;
+        continue;
+      }
 
       const wk = sliceTrueOpen(d.w1, now, d.m5, PRODUCTION_SIZES.weekly);
       const dy = sliceTrueOpen(d.d1, now, d.m5, PRODUCTION_SIZES.daily);
@@ -183,8 +197,27 @@ export async function runBacktest(
       if (arm === 'strategy' && sig.confidence < 70) { blocked.belowThreshold++; continue; }
 
       // --- fill: next bar's open + half spread (§6) ---
-      const fi = lastIndexAtOrBefore(d.m5, ms) + 1;
+      //
+      // `ms` is a 1H boundary and an m5 bar opens exactly on it, so lastIndexAtOrBefore(ms)
+      // returns THAT bar and +1 landed on the SECOND bar of the hour — a fill 5 minutes later
+      // than the documented model. Using ms-1 selects the first bar opening at or after ms.
+      // Not look-ahead: sliceTrueOpen cuts inputs at ms-1, so the decision never saw this bar.
+      // Measured cost of the old behaviour: 0.0191 R, and 13x larger for the strategy than for
+      // the random arm — it was discarding short-lived directional information.
+      const fi = lastIndexAtOrBefore(d.m5, ms - 1) + 1;
       if (fi >= d.m5.length) continue;
+
+      // BUG 2/3 — a data hole can place the fill long after the decision, on a different
+      // trading day and outside the kill zone. Production cannot do that: it re-decides on the
+      // next cron tick. Four such trades existed, opening at 00:00 UTC with meanR +1.215, which
+      // both breached the 3/day cap (perDay is keyed on the DECISION day) and smuggled
+      // out-of-session trades into the result.
+      const fillAt = d.m5[fi].timestamp;
+      const fillLagMin = (+fillAt - ms) / 60_000;
+      if (fillLagMin > MAX_FILL_LAG_MIN || tradingDay(fillAt) !== day || !isInKillZone(fillAt)) {
+        blocked.staleFill++;
+        continue;
+      }
       const pip = pipSize(symbol);
       const half = ((cfg.spreadPips[symbol] ?? 1.5) / 2) * pip;
       const isLong = sig.type === 'LONG';
@@ -250,6 +283,7 @@ if (process.argv[1] && process.argv[1].includes('run-backtest')) {
     console.log(`decision points : ${res.decisionPoints}`);
     console.log(`analyze() calls : ${res.analyzeCalls}`);
     console.log(`blocked         : cooldown ${res.blocked.cooldown}, daily cap ${res.blocked.dailyCap}, no entry or <70 ${res.blocked.noSignal}`);
+    console.log(`data quality    : skipped for stale slice ${res.blocked.staleData}, unusable fill ${res.blocked.staleFill}`);
     console.log(`\ntrades          : ${res.trades.length}  (unresolved at data end: ${res.unresolved})`);
     console.log(`  TP1_HIT ${wins}   STOP_HIT ${losses}   EXPIRED ${exp}`);
     if (done.length) {
