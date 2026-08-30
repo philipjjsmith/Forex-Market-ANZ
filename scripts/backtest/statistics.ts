@@ -166,15 +166,39 @@ export function deflatedSharpe(
   return { sharpe, sharpeThreshold: threshold, dsr, skew, kurtosis: kurt, trials: N, observations: T };
 }
 
-export interface Fold { index: number; from: Date; to: Date; n: number; meanR: number; winRate: number }
+export interface Fold {
+  index: number; from: Date; to: Date; n: number;
+  meanR: number; winRate: number;
+  /**
+   * Sharpe for the fold — meanR / sd(R), dimensionless.
+   *
+   * This field exists because its absence caused a real bug: report.ts had to reach for `meanR`
+   * when it needed a Sharpe, silently passing a quantity in R units where the Deflated Sharpe
+   * formula requires a dimensionless ratio. That inflated the hurdle by a factor of sd(R).
+   */
+  sharpe: number;
+  /** Per-trade R for the fold, so callers can compute their own statistics. */
+  returns: number[];
+}
 
 /**
  * Anchored walk-forward with purging and an embargo.
  *
- * A trade is dropped from a fold when its HOLDING PERIOD crosses the fold's start, and trades
- * inside the embargo window after the boundary are dropped too. Both exist because a 48h hold and
- * a cooldown make neighbouring trades share information; without them, folds are not independent
- * and per-fold stability is overstated.
+ * A trade is dropped when its holding period crosses the fold's END (`closedAt > to`), and trades
+ * inside the embargo window after the boundary are dropped too.
+ *
+ * NOTE, and this is a genuine caveat rather than a footnote: purging exists to stop information
+ * leaking from a TEST set into a TRAINING set. Nothing is fitted here — this reports the
+ * out-of-sample expectancy of a fixed rule per time slice — so there is no training set to
+ * protect, and dropping trades on a duration criterion is a selection filter where none was
+ * needed. It is retained because §7 pre-registered it, and because the measured effect is ~0.002 R
+ * across ~5 of 693 trades. `walkForwardUnpurged` reports the same folds without it so the two can
+ * be compared rather than argued about.
+ *
+ * The bias direction is also the opposite of the intuitive one: the stop sits at 1.5xATR and the
+ * target at 3.0xATR, so stop-outs hit the NEARER barrier and resolve fastest. Purging therefore
+ * removes the longest-held trades, which are EXPIRED and TP1_HIT — the above-average ones — so it
+ * biases folds DOWNWARD, not upward.
  */
 export function walkForward(
   trades: Trade[], folds = 6, embargoHours = 48
@@ -201,6 +225,8 @@ export function walkForward(
       index: i + 1, from: new Date(from), to: new Date(to), n: inFold.length,
       meanR: mean(rs),
       winRate: inFold.length ? inFold.filter(t => t.outcome === 'TP1_HIT').length / inFold.length : 0,
+      sharpe: sharpeOf(rs),
+      returns: rs,
     });
   }
   return out;
@@ -269,3 +295,36 @@ export function bootstrapDifference(
     excludesZero: lo > 0 || hi < 0,
   };
 }
+
+/**
+ * The same folds with NO purge and NO embargo: a trade belongs to the fold containing its OPEN.
+ *
+ * This is the treatment that is actually correct when nothing is being fitted. Reported alongside
+ * the purged version so the effect of purging is a measured number rather than an assumption.
+ */
+export function walkForwardUnpurged(trades: Trade[], folds = 6): Fold[] {
+  const done = trades.filter(t => t.r != null).sort((a, b) => +a.openedAt - +b.openedAt);
+  if (done.length < folds) return [];
+  const start = +done[0].openedAt, end = +done[done.length - 1].openedAt;
+  const width = (end - start) / folds;
+  const out: Fold[] = [];
+  for (let i = 0; i < folds; i++) {
+    const from = start + i * width, to = from + width;
+    const inFold = done.filter(t => +t.openedAt >= from && +t.openedAt < to);
+    const rs = inFold.map(t => t.r!);
+    out.push({
+      index: i + 1, from: new Date(from), to: new Date(to), n: inFold.length,
+      meanR: mean(rs),
+      winRate: inFold.length ? inFold.filter(t => t.outcome === 'TP1_HIT').length / inFold.length : 0,
+      sharpe: sharpeOf(rs), returns: rs,
+    });
+  }
+  return out;
+}
+
+/** Sample variance of a set of values. Exported so callers can build a trial-variance estimate. */
+export const varianceOf = (a: number[]) => {
+  if (a.length < 2) return 0;
+  const m = a.reduce((s, x) => s + x, 0) / a.length;
+  return a.reduce((s, x) => s + (x - m) ** 2, 0) / (a.length - 1);
+};

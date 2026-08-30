@@ -22,7 +22,10 @@ import 'dotenv/config';
 import { runBacktest } from './run-backtest';
 import { DEFAULT_CONFIG, type EngineConfig, type Trade } from './engine';
 import { summarise } from './control-arms';
-import { blockBootstrap, deflatedSharpe, walkForward, sharpeOf, bootstrapDifference } from './statistics';
+import {
+  blockBootstrap, deflatedSharpe, walkForward, walkForwardUnpurged, sharpeOf,
+  bootstrapDifference, varianceOf,
+} from './statistics';
 
 const arg = (k: string, d: string) => process.argv.find(a => a.startsWith(`--${k}=`))?.split('=')[1] ?? d;
 const pct = (x: number) => (100 * x).toFixed(1) + '%';
@@ -42,15 +45,15 @@ async function arm(
   const boot = blockBootstrap(res.trades, 10000);
   const folds = walkForward(res.trades, 6);
 
-  // Trial-Sharpe variance estimated from cross-fold Sharpes, which is the practical estimator.
-  // Falling back to the H0 sampling variance is reported rather than hidden.
-  const foldSharpes = folds.filter(f => f.n > 2).map(f => f.meanR);
-  const v = foldSharpes.length > 2
-    ? foldSharpes.reduce((acc, x, _, a) => acc + (x - a.reduce((p, q) => p + q, 0) / a.length) ** 2, 0) / (foldSharpes.length - 1)
-    : undefined;
+  // Trial-Sharpe variance. This previously mapped `f.meanR` — a quantity in R units — into a
+  // parameter the Deflated Sharpe formula defines as the variance of dimensionless SHARPE ratios.
+  // That inflated the hurdle by a factor of sd(R) (~1.38 here, so ~38% too high).
+  const foldSharpes = folds.filter(f => f.n > 2).map(f => f.sharpe);
+  const v = foldSharpes.length > 2 ? varianceOf(foldSharpes) : undefined;
   const dsr = deflatedSharpe(returns, TRIALS, v);
+  const unpurged = walkForwardUnpurged(res.trades, 6);
 
-  return { name, res, s, boot, folds, dsr, usedFoldVariance: v !== undefined };
+  return { name, res, s, boot, folds, unpurged, dsr, returns, foldSharpes, usedFoldVariance: v !== undefined };
 }
 
 (async () => {
@@ -111,10 +114,34 @@ async function arm(
   console.log(`  Deflated Sharpe        : ${strategy.dsr.dsr.toFixed(4)}   (skew ${strategy.dsr.skew.toFixed(2)}, kurtosis ${strategy.dsr.kurtosis.toFixed(2)})`);
   console.log(`  trial-Sharpe variance  : ${strategy.usedFoldVariance ? 'estimated from cross-fold Sharpes' : 'FALLBACK to H0 sampling variance — weaker'}`);
 
+  // No single trial-variance estimator is defensible enough to quote alone: Bailey & Lopez de
+  // Prado's V[SR] is the dispersion of Sharpes across the N configurations actually tried, and
+  // those were never measured. Report the range instead of implying a precision we do not have.
+  const arms3 = varianceOf(arms.map(a => sharpeOf(a.returns)));
+  const T = strategy.returns.length;
+  const variants: [string, number | undefined][] = [
+    ['cross-fold Sharpe variance (default)', varianceOf(strategy.foldSharpes)],
+    ['cross-ARM Sharpe variance (3 configs)', arms3],
+    ['H0 sampling variance 1/T', 1 / T],
+    ['no deflation at all', 0],
+  ];
+  console.log(`\n  Deflated Sharpe across trial-variance estimators (Sharpe is ${strategy.dsr.sharpe.toFixed(4)}):`);
+  for (const [label, vv] of variants) {
+    const d = deflatedSharpe(strategy.returns, TRIALS, vv);
+    console.log(`    ${label.padEnd(38)} hurdle ${d.sharpeThreshold.toFixed(4)}   DSR ${d.dsr.toFixed(4)}`);
+  }
+  console.log(`    -> the verdict does not depend on the choice: Sharpe is negative, so DSR is ~0`);
+  console.log(`       under every estimator, including none at all.`);
+
   console.log(`\n  walk-forward (purged, 48h embargo):`);
   for (const f of strategy.folds) {
     console.log(`    fold ${f.index}  ${f.from.toISOString().slice(0, 10)} -> ${f.to.toISOString().slice(0, 10)}  n=${String(f.n).padStart(3)}  meanR ${sgn(f.meanR, 3)}  win ${pct(f.winRate)}`);
   }
+  const up = strategy.unpurged;
+  const upMean = up.reduce((a, f) => a + f.meanR * f.n, 0) / Math.max(1, up.reduce((a, f) => a + f.n, 0));
+  const pMean = strategy.folds.reduce((a, f) => a + f.meanR * f.n, 0) / Math.max(1, strategy.folds.reduce((a, f) => a + f.n, 0));
+  console.log(`    unpurged, for comparison: n=${up.reduce((a, f) => a + f.n, 0)} meanR ${sgn(upMean, 4)}  vs purged n=${strategy.folds.reduce((a, f) => a + f.n, 0)} meanR ${sgn(pMean, 4)}`);
+  console.log(`    (purging is pre-registered but unnecessary here — nothing is fitted — so the gap is reported, not argued)`);
   const positiveFolds = strategy.folds.filter(f => f.n > 0 && f.meanR > 0).length;
   console.log(`    folds with positive expectancy: ${positiveFolds}/${strategy.folds.filter(f => f.n > 0).length}`);
 
