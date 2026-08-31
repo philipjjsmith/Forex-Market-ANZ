@@ -381,3 +381,94 @@ result may drive a parameter change.
 
 The reproduction gate (Amendment 1) continues to run against **Twelve Data** provenance, since
 its purpose is proving the harness reproduces *production*, which still runs on Twelve Data.
+
+
+---
+
+# AMENDMENT 4 — running the remaining §4 windows, and the power ceiling that bounds them
+
+**Committed 2026-08-31, BEFORE the secondary or pooled window has been run.** No expectancy,
+win-rate or per-cell number exists for either window at the time of writing. The §3 kill
+criterion is UNCHANGED. §5's variant cap is UNCHANGED and no slot is consumed. §8 stands.
+
+## A4.1 What is being run, and why it needs no new decision
+
+§4 pre-registered **three** windows on 2026-08-28. Only the **Primary** has been run. The
+**Secondary** (2022-08 → 2024-08, VETO-ONLY) and the **Pooled** (2022-08 → 2026-08, exactly one
+test: is expectancy ≥ 0 net of costs?) were specified before any result existed and remain unrun.
+
+The `BACKTEST_RESULT_2026-08-30` verdict is dominated by a power problem — effective n 469,
+MDE 0.179 R, 12% power against a +0.05 R edge — so "no demonstrable edge" was close to a
+guaranteed output. The remaining windows are the only pre-registered lever on that problem, and
+the Dukascopy data for them is **already downloaded and gate-verified** (`verify-data.ts`,
+2026-08-31: 5 pairs, ~1.49M m5 bars, no structural defects).
+
+**This adds no trial to the §7 Deflated-Sharpe count.** These windows were named in the original
+pre-registration, not selected after seeing the primary result.
+
+## A4.2 The power ceiling — recorded now so "get more data" is never proposed again
+
+Measured on the primary trade set (`.backtest-cache/trades-primary.json`, n=687):
+sd(R) = **1.3863**, block-bootstrap design effect **1.465**, median stop **17.4 pips**.
+
+Trades required for 80% power at α=.05 two-sided, and how long they take at the observed rate
+of ~344 trades/year across 5 pairs:
+
+| true edge | raw n needed | effective n | years @ 5 pairs |
+|---|---|---|---|
+| +0.02 R | 55,222 | 37,694 | **161** |
+| +0.05 R | 8,836 | 6,031 | **25.7** |
+| +0.10 R | 2,209 | 1,508 | 6.4 |
+| +0.15 R | 982 | 670 | 2.9 |
+| +0.20 R | 552 | 377 | 1.6 |
+
+> [!danger] A +0.05 R edge is not detectable by this design at any realistic data budget.
+> 25.7 years of 5-pair history exceeds Dukascopy's depth for most of the set, and 25 years spans
+> regimes that make a single pooled expectancy meaningless. **Chasing statistical significance on
+> a +0.05 R edge is not a data problem that can be solved. It is off the table.**
+
+Projected pooled window (assuming the observed trade rate holds): n ≈ 1,374, effective ≈ 938,
+SE ≈ **0.0453**, MDE ≈ **0.127 R**. Power moves +0.05 R: 12% → 20%; +0.10 R: 35% → 60%;
++0.20 R: 88% → 99%.
+
+## A4.3 The threshold that actually matters is a TRADEABILITY threshold, not +0.05 R
+
+Measured cost on the primary set: gross **+0.0253 R**, net **−0.0551 R**, so §6's modelled
+all-in cost is **0.080 R** per trade — the high end of The5ers' researched 0.6–1.7 pips
+(0.034–0.098 R on a 17.4-pip stop). Harness-net expectancy is therefore **conservative** relative
+to where these trades would actually execute, by roughly 0.014 R.
+
+A strategy is worth a funded prop account only if it clears costs by a working margin. Declared
+now, before the numbers: the decision-relevant edge is **net +0.05 R per trade**, requiring
+gross ≈ +0.116 R. Power against that: primary **44%**, pooled **72%**.
+
+> **The zone this study is blind to is largely the zone that is not worth trading.** Below
+> +0.066 R gross the system cannot pay The5ers' mid-range costs, so no significance level would
+> make it tradeable. The pooled window is worth running precisely because it lifts power against
+> the *tradeable* band from 44% to 72% — not because it rescues +0.05 R, which it cannot.
+
+## A4.4 Pre-declared decision rules for these two windows
+
+1. **§3 kill criterion, unchanged.** If the pooled window shows expectancy < 0 net of costs with
+   a 95% CI excluding zero, development stops.
+2. **The Secondary window may VETO and may never confirm** (§4, unchanged). If the pooled result
+   is positive while the primary half is negative — i.e. the 2022–24 Fed-hiking / EUR-parity leg
+   supplies the positivity — that is **not** confirmation. It is the failure mode §4 was written
+   to catch. The two halves are reported separately for exactly this check.
+3. **GREEN, declared in advance:** pooled net expectancy **≥ +0.05 R with a 95% CI excluding
+   zero**. At the projected SE of 0.0453 that means a point estimate **≥ +0.089 R**. Anything
+   less is not a green light, however encouraging it looks.
+4. **A pooled result between kill and green changes nothing.** It is the current status with
+   tighter bounds. No positive pooled result licenses real money; only forward out-of-sample can.
+5. **§8 stands.** No per-year, per-pair, per-hour or per-regime cell from these windows may drive
+   a parameter change, a pair drop, or a filter. The cooldown gradient noted in the primary
+   result remains a hypothesis for a future pre-registered test, not a tweak.
+6. **No re-run for a better number.** Both windows are run once, at `until-resolved` cooldown as
+   primary, with the same three arms. The other two cooldown bounds are reported as the primary's
+   sensitivity check was, not selected between.
+
+## A4.5 What is unchanged
+
+§3 kill criterion, §4 windows, §5 variant cap and both control arms, §6 cost model including the
+§A2.3 refusal to adopt Dukascopy's observed spread, §7 statistics with DSR trial count N ≥ 15,
+§8's per-cell rule, and Amendments 1–3 in full.
