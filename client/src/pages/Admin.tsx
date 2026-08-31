@@ -245,6 +245,37 @@ export default function Admin() {
     }
   };
 
+  /**
+   * Places a REAL order on the demo account. Two-step on purpose: the button that actually
+   * fires is only rendered after the first click, so a stray click cannot open a position.
+   */
+  const [smokeArmed, setSmokeArmed] = useState(false);
+  const [smoke, setSmoke] = useState<any>(null);
+  const [smokeLoading, setSmokeLoading] = useState(false);
+
+  const runSmokeTest = async () => {
+    setSmokeLoading(true);
+    setSmoke(null);
+    try {
+      const token = getToken();
+      const res = await fetch(API_ENDPOINTS.ADMIN_CTRADER_SMOKE_TEST, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` }),
+        },
+        credentials: 'include',
+        body: JSON.stringify({ confirm: 'PLACE_DEMO_ORDER', symbol: 'EUR/USD' }),
+      });
+      setSmoke(await res.json());
+    } catch (err: any) {
+      setSmoke({ placed: false, error: err?.message ?? 'request failed' });
+    } finally {
+      setSmokeLoading(false);
+      setSmokeArmed(false);
+    }
+  };
+
   // Fetch system health
   const { data: health, isLoading: healthLoading } = useQuery<SystemHealth>({
     queryKey: [API_ENDPOINTS.ADMIN_HEALTH],
@@ -714,6 +745,31 @@ export default function Admin() {
               {JSON.stringify(ctrader, null, 2)}
             </pre>
           )}
+          <div className="border-t border-slate-600/50 pt-3 mt-3">
+            <p className="text-xs text-amber-300/90 mb-2">
+              Places a <strong>real market order</strong> on the DEMO account at the broker's minimum
+              volume. Refuses if live mode is set. Leaves the position open — close it in cTrader.
+            </p>
+            {!smokeArmed ? (
+              <Button variant="outline" onClick={() => setSmokeArmed(true)} disabled={smokeLoading} data-testid="button-smoke-arm">
+                Arm demo test order
+              </Button>
+            ) : (
+              <div className="flex gap-2">
+                <Button variant="destructive" onClick={runSmokeTest} disabled={smokeLoading} data-testid="button-smoke-fire">
+                  {smokeLoading
+                    ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Placing…</>
+                    : <>Confirm — place demo order</>}
+                </Button>
+                <Button variant="ghost" onClick={() => setSmokeArmed(false)} disabled={smokeLoading}>Cancel</Button>
+              </div>
+            )}
+            {smoke && (
+              <pre className="mt-3 text-xs text-slate-200 bg-slate-900/80 rounded p-3 overflow-x-auto max-h-80">
+                {JSON.stringify(smoke, null, 2)}
+              </pre>
+            )}
+          </div>
         </CardContent>
       </Card>
 

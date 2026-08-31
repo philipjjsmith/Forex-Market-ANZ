@@ -53,6 +53,8 @@ const PT = {
   NEW_ORDER_REQ:     2106,
   SYMBOLS_LIST_REQ:  2114,
   SYMBOLS_LIST_RES:  2115,
+  SYMBOL_BY_ID_REQ:  2116,
+  SYMBOL_BY_ID_RES:  2117,
   EXECUTION_EVENT:   2126,
   GET_ACCOUNTS_REQ:  2149,
   GET_ACCOUNTS_RES:  2150,
@@ -381,6 +383,119 @@ class CTraderExecutor {
       console.error('[cTrader] ❌ Execution failed:', err.message);
     } finally {
       socket?.close();
+    }
+  }
+  /**
+   * SMOKE TEST — places ONE real order on the DEMO account, then reports what the broker said.
+   *
+   * Why this has to exist: NEW_ORDER_REQ -> EXECUTION_EVENT has never once completed in this
+   * system's history. The executor spent its whole life speaking raw framed TCP to a port that
+   * only answers WebSocket, so every order it "placed" was silently discarded. Account
+   * enumeration now works, but that only proves the read path. Order placement is still
+   * unevidenced, and waiting for a natural HIGH-tier signal to find out could take days.
+   *
+   * FOUR INDEPENDENT REFUSALS, because this is the one method that can move money:
+   *   1. the caller must pass the exact confirmation string
+   *   2. refuses outright if live mode resolves true
+   *   3. selects only isLive === false, and re-checks the chosen account afterwards
+   *   4. refuses if the account the broker hands back does not match the one selected
+   *
+   * Deliberately sends NO stopLoss/takeProfit. Those field names are as untested as everything
+   * else on this path, and a rejection caused by an untested field would obscure the single
+   * question being asked. It also asks the broker for the symbol's real minVolume rather than
+   * trusting calcVolume's `volume = lots x 100`, which has never been checked against a broker
+   * and is the kind of assumption that has already cost this project a day.
+   *
+   * Leaves a position OPEN. Closing it would mean guessing ProtoOAClosePositionReq's payload
+   * type, and guessing protocol numbers on a trading path is precisely the error class that
+   * caused this entire episode. Close it in cTrader.
+   */
+  async smokeTestDemoOrder(confirm: string, symbol = 'EUR/USD'): Promise<any> {
+    if (confirm !== 'PLACE_DEMO_ORDER') {
+      throw new Error('Refused: confirmation string absent. This places a REAL order.');
+    }
+    if (!this.isConfigured) throw new Error('Refused: cTrader credentials are not configured.');
+    if (this.isLiveMode) {
+      throw new Error('REFUSED: live mode is active (CTRADER_MODE=live and CTRADER_ALLOW_LIVE=true). This test only ever runs on demo.');
+    }
+
+    const accessToken = await this.getAccessToken();
+    const { socket, emitter } = await this.openConnection(DEMO_HOST);
+    const transcript: any[] = [];
+    const record = (m: any) => transcript.push({ type: m.payloadType, payload: CTraderExecutor.redact(m.payload) });
+
+    try {
+      this.send(socket, PT.APP_AUTH_REQ, { clientId: this.clientId!, clientSecret: this.clientSecret! });
+      record(await this.waitFor(emitter, PT.APP_AUTH_RES));
+
+      this.send(socket, PT.GET_ACCOUNTS_REQ, { accessToken });
+      const accountsMsg = await this.waitFor(emitter, PT.GET_ACCOUNTS_RES);
+      const all: any[] = accountsMsg.payload?.ctidTraderAccount ?? [];
+      const demoOnly = all.filter((a: any) => a.isLive !== true);
+      if (!demoOnly.length) {
+        throw new Error(`REFUSED: no DEMO account on this token. Accounts seen: ${all.map((a: any) => `${a.ctidTraderAccountId}:${a.isLive ? 'live' : 'demo'}`).join(', ')}`);
+      }
+      const account = demoOnly[0];
+      if (account.isLive === true) throw new Error('REFUSED: selected account is LIVE.');
+      const accountId = account.ctidTraderAccountId;
+
+      this.send(socket, PT.ACCOUNT_AUTH_REQ, { ctidTraderAccountId: accountId, accessToken });
+      const authRes = await this.waitFor(emitter, PT.ACCOUNT_AUTH_RES);
+      record(authRes);
+      if (authRes.payload?.ctidTraderAccountId && authRes.payload.ctidTraderAccountId !== accountId) {
+        throw new Error(`REFUSED: broker authenticated a DIFFERENT account (${authRes.payload.ctidTraderAccountId}) than selected (${accountId}).`);
+      }
+
+      this.send(socket, PT.SYMBOLS_LIST_REQ, { ctidTraderAccountId: accountId });
+      const symMsg = await this.waitFor(emitter, PT.SYMBOLS_LIST_RES, 30000);
+      const symbols: any[] = symMsg.payload?.symbol ?? [];
+      const wanted = [symbol.replace('/', ''), symbol, symbol.replace('/', '') + 'm', symbol.replace('/', '') + '.', symbol.replace('/', '') + '+'];
+      const light = symbols.find((x: any) => wanted.includes(x.symbolName));
+      if (!light) throw new Error(`Symbol ${symbol} not found. First 30: ${symbols.slice(0, 30).map((x: any) => x.symbolName).join(', ')}`);
+      const symbolId = light.symbolId;
+
+      // Ask for FULL symbol metadata — the light list does not carry volume limits.
+      let minVolume: number | undefined, stepVolume: number | undefined, volumeSource = 'broker minVolume';
+      try {
+        this.send(socket, PT.SYMBOL_BY_ID_REQ, { ctidTraderAccountId: accountId, symbolId: [symbolId] });
+        const full = await this.waitFor(emitter, PT.SYMBOL_BY_ID_RES, 15000);
+        const detail = (full.payload?.symbol ?? [])[0];
+        minVolume  = detail?.minVolume;
+        stepVolume = detail?.stepVolume;
+      } catch (e: any) {
+        volumeSource = `symbol detail unavailable (${e.message}); fell back to calcVolume's assumption`;
+      }
+      const volume = minVolume ?? 100;
+      if (minVolume === undefined) volumeSource += ' — volume=100 is UNVERIFIED';
+
+      this.send(socket, PT.NEW_ORDER_REQ, {
+        ctidTraderAccountId: accountId,
+        symbolId,
+        orderType: 1,   // MARKET
+        tradeSide: 1,   // BUY
+        volume,
+      });
+      const exec = await this.waitFor(emitter, PT.EXECUTION_EVENT, 20000);
+      record(exec);
+
+      const pos = exec.payload?.position;
+      return {
+        placed: true,
+        host: DEMO_HOST,
+        accountId,
+        accountIsLive: account.isLive === true,
+        symbol: light.symbolName,
+        symbolId,
+        volume,
+        volumeSource,
+        minVolume, stepVolume,
+        executionType: exec.payload?.executionType,
+        positionId: pos?.positionId ?? exec.payload?.order?.positionId,
+        entryPrice: pos?.price ?? exec.payload?.deal?.executionPrice,
+        transcript,
+      };
+    } finally {
+      try { socket.close(); } catch { /* already closed */ }
     }
   }
 }

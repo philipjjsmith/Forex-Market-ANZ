@@ -72,6 +72,25 @@ export function registerAdminRoutes(app: Express) {
     res.json({ success: demo.ok || live.ok, state, demo, live, demoAccounts: demoCount, verdict });
   });
 
+  /**
+   * POST /api/admin/ctrader-smoke-test — PLACES A REAL ORDER on the DEMO account.
+   *
+   * The only endpoint in this codebase that can open a position. Every guard lives in
+   * smokeTestDemoOrder(): exact confirmation string, refuses live mode, demo-only account
+   * selection, and a re-check that the broker authenticated the account we chose.
+   *
+   * POST rather than GET so it cannot be triggered by a prefetch, a link, or a monitor URL.
+   */
+  app.post("/api/admin/ctrader-smoke-test", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const confirm = (req.body?.confirm ?? req.query.confirm ?? '') as string;
+      const symbol  = (req.body?.symbol  ?? req.query.symbol  ?? 'EUR/USD') as string;
+      res.json(await ctraderExecutor.smokeTestDemoOrder(confirm, symbol));
+    } catch (err: any) {
+      res.status(400).json({ placed: false, error: err?.message ?? 'smoke test failed' });
+    }
+  });
+
   app.get("/api/admin/health", requireAuth, requireAdmin, async (req, res) => {
     try {
       // Get pending signals count
