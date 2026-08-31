@@ -6,6 +6,7 @@ import { twelveDataAPI } from '../services/twelve-data';
 import { exchangeRateAPI } from '../services/exchangerate-api';
 import { ctraderExecutor, CTRADER_HOSTS } from '../services/ctrader-executor';
 import { requireAuth, requireAdmin } from '../auth-middleware';
+import { propFirmService } from '../services/prop-firm-config';
 
 export function registerAdminRoutes(app: Express) {
   console.log('✅ Admin routes registered');
@@ -612,7 +613,18 @@ export function registerAdminRoutes(app: Express) {
             100.0 * COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT')) /
             NULLIF(COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'STOP_HIT')), 0),
             2
-          ) as win_rate
+          ) as win_rate,
+          -- Phase 1 additions. Hold time is measured, not assumed: it is the single number
+          -- that says whether this is an intraday system or a swing system.
+          ROUND(AVG(EXTRACT(EPOCH FROM (outcome_time - created_at)) / 3600)::numeric, 1) as avg_hold_hours,
+          ROUND(MAX(profit_loss_pips)::numeric, 1) as best_trade_pips,
+          ROUND(MIN(profit_loss_pips)::numeric, 1) as worst_trade_pips,
+          -- Needed for a REAL Sharpe. The previous one had no variance term at all.
+          ROUND(STDDEV_SAMP(profit_loss_pips)::numeric, 4) as sd_pips,
+          COUNT(*) FILTER (WHERE type = 'LONG') as longs,
+          COUNT(*) FILTER (WHERE type = 'SHORT') as shorts,
+          COUNT(*) FILTER (WHERE type = 'LONG'  AND outcome IN ('TP1_HIT','TP2_HIT','TP3_HIT')) as long_wins,
+          COUNT(*) FILTER (WHERE type = 'SHORT' AND outcome IN ('TP1_HIT','TP2_HIT','TP3_HIT')) as short_wins
         FROM signal_history_deduped
         WHERE outcome != 'PENDING'
           ${dateFilter}
@@ -689,9 +701,16 @@ export function registerAdminRoutes(app: Express) {
       const totalLossPips = parseInt(overall.losses) * avgLossPips;
       const profitFactor = totalLossPips > 0 ? totalWinPips / totalLossPips : 0;
 
-      // Sharpe Ratio approximation (simplified)
-      const avgProfitPerTrade = parseFloat(overall.total_profit_pips) / totalTrades || 0;
-      const sharpeRatio = avgProfitPerTrade > 0 ? (avgProfitPerTrade / 100) : 0; // Simplified
+      // Sharpe ratio, per trade.
+      //
+      // The previous implementation was `avgProfitPerTrade / 100` and returned 0 whenever the
+      // mean was negative. It contained NO standard deviation, so it was not a Sharpe ratio in
+      // any sense - it was mean pips with a decimal moved, on a page whose entire purpose is
+      // honest measurement. Replaced with the actual definition: mean / sd of per-trade pips.
+      // It is deliberately allowed to be negative, because it usually is.
+      const avgProfitPerTrade = totalTrades > 0 ? parseFloat(overall.total_profit_pips) / totalTrades : 0;
+      const sdPips = parseFloat(overall.sd_pips) || 0;
+      const sharpeRatio = sdPips > 0 ? avgProfitPerTrade / sdPips : 0;
 
       // Max Drawdown (proper peak-to-trough calculation)
       let peak = 0;
@@ -711,7 +730,69 @@ export function registerAdminRoutes(app: Express) {
         }
       }
 
+      // 6. Reconciliation status.
+      //
+      // This dashboard has reported untrue numbers twice: fabricated winning trades served as
+      // real, and a corrected outcome column that no route read. So the reader is now told how
+      // much of the record has been re-derived from candle data and how much of it DISAGREED
+      // with what the system originally recorded. A silent correction is still a correction the
+      // reader cannot audit.
+      const integrityResult = await db.execute(sql`
+        SELECT
+          COUNT(*) as total,
+          COUNT(corrected_outcome) as reconciled,
+          COUNT(*) FILTER (WHERE corrected_outcome IS NOT NULL
+                             AND corrected_outcome <> raw_outcome) as disagreed,
+          MAX(last_validated_at) as last_validated_at
+        FROM signal_history_deduped
+      `);
+      const integ = (integrityResult as any)[0];
+
+      // 7. Open exposure - realised and unrealised must never be added together.
+      // Every figure below this point is REALISED (outcome != 'PENDING').
+      const openResult = await db.execute(sql`
+        SELECT COUNT(*) as pending, MIN(created_at) as oldest_pending_at
+        FROM signal_history_deduped WHERE outcome = 'PENDING'
+      `);
+      const open = (openResult as any)[0];
+
+      // 8. The live risk configuration, read from the service rather than restated here, so
+      // this panel cannot drift away from what the system is actually doing.
+      const propConfig = propFirmService.getConfig();
+
+      const reconciledCount = parseInt(integ.reconciled) || 0;
+      const disagreedCount = parseInt(integ.disagreed) || 0;
+
       res.json({
+        integrity: {
+          totalRows: parseInt(integ.total) || 0,
+          reconciled: reconciledCount,
+          disagreed: disagreedCount,
+          disagreementPct: reconciledCount > 0
+            ? parseFloat((100 * disagreedCount / reconciledCount).toFixed(1))
+            : 0,
+          lastValidatedAt: integ.last_validated_at,
+          note: 'Outcomes re-derived from 5-minute candles. "disagreed" is how many differed '
+              + 'from what the system originally recorded.',
+        },
+        open: {
+          pending: parseInt(open.pending) || 0,
+          oldestPendingAt: open.oldest_pending_at,
+          note: 'Unrealised. Never combined with the realised figures.',
+        },
+        riskConfig: {
+          maxTradesPerDay: propConfig.maxTradesPerDay,
+          riskPerTradePercent: propConfig.riskPerTrade,
+          positionSizeHighPercent: propFirmService.getPositionSize('HIGH'),
+          positionSizeMediumPercent: propFirmService.getPositionSize('MEDIUM'),
+          signalCooldownMinutes: 240,
+          highTierConfidence: 90,
+          confidenceScaleMax: 130,
+          maxConcurrentCorrelated: null,
+          correlationControlNote: 'No correlation control exists. The 240-minute cooldown is '
+              + 'PER SYMBOL and only prevents sequential re-entry, so simultaneous signals on '
+              + 'correlated pairs (EUR/USD and USD/CHF run about -0.9) are not restricted.',
+        },
         overall: {
           totalSignals: parseInt(overall.total_signals),
           wins: parseInt(overall.wins),
@@ -721,8 +802,21 @@ export function registerAdminRoutes(app: Express) {
           avgWinPips,
           avgLossPips,
           profitFactor: parseFloat(profitFactor.toFixed(2)),
-          sharpeRatio: parseFloat(sharpeRatio.toFixed(2)),
+          sharpeRatio: parseFloat(sharpeRatio.toFixed(4)),
+          sharpeNote: 'mean / sd of per-trade pips. Negative is a real value, not an error.',
+          sdPips: parseFloat(sdPips.toFixed(2)),
           maxDrawdown: parseFloat(maxDrawdown.toFixed(2)),
+          avgHoldHours: parseFloat(overall.avg_hold_hours) || 0,
+          bestTradePips: parseFloat(overall.best_trade_pips) || 0,
+          worstTradePips: parseFloat(overall.worst_trade_pips) || 0,
+          longs: parseInt(overall.longs) || 0,
+          shorts: parseInt(overall.shorts) || 0,
+          longWinRate: parseInt(overall.longs) > 0
+            ? parseFloat((100 * parseInt(overall.long_wins) / parseInt(overall.longs)).toFixed(1))
+            : 0,
+          shortWinRate: parseInt(overall.shorts) > 0
+            ? parseFloat((100 * parseInt(overall.short_wins) / parseInt(overall.shorts)).toFixed(1))
+            : 0,
         },
         cumulativeProfit: cumulativeProfitResult as any[],
         monthlyComparison: monthlyResult as any[],
