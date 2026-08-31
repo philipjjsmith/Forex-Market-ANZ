@@ -51,8 +51,15 @@ export function registerAdminRoutes(app: Express) {
     const accounts = (demo.ok ? demo.accounts : live.ok ? live.accounts : []) ?? [];
     const demoCount = accounts.filter((a: any) => !a.isLive).length;
 
+    // The OAuth token exchange happens BEFORE any socket is opened, so its failures must be
+    // reported as token problems — not as host/handshake problems. Getting this backwards sends
+    // you looking at firewalls when the answer is "mint a new token".
+    const tokenFailed = [demo, live].every(p => /token refresh|ACCESS_DENIED|invalid_grant/i.test((p as any).error ?? ''));
+
     let verdict: string;
-    if (!demo.ok && !live.ok) {
+    if (tokenFailed) {
+      verdict = 'OAUTH TOKEN REJECTED (ACCESS_DENIED) — this fails before any host is contacted, so it is not connectivity. The refresh token is expired, revoked, or was issued for a closed account or a different CLIENT_ID. Re-run the OAuth flow at /api/ctrader/auth-url to mint a new one.';
+    } else if (!demo.ok && !live.ok) {
       verdict = 'NEITHER host completed the app handshake. APP_AUTH uses only CLIENT_ID/CLIENT_SECRET, so this is credentials or outbound connectivity on port 5036 — not the refresh token.';
     } else if (demoCount > 0) {
       verdict = 'A demo account exists — demo mode can run.';
