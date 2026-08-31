@@ -417,17 +417,29 @@ export class OutcomeValidator {
     try {
       const createdAt = new Date(signal.created_at);
       const windowStart = new Date(Math.floor(createdAt.getTime() / 300_000) * 300_000);
-      // Clamp to the trade's own expiry so a long-unresolved signal cannot pull in
-      // unbounded post-trade history.
       const expiresAt = new Date(signal.expires_at);
-      const windowEnd = new Date(Math.min(resolutionTime.getTime(), expiresAt.getTime()));
+
+      // The window runs to EXPIRY, not to the resolution time.
+      //
+      // It used to stop at `min(resolutionTime, expiresAt)`, which is the same defect the
+      // backtest engine had: a path that ends the moment the CURRENT stop fired cannot answer
+      // "what would a wider stop, a breakeven, or an earlier target have done?" — the evidence
+      // is truncated exactly where the counterfactual begins. Every signal collected that way is
+      // permanently unable to support an exit-rule question.
+      //
+      // Clamped to `now` as well, because a trade can resolve hours before it expires and the
+      // rest of the window has not happened yet. `backfill-outcome-paths.ts` completes those
+      // once expiry has passed; it is idempotent and safe to re-run.
+      const windowEnd = new Date(Math.min(Date.now(), expiresAt.getTime()));
 
       if (!(windowEnd.getTime() > windowStart.getTime())) return null;
 
-      // 15min keeps a 48h window to ~192 bars — enough resolution for a chart without
-      // paying for 576 five-minute bars.
+      // 5min, not 15min. 15min was chosen for chart resolution; the engine resolves stops and
+      // targets on 5-minute bars, so anything coarser cannot reproduce its decisions. This costs
+      // NOTHING extra: fetchCandlesInWindow is a single API call that increments the usage
+      // counter once, whatever the bar count. 48h of 5min is ~576 bars in that one call.
       const candles = await twelveDataAPI.fetchCandlesInWindow(
-        signal.symbol, '15min', windowStart, windowEnd
+        signal.symbol, '5min', windowStart, windowEnd
       );
 
       if (candles && candles.length > 0) {
