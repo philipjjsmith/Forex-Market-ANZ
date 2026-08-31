@@ -1,3 +1,4 @@
+import { ctraderExecutor } from './services/ctrader-executor';
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
@@ -1253,11 +1254,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // route by which CTRADER_CLIENT_SECRET leaked; printing the refresh token here would
       // expose the new credential the instant it is minted, and cTrader offers no regenerate
       // control — recovering means deleting and recreating the whole app. Length only.
-      console.log(`[cTrader OAuth] ✅ Refresh token minted (${tokens.refreshToken?.length ?? 0} chars) — shown in the browser only.`);
+      console.log(`[cTrader OAuth] ✅ Refresh token minted (${tokens.refreshToken?.length ?? 0} chars).`);
+
+      // Persist immediately. cTrader ROTATES this token on every refresh, so a value copied by
+      // hand into an env var is dead after its first use — which is exactly how the previous
+      // token died. Storing it here means the operator never handles the credential at all.
+      let stored = false, storeErr = '';
+      try {
+        if (tokens.refreshToken) { await ctraderExecutor.seedRefreshToken(tokens.refreshToken); stored = true; }
+      } catch (e: any) {
+        storeErr = e?.message ?? 'unknown error';
+        console.error('[cTrader OAuth] ⚠️  could not persist refresh token:', storeErr);
+      }
 
       return res.send(`<!DOCTYPE html><html><body style="font-family:sans-serif;max-width:640px;margin:60px auto;padding:20px">
         <h1 style="color:green">✅ cTrader Authorization Successful!</h1>
-        <p>Copy your <strong>Refresh Token</strong> below and add it to Render as <code>CTRADER_REFRESH_TOKEN</code>:</p>
+        <p style="padding:12px;border-radius:6px;background:${stored ? '#e6f7e6' : '#fdecea'}">
+          ${stored
+            ? '<strong>Saved automatically.</strong> The token is stored in the database and is already live. You do NOT need to copy it into Render.'
+            : `<strong>NOT saved automatically${storeErr ? ` (${storeErr})` : ''}.</strong> Copy the token below into Render as <code>CTRADER_REFRESH_TOKEN</code>.`}
+        </p>
+        <p>Backup copy — cTrader rotates this on every use, so it goes stale quickly:</p>
         <pre style="background:#f4f4f4;padding:16px;border-radius:6px;word-break:break-all;font-size:13px">${tokens.refreshToken}</pre>
         <hr/>
         <p>Then add all 4 env vars to Render → Save Changes → redeploy:</p>

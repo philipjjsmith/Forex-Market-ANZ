@@ -14,6 +14,8 @@
  */
 
 import WebSocket from 'ws';
+import { db } from '../db';
+import { sql } from 'drizzle-orm';
 import { EventEmitter } from 'events';
 
 const LIVE_HOST = 'live.ctraderapi.com';
@@ -99,27 +101,96 @@ class CTraderExecutor {
 
   // ─── Token management ────────────────────────────────────────────────────
 
+  /**
+   * Read the CURRENT refresh token: the persisted one if we have it, else the env seed.
+   *
+   * CTRADER_REFRESH_TOKEN is a SEED, not the live value. See saveRefreshToken().
+   */
+  private async currentRefreshToken(): Promise<string | undefined> {
+    try {
+      const [row]: any = await db.execute(sql`SELECT refresh_token FROM ctrader_auth WHERE id = 1`);
+      if (row?.refresh_token) return row.refresh_token as string;
+    } catch (err) {
+      // A missing table must not make the executor unusable — fall back to the env seed.
+      console.error('[cTrader] could not read persisted refresh token:', err instanceof Error ? err.message : err);
+    }
+    return this.refreshToken;
+  }
+
+  /** Persist a rotated refresh token. NEVER logs the value. */
+  private async saveRefreshToken(token: string): Promise<void> {
+    await db.execute(sql`
+      INSERT INTO ctrader_auth (id, refresh_token, updated_at, rotations)
+      VALUES (1, ${token}, now(), 1)
+      ON CONFLICT (id) DO UPDATE
+        SET refresh_token = EXCLUDED.refresh_token,
+            updated_at    = now(),
+            rotations     = ctrader_auth.rotations + 1
+    `);
+  }
+
+  /**
+   * Exchange the refresh token for an access token, PERSISTING the rotated refresh token.
+   *
+   * cTrader rotates the refresh token on every refresh — the response carries a new one and
+   * invalidates the one just used. This method previously destructured only `accessToken` and
+   * `expiresIn`, so the replacement was silently dropped and the env token was dead after its
+   * first use. It looked fine until the process restarted and the in-memory access token went
+   * away, which on Render's free tier (spins down on inactivity) is constantly.
+   *
+   * Serialised through `refreshInFlight`: two concurrent refreshes would race, and whichever
+   * lost would have spent a token that is now invalid.
+   */
+  private refreshInFlight: Promise<string> | null = null;
+
   private async getAccessToken(): Promise<string> {
     if (this.accessToken && Date.now() < this.tokenExpiry) return this.accessToken;
+    if (this.refreshInFlight) return this.refreshInFlight;
 
-    const url = new URL('https://openapi.ctrader.com/apps/token');
-    url.searchParams.set('grant_type', 'refresh_token');
-    url.searchParams.set('refresh_token', this.refreshToken!);
-    url.searchParams.set('client_id', this.clientId!);
-    url.searchParams.set('client_secret', this.clientSecret!);
+    this.refreshInFlight = (async () => {
+      const refreshToken = await this.currentRefreshToken();
+      if (!refreshToken) throw new Error('No cTrader refresh token: set CTRADER_REFRESH_TOKEN or seed ctrader_auth.');
 
-    const res = await fetch(url.toString());
-    if (!res.ok) throw new Error(`Token refresh failed (${res.status}): ${await res.text()}`);
+      const url = new URL('https://openapi.ctrader.com/apps/token');
+      url.searchParams.set('grant_type', 'refresh_token');
+      url.searchParams.set('refresh_token', refreshToken);
+      url.searchParams.set('client_id', this.clientId!);
+      url.searchParams.set('client_secret', this.clientSecret!);
 
-    const data = await res.json() as { accessToken: string; expiresIn: number; errorCode?: string };
-    if (data.errorCode) throw new Error(`Token refresh error: ${data.errorCode}`);
+      const res = await fetch(url.toString());
+      if (!res.ok) throw new Error(`Token refresh failed (${res.status}): ${await res.text()}`);
 
-    this.accessToken = data.accessToken;
-    // Refresh 1 hour before actual expiry
-    this.tokenExpiry = Date.now() + (data.expiresIn - 3600) * 1000;
-    console.log('[cTrader] Access token refreshed ✅');
-    return this.accessToken;
+      const data = await res.json() as {
+        accessToken: string; expiresIn: number; refreshToken?: string; errorCode?: string;
+      };
+      if (data.errorCode) {
+        throw new Error(
+          `Token refresh error: ${data.errorCode}. The refresh token is spent or revoked — ` +
+          `cTrader rotates it on every use. Re-mint at /api/ctrader/auth-url and update CTRADER_REFRESH_TOKEN.`
+        );
+      }
+
+      // Persist the ROTATED token before returning. If this write fails the next restart cannot
+      // authenticate, so it is loud rather than swallowed.
+      if (data.refreshToken && data.refreshToken !== refreshToken) {
+        try {
+          await this.saveRefreshToken(data.refreshToken);
+          console.log('[cTrader] refresh token rotated and persisted ✅');
+        } catch (err) {
+          console.error('[cTrader] ⚠️  ROTATED TOKEN NOT PERSISTED — the next restart will fail:', err instanceof Error ? err.message : err);
+        }
+      }
+
+      this.accessToken = data.accessToken;
+      this.tokenExpiry = Date.now() + (data.expiresIn - 3600) * 1000;  // refresh 1h early
+      console.log('[cTrader] Access token refreshed ✅');
+      return this.accessToken;
+    })();
+
+    try { return await this.refreshInFlight; }
+    finally { this.refreshInFlight = null; }
   }
+
 
   // ─── TCP connection ───────────────────────────────────────────────────────
 
@@ -385,6 +456,19 @@ class CTraderExecutor {
       socket?.close();
     }
   }
+  /**
+   * Seed or replace the persisted refresh token. Called by the OAuth callback.
+   *
+   * Lets a freshly-minted token go straight into storage, so the operator never has to copy a
+   * credential by hand into Render. CTRADER_REFRESH_TOKEN then matters only as a cold-start
+   * fallback if the row is ever missing.
+   */
+  async seedRefreshToken(token: string): Promise<void> {
+    await this.saveRefreshToken(token);
+    this.accessToken = null;   // force the next call to use the new token
+    this.tokenExpiry = 0;
+  }
+
   /**
    * SMOKE TEST — places ONE real order on the DEMO account, then reports what the broker said.
    *
