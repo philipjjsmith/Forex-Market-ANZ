@@ -40,7 +40,19 @@ const LIMIT = parseInt(arg('limit', '40'), 10);   // free tier is 800 calls/day;
 
 const db = postgres(process.env.DATABASE_URL!, { ssl: 'require', connect_timeout: 20 });
 
-const hasPath = (bars: any[] | null) => !!bars && bars.length > 0;
+/**
+ * A usable path is a jsonb ARRAY, not a jsonb string.
+ *
+ * postgres.js binds a JS string to a `::jsonb` cast as a JSON *string scalar*, so
+ * `${JSON.stringify(bars)}::jsonb` silently stores `"[{...}]"` rather than `[{...}]`.
+ * Verified with `jsonb_typeof`: rows written that way came back as 'string' while the
+ * validator's own rows are 'array'. Reading them back gives a JS string, and every consumer
+ * that does `Array.isArray()` skips the row without complaining.
+ *
+ * Writing now uses `db.json(bars)`, and this check treats anything non-array as missing so the
+ * affected rows are repaired rather than left looking done.
+ */
+const hasPath = (bars: any) => Array.isArray(bars) && bars.length > 0;
 
 /**
  * Whether a stored path actually runs to expiry.
@@ -58,9 +70,9 @@ const hasPath = (bars: any[] | null) => !!bars && bars.length > 0;
  * close, hours before the Sunday expiry timestamp. That is correct data, not a gap, so `--repair`
  * would re-fetch those every time. It is deliberately opt-in for that reason.
  */
-function reachesExpiry(bars: any[] | null, expiresAt: Date): boolean {
+function reachesExpiry(bars: any, expiresAt: Date): boolean {
   if (!hasPath(bars)) return false;
-  const last = new Date(bars![bars!.length - 1].timestamp).getTime();
+  const last = new Date(bars[bars.length - 1].timestamp).getTime();
   return last >= expiresAt.getTime() - 10 * 60_000;
 }
 
@@ -104,7 +116,7 @@ function reachesExpiry(bars: any[] | null, expiresAt: Date): boolean {
       }
       await db`
         UPDATE signal_history
-        SET outcome_candles = ${JSON.stringify(bars)}::jsonb, updated_at = NOW()
+        SET outcome_candles = ${db.json(bars as any)}, updated_at = NOW()
         WHERE signal_id = ${r.signal_id}
       `;
       done++;
