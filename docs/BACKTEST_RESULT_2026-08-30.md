@@ -8,6 +8,11 @@ three amendments, all committed before any number existed.
 Baseline: **v3.4.0 on Dukascopy mid** (Amendment 3). Spreads: §6 configured, NOT the measured
 Dukascopy values (§A2.3).
 
+> [!important] Read the RETRACTION below before quoting anything from this document.
+> The original write-up led with a paired control comparison that turned out to be an identity of
+> the harness. It is withdrawn, and the finding that should have led it — the confluence score does
+> not rank trades — is stated in its place.
+
 ## What changed since the first run
 
 | | first run | definitive |
@@ -94,19 +99,42 @@ STRATEGY — §7 statistics
 
 ---
 
-## The finding that settles it
+## RETRACTED — "the finding that settles it"
 
-Everything above is sample-size-dependent and cost-assumption-dependent. This is neither:
+An earlier version of this document led with:
 
-> On **332 decision points where STRATEGY and TREND-ONLY both fire, they choose the same
-> direction 100% of the time**, and the paired R difference is **+0.0001 ± 0.0006**.
+> On 332 shared decision points STRATEGY and TREND-ONLY choose the same direction 100% of the
+> time, paired R difference +0.0001 +/- 0.0006.
 
-TREND-ONLY is Daily+4H EMA agreement and nothing else — no FVG, no order blocks, no liquidity
-sweeps, no 130-point confluence score. On shared bars the full machinery and a bare trend filter
-are statistically indistinguishable.
+**That is circular and carries no information.** It is withdrawn.
 
-The ICT machinery changes **which bars fire**, not **what happens on them**. That is a structural
-statement about the strategy, not a claim about this sample.
+`signal-generator.ts:762` makes `dailyTrend === fourHourTrend` a HARD REQUIREMENT of the
+strategy, and `signalType` *is* that trend. `control-arms.ts trendOnlyArm` fires iff daily and 4H
+agree and sets `type` the same way, on the same slices, with the same 1.5xATR / 3.0xATR geometry
+and the same fill bar. **On a shared bar the two arms construct the same trade.** Verified: entry
+price identical on 332/332; the stop differs on 310/332 only because `analyze()` rounds via
+`toFixed(5)` and the arm does not. The +/-0.0006 interval is the width of a rounding error.
+
+The inference drawn from it was also backwards. It concluded "the machinery changes which bars
+fire, not what happens on them" — but **which bars fire is the only channel through which an entry
+strategy can add value.** The test conditioned on the exact variable of interest and reported the
+residual as zero. It had no power against the hypothesis it was presented as settling.
+
+## The finding that should have led — the confluence score does not rank trades
+
+This one is real, is independent of every cost assumption, and survives every objection:
+
+| | |
+|---|---|
+| corr(confidence, R) | **+0.0091** (n=687; \|r\| ~ 0.075 needed for p<.05) |
+| Q1 (lowest confidence) | −0.029 |
+| Q2 | −0.036 |
+| Q3 | −0.027 |
+| **Q4 (conf 108–125)** | **−0.128** |
+
+The 130-point confluence score — FVG, order blocks, liquidity sweeps, multi-timeframe alignment,
+the entire ICT apparatus — **does not rank its own trades, and its highest-confidence quartile is
+the worst performing.** No cost assumption, sample-size caveat or harness choice touches this.
 
 ## Supporting evidence
 
@@ -121,11 +149,70 @@ statement about the strategy, not a claim about this sample.
 The CI is [−0.181, +0.074] and does not exclude zero. That is **not** a reprieve — it means the
 data does not definitively prove failure, not that the strategy works.
 
+## Power — "no demonstrable edge" is mostly a statement about power
+
+| | |
+|---|---|
+| sd(R) | 1.386 |
+| block-bootstrap SE | 0.0640 (design effect 1.465) |
+| **effective n** | **469** of 687 |
+| **MDE at 80% power** | **0.179 R** |
+
+Power against plausible edges: **+0.02 R → 6%**, **+0.05 R → 12%**, +0.10 R → 35%, +0.20 R → 88%.
+
+**If the true edge were +0.05 R, this test would find it 12% of the time.** §1 of the
+pre-registration said a 5pp effect needs ~1,300 trades per arm; the primary window delivered 687
+total, 469 effective. **The study was underpowered by its own stated standard before it ran**, so
+"no demonstrable edge" was close to a guaranteed output. The point estimate is still negative and
+the burden of proof still sits with the strategy — but this is *"the experiment cannot see an edge
+of the size you would hope for"*, not *"there is no edge."*
+
+## A disclosure §6 owes the reader
+
+Amendment 2 §A2.3 refused Dukascopy's measured spread, predicting adoption "would flatter the
+backtest by ~0.05R ... it could manufacture the entire result." Recomputation confirms that
+forecast almost exactly: **0.0503 R**.
+
+The refusal is substantively correct — 1.0 pip EUR/USD is mid-range against The5ers' real 0.6–1.7.
+But the symmetric sentence is equally true and appears nowhere in the original write-up:
+
+> **Refusing the measured spread manufactures the entire negative result.**
+
+Both sentences are true. Only one was written down. Recorded here because the measurement code and
+the decision to discard the measurement shipped in the SAME commit (`37069a5`), so the magnitude
+of the swing was known when the refusal was authored.
+
+Related: `33d8673` re-enabled USD/JPY, GBP/USD and AUD/USD **27 minutes before** the
+pre-registration was committed. USD/JPY (−0.233) and AUD/USD (−0.232) supply the entire loss;
+EUR/USD (+0.002), USD/CHF (+0.121) and GBP/USD (+0.011) do not. §8 forbids acting on that, and it
+is recorded as a disclosure, not a rescue.
+
+## The backtest models neither the historical nor the deployed system
+
+`ForexMarketANZ_EA.mq5:739-770` splits every signal into **two orders — 50% at TP1 (2R) and 50% at
+TP3 (6–8R), sharing one stop**, with breakeven and partial-close fields in the schema to match. The
+engine books **100% at TP1**, all-or-nothing, no breakeven, no trail. Because `mfeR` is truncated
+at the resolving bar, the TP3 leg cannot be reconstructed from this trade set at all.
+
+Combined with Amendment 3's admission that this is not the version that produced the live record,
+**the backtest measures a third system** — neither the one that traded nor the one that would.
+Direction of the bias is genuinely ambiguous, so this is a limit on transfer, not a correction.
+
 ## Honest caveats
 
-1. **Gross expectancy is ≈ 0** (−0.0399 R on the previous run's trade set); the loss is
-   transaction cost against a ~17.5-pip median stop. "No edge, loses to costs" — not "negative
-   edge". Different diagnosis, different remedies.
+1. **Gross expectancy is +0.0253 R, not −0.0399.** The earlier figure was quoted from the
+   superseded trade set, and `grossPips` is measured against a fill that ALREADY contains half the
+   spread, so it double-counts. True zero-cost expectancy on this trade set is **+0.0253 R** —
+   statistically indistinguishable from zero, but positive.
+
+   **The cost assumption carries 91% of the deficit** (0.0503 R of 0.0551 R). Under Dukascopy's
+   measured spread the system is a coin flip: expectancy −0.0099 R, P(mean ≤ 0) = 0.56. Swap is a
+   red herring at 6% of total cost.
+
+   **Break-even spread is 0.27 pips.** That is below any spread this could actually trade at.
+   Researched The5ers all-in cost is 0.6–1.7 pips (raw 0.2–0.9 plus $4–8 commission per round-turn
+   lot). A system whose entire edge is consumed by the cheapest spread available anywhere is not a
+   system — and that conclusion does NOT depend on §6's assumption being right.
 2. **RANDOM's cell coverage is 56%**, so its re-weighted comparison is partial. TREND-ONLY at 99%
    is why the paired result carries the weight.
 3. **Data gaps remain**: 7,070–14,080 market-open minutes per pair, worst hole 2,245 min. Dukascopy
