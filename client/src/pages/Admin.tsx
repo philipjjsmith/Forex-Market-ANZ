@@ -211,6 +211,40 @@ export default function Admin() {
     checkAdminAccess();
   }, [setLocation]);
 
+  /**
+   * cTrader connectivity check — ON DEMAND ONLY, never polled.
+   *
+   * Each run does an OAuth token exchange and opens a WebSocket to BOTH cTrader hosts, so a
+   * refetchInterval here would hammer a third party. The endpoint is read-only and never sends
+   * an order.
+   *
+   * This exists because the executor spent its whole life speaking raw framed TCP to a port that
+   * only answers WebSocket, so every message was silently dropped and nothing surfaced. There was
+   * no way to invoke the diagnose endpoint from anywhere, which is part of why it went unnoticed.
+   */
+  const [ctrader, setCtrader] = useState<any>(null);
+  const [ctraderLoading, setCtraderLoading] = useState(false);
+
+  const runCtraderDiagnose = async () => {
+    setCtraderLoading(true);
+    setCtrader(null);
+    try {
+      const token = getToken();
+      const res = await fetch(API_ENDPOINTS.ADMIN_CTRADER_DIAGNOSE, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` }),
+        },
+        credentials: 'include',
+      });
+      setCtrader(await res.json());
+    } catch (err: any) {
+      setCtrader({ error: err?.message ?? 'request failed' });
+    } finally {
+      setCtraderLoading(false);
+    }
+  };
+
   // Fetch system health
   const { data: health, isLoading: healthLoading } = useQuery<SystemHealth>({
     queryKey: [API_ENDPOINTS.ADMIN_HEALTH],
@@ -657,6 +691,31 @@ export default function Admin() {
         <h2 className="text-xl font-bold text-white">System Health</h2>
         <div className="flex-1 h-px bg-gradient-to-r from-amber-500/50 to-transparent"></div>
       </div>
+
+      {/* cTrader connectivity (read-only; sends no order) */}
+      <Card className="bg-slate-800/80 border-slate-600/50 backdrop-blur-md shadow-xl">
+        <CardHeader>
+          <CardTitle className="text-white flex items-center gap-2">
+            <Zap className="h-4 w-4" />
+            cTrader Connectivity
+          </CardTitle>
+          <CardDescription className="text-slate-400">
+            Read-only. Authenticates and lists accounts on both hosts — it never places an order.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Button onClick={runCtraderDiagnose} disabled={ctraderLoading} data-testid="button-ctrader-diagnose">
+            {ctraderLoading
+              ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Checking…</>
+              : <><RefreshCw className="w-4 h-4 mr-2" />Run check</>}
+          </Button>
+          {ctrader && (
+            <pre className="text-xs text-slate-200 bg-slate-900/80 rounded p-3 overflow-x-auto max-h-80">
+              {JSON.stringify(ctrader, null, 2)}
+            </pre>
+          )}
+        </CardContent>
+      </Card>
 
       {/* System Status */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
