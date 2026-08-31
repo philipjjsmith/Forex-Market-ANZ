@@ -148,6 +148,33 @@ interface SignalDataSet {
   }>;
 }
 
+interface IntegrityPanel {
+  totalRows: number;
+  reconciled: number;
+  disagreed: number;
+  disagreementPct: number;
+  lastValidatedAt: string | null;
+  note: string;
+}
+
+interface OpenPanel {
+  pending: number;
+  oldestPendingAt: string | null;
+  note: string;
+}
+
+interface RiskConfigPanel {
+  maxTradesPerDay: number;
+  riskPerTradePercent: number;
+  positionSizeHighPercent: number;
+  positionSizeMediumPercent: number;
+  signalCooldownMinutes: number;
+  highTierConfidence: number;
+  confidenceScaleMax: number;
+  maxConcurrentCorrelated: number | null;
+  correlationControlNote: string;
+}
+
 interface DualGrowthStats {
   fxifyOnly: SignalDataSet;
   allSignals: SignalDataSet;
@@ -156,6 +183,10 @@ interface DualGrowthStats {
     winRateDiff: number;
     profitDiff: number;
   };
+  // Optional so older cached responses still render.
+  integrity?: IntegrityPanel;
+  open?: OpenPanel;
+  riskConfig?: RiskConfigPanel;
   timeframe: string;
 }
 
@@ -1408,6 +1439,99 @@ export default function Admin() {
               </div>
             ) : dualGrowthStats ? (
               <>
+                {/*
+                  Data integrity strip.
+
+                  This page has twice shown numbers that were not true: fabricated winning
+                  trades served as real, and a corrected outcome column that no route read.
+                  Everything below is now stated up front - how much of the record was
+                  re-derived from candle data, how much of it DISAGREED, what is still open,
+                  and what risk limits are actually in force.
+                */}
+                {dualGrowthStats.integrity && (
+                  <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="rounded-lg border border-slate-700 bg-slate-900/60 p-4">
+                      <div className="text-xs uppercase tracking-wide text-slate-400 mb-2">
+                        Outcome reconciliation
+                      </div>
+                      <div className="text-2xl font-semibold text-white">
+                        {dualGrowthStats.integrity.reconciled}
+                        <span className="text-slate-500 text-base font-normal">
+                          {' / '}{dualGrowthStats.integrity.totalRows} rows
+                        </span>
+                      </div>
+                      <div
+                        className={
+                          dualGrowthStats.integrity.disagreementPct >= 20
+                            ? 'mt-1 text-sm text-amber-400'
+                            : 'mt-1 text-sm text-slate-300'
+                        }
+                      >
+                        {dualGrowthStats.integrity.disagreed} disagreed
+                        {' ('}{dualGrowthStats.integrity.disagreementPct}%{')'}
+                      </div>
+                      <div className="mt-2 text-xs text-slate-500 leading-snug">
+                        {dualGrowthStats.integrity.note}
+                      </div>
+                      {dualGrowthStats.integrity.lastValidatedAt && (
+                        <div className="mt-1 text-xs text-slate-600">
+                          last validated{' '}
+                          {new Date(dualGrowthStats.integrity.lastValidatedAt).toISOString()
+                            .replace('T', ' ').slice(0, 16)} UTC
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="rounded-lg border border-slate-700 bg-slate-900/60 p-4">
+                      <div className="text-xs uppercase tracking-wide text-slate-400 mb-2">
+                        Open (unrealised)
+                      </div>
+                      <div className="text-2xl font-semibold text-white">
+                        {dualGrowthStats.open?.pending ?? 0}
+                        <span className="text-slate-500 text-base font-normal"> pending</span>
+                      </div>
+                      <div className="mt-2 text-xs text-slate-500 leading-snug">
+                        {dualGrowthStats.open?.note}
+                      </div>
+                      {dualGrowthStats.open?.oldestPendingAt && (
+                        <div className="mt-1 text-xs text-slate-600">
+                          oldest{' '}
+                          {new Date(dualGrowthStats.open.oldestPendingAt).toISOString()
+                            .replace('T', ' ').slice(0, 16)} UTC
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="rounded-lg border border-slate-700 bg-slate-900/60 p-4">
+                      <div className="text-xs uppercase tracking-wide text-slate-400 mb-2">
+                        Risk limits in force
+                      </div>
+                      <div className="text-sm text-slate-300 space-y-0.5">
+                        <div>
+                          max {dualGrowthStats.riskConfig?.maxTradesPerDay} trades/day
+                          {' · '}{dualGrowthStats.riskConfig?.riskPerTradePercent}% risk
+                        </div>
+                        <div>
+                          HIGH {dualGrowthStats.riskConfig?.positionSizeHighPercent}%
+                          {' · '}MEDIUM {dualGrowthStats.riskConfig?.positionSizeMediumPercent}%
+                          {' (tier at '}{dualGrowthStats.riskConfig?.highTierConfidence}
+                          {'/'}{dualGrowthStats.riskConfig?.confidenceScaleMax}{')'}
+                        </div>
+                        <div>
+                          {dualGrowthStats.riskConfig?.signalCooldownMinutes}min cooldown
+                          {' · correlation cap: '}
+                          <span className="text-amber-400">
+                            {dualGrowthStats.riskConfig?.maxConcurrentCorrelated ?? 'none'}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="mt-2 text-xs text-slate-500 leading-snug">
+                        {dualGrowthStats.riskConfig?.correlationControlNote}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Time Period Filter & Diagnostic Button */}
                 <div className="flex justify-between items-center mb-6 gap-4">
                   <Button
