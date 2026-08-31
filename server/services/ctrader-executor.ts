@@ -38,6 +38,8 @@ const LIVE_PORT = 5036; // JSON port — official docs: "JSON always requires po
  *
  * Credentials alone now do nothing.
  */
+export const CTRADER_HOSTS = { live: LIVE_HOST, demo: DEMO_HOST } as const;
+
 const ctraderEnabled  = () => process.env.CTRADER_ENABLED === 'true';
 const ctraderLiveMode = () =>
   process.env.CTRADER_MODE === 'live' && process.env.CTRADER_ALLOW_LIVE === 'true';
@@ -119,10 +121,10 @@ class CTraderExecutor {
 
   // ─── TCP connection ───────────────────────────────────────────────────────
 
-  private openConnection(): Promise<{ socket: tls.TLSSocket; emitter: EventEmitter }> {
+  private openConnection(hostOverride?: string): Promise<{ socket: tls.TLSSocket; emitter: EventEmitter }> {
     return new Promise((resolve, reject) => {
       // MUST use this.host, not LIVE_HOST — otherwise demo mode still dials the live server.
-      const socket = tls.connect({ host: this.host, port: LIVE_PORT, rejectUnauthorized: true });
+      const socket = tls.connect({ host: hostOverride ?? this.host, port: LIVE_PORT, rejectUnauthorized: true });
       const emitter = new EventEmitter();
       emitter.setMaxListeners(20);
       let buf = Buffer.alloc(0);
@@ -219,18 +221,18 @@ class CTraderExecutor {
    * connection must fail rather than silently trade real money. Deliberately does NOT require
    * CTRADER_ENABLED — reading the account list is not execution.
    */
-  async listAccounts(): Promise<{ host: string; mode: string; accounts: { id: unknown; isLive: boolean }[] }> {
+  async listAccounts(hostOverride?: string, timeoutMs = 25000): Promise<{ host: string; mode: string; accounts: { id: unknown; isLive: boolean }[] }> {
     if (!this.isConfigured) throw new Error('cTrader credentials are not configured');
     const accessToken = await this.getAccessToken();
-    const { socket, emitter } = await this.openConnection();
+    const { socket, emitter } = await this.openConnection(hostOverride);
     try {
       this.send(socket, PT.APP_AUTH_REQ, { clientId: this.clientId!, clientSecret: this.clientSecret! });
-      await this.waitFor(emitter, PT.APP_AUTH_RES);
+      await this.waitFor(emitter, PT.APP_AUTH_RES, timeoutMs);
       this.send(socket, PT.GET_ACCOUNTS_REQ, { accessToken });
-      const msg = await this.waitFor(emitter, PT.GET_ACCOUNTS_RES);
+      const msg = await this.waitFor(emitter, PT.GET_ACCOUNTS_RES, timeoutMs);
       const all: any[] = msg.payload?.ctidTraderAccount ?? [];
       return {
-        host: this.host,
+        host: hostOverride ?? this.host,
         mode: this.isLiveMode ? 'live' : 'demo',
         accounts: all.map(a => ({ id: a.ctidTraderAccountId, isLive: a.isLive === true })),
       };

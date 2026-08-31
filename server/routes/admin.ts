@@ -4,7 +4,7 @@ import { sql } from 'drizzle-orm';
 import { signalGenerator } from '../services/signal-generator';
 import { twelveDataAPI } from '../services/twelve-data';
 import { exchangeRateAPI } from '../services/exchangerate-api';
-import { ctraderExecutor } from '../services/ctrader-executor';
+import { ctraderExecutor, CTRADER_HOSTS } from '../services/ctrader-executor';
 import { requireAuth, requireAdmin } from '../auth-middleware';
 
 export function registerAdminRoutes(app: Express) {
@@ -33,23 +33,36 @@ export function registerAdminRoutes(app: Express) {
       configured: (ctraderExecutor as any).isConfigured === true,
       resolvedMode: (ctraderExecutor as any).isLiveMode ? 'LIVE' : 'DEMO',
     };
-    try {
-      const r = await ctraderExecutor.listAccounts();
-      const demoCount = r.accounts.filter(a => !a.isLive).length;
-      res.json({
-        success: true, state, host: r.host, accounts: r.accounts,
-        demoAccounts: demoCount,
-        verdict: demoCount > 0
-          ? 'A demo account exists — demo mode can run.'
-          : 'No demo account. Demo mode will refuse to run (correct and safe). Create one in cTrader.',
-      });
-    } catch (e: any) {
-      res.status(200).json({
-        success: false, state,
-        error: String(e?.message).slice(0, 300),
-        hint: 'Most often the refresh token belongs to a closed account, or has expired/been revoked. Re-run the OAuth flow to mint a new one.',
-      });
+    // Probe BOTH hosts read-only. APP_AUTH uses only CLIENT_ID/CLIENT_SECRET and never the
+    // refresh token, so a failure there is a connectivity/app-registration problem, NOT a token
+    // problem — distinguishing the two is the whole point of testing both.
+    const probe = async (label: 'demo' | 'live') => {
+      const t0 = Date.now();
+      try {
+        const r = await ctraderExecutor.listAccounts(CTRADER_HOSTS[label]);
+        return { host: r.host, ok: true, ms: Date.now() - t0, accounts: r.accounts };
+      } catch (e: any) {
+        return { host: CTRADER_HOSTS[label], ok: false, ms: Date.now() - t0, error: String(e?.message).slice(0, 200) };
+      }
+    };
+
+    const demo = await probe('demo');
+    const live = await probe('live');
+    const accounts = (demo.ok ? demo.accounts : live.ok ? live.accounts : []) ?? [];
+    const demoCount = accounts.filter((a: any) => !a.isLive).length;
+
+    let verdict: string;
+    if (!demo.ok && !live.ok) {
+      verdict = 'NEITHER host completed the app handshake. APP_AUTH uses only CLIENT_ID/CLIENT_SECRET, so this is credentials or outbound connectivity on port 5036 — not the refresh token.';
+    } else if (demoCount > 0) {
+      verdict = 'A demo account exists — demo mode can run.';
+    } else if (accounts.length) {
+      verdict = 'Accounts found but NONE are demo. Demo mode will refuse to run (correct and safe). Create a demo account in cTrader.';
+    } else {
+      verdict = 'Handshake succeeded but no accounts were returned for this cTID — the refresh token may not be linked to any account.';
     }
+
+    res.json({ success: demo.ok || live.ok, state, demo, live, demoAccounts: demoCount, verdict });
   });
 
   app.get("/api/admin/health", requireAuth, requireAdmin, async (req, res) => {
