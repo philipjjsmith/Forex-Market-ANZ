@@ -20,7 +20,10 @@ import { EventEmitter } from 'events';
 
 const LIVE_HOST = 'live.ctraderapi.com';
 const DEMO_HOST = 'demo.ctraderapi.com';
-const LIVE_PORT = 5036; // JSON port — official docs: "JSON always requires port 5036 (and only this port)"
+const LIVE_PORT = 5036;
+
+/** cTrader volume is in centi-units of base currency: 1 lot = 100,000 units = 10,000,000. */
+const LOTS_TO_VOLUME = 10_000_000; // JSON port — official docs: "JSON always requires port 5036 (and only this port)"
 
 /**
  * THREE independent switches must ALL be set before a real order can be placed.
@@ -303,7 +306,15 @@ class CTraderExecutor {
     const lots = Math.min(10, Math.max(0.01,
       Math.round((riskUsd / (slPips * pipValuePerLot)) * 100) / 100
     ));
-    return Math.round(lots * 100); // cTrader API: volume = lots × 100
+    // cTrader volume is in CENTI-UNITS of the base currency, so 1 lot (100,000 units) is
+    // 10,000,000 — not 100. Measured against the broker on 2026-08-31: EURUSD reports
+    // minVolume = stepVolume = 100000, which is exactly 0.01 lots at this scale and confirms it.
+    //
+    // The old `lots * 100` was 100,000x too small: a 1-lot order sent volume=100, far BELOW the
+    // broker's minimum, so every production order would have been rejected. It went unnoticed
+    // because the executor spoke the wrong transport and no order ever reached a broker to be
+    // rejected. The caller clamps to the symbol's real min/step before sending.
+    return Math.round(lots * LOTS_TO_VOLUME);
   }
 
   /**
@@ -427,12 +438,30 @@ class CTraderExecutor {
       // Step 6 — Calculate position size (1% risk)
       const pipFactor = signal.symbol.includes('JPY') ? 100 : 10000;
       const slPips    = Math.abs(signal.entry - signal.stop) * pipFactor;
-      const volume    = this.calcVolume(signal.symbol, slPips, signal.positionSizePercent ?? 1.0);
+      let volume      = this.calcVolume(signal.symbol, slPips, signal.positionSizePercent ?? 1.0);
       if (volume <= 0) {
         console.log(`[cTrader] positionSizePercent=${signal.positionSizePercent} -> zero volume. No order placed.`);
         return;
       }
-      const lots      = volume / 100;
+
+      // Clamp to the symbol's ACTUAL limits rather than assuming ours are valid. A volume below
+      // minVolume, or off the stepVolume grid, is rejected by the broker — and a rejection here
+      // is silent from the strategy's point of view, so it must be caught before sending.
+      try {
+        this.send(socket, PT.SYMBOL_BY_ID_REQ, { ctidTraderAccountId: accountId, symbolId: [symbolId] });
+        const detail = ((await this.waitFor(emitter, PT.SYMBOL_BY_ID_RES, 15000)).payload?.symbol ?? [])[0];
+        const min  = detail?.minVolume, max = detail?.maxVolume, step = detail?.stepVolume;
+        if (step && step > 0) volume = Math.round(volume / step) * step;
+        if (min  && volume < min) {
+          console.log(`[cTrader] computed volume ${volume} is below the broker minimum ${min}. Raising to the minimum.`);
+          volume = min;
+        }
+        if (max  && volume > max) volume = max;
+      } catch (e: any) {
+        console.warn(`[cTrader] could not read symbol limits (${e.message}); sending unclamped volume ${volume}.`);
+      }
+
+      const lots      = volume / LOTS_TO_VOLUME;
 
       // Step 7 — Place market order with SL + TP1
       this.send(socket, PT.NEW_ORDER_REQ, {
