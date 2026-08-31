@@ -210,6 +210,35 @@ class CTraderExecutor {
     return Math.round(lots * 100); // cTrader API: volume = lots × 100
   }
 
+  /**
+   * READ-ONLY diagnostic. Authenticates and enumerates the accounts on this cTID, reporting
+   * each one's isLive flag. **Places no orders and sends no NEW_ORDER_REQ.**
+   *
+   * Exists because you cannot safely configure the executor without knowing whether a DEMO
+   * account exists: demo mode selects `isLive === false`, and if the only account is live the
+   * connection must fail rather than silently trade real money. Deliberately does NOT require
+   * CTRADER_ENABLED — reading the account list is not execution.
+   */
+  async listAccounts(): Promise<{ host: string; mode: string; accounts: { id: unknown; isLive: boolean }[] }> {
+    if (!this.isConfigured) throw new Error('cTrader credentials are not configured');
+    const accessToken = await this.getAccessToken();
+    const { socket, emitter } = await this.openConnection();
+    try {
+      this.send(socket, PT.APP_AUTH_REQ, { clientId: this.clientId!, clientSecret: this.clientSecret! });
+      await this.waitFor(emitter, PT.APP_AUTH_RES);
+      this.send(socket, PT.GET_ACCOUNTS_REQ, { accessToken });
+      const msg = await this.waitFor(emitter, PT.GET_ACCOUNTS_RES);
+      const all: any[] = msg.payload?.ctidTraderAccount ?? [];
+      return {
+        host: this.host,
+        mode: this.isLiveMode ? 'live' : 'demo',
+        accounts: all.map(a => ({ id: a.ctidTraderAccountId, isLive: a.isLive === true })),
+      };
+    } finally {
+      try { socket.destroy(); } catch { /* already closed */ }
+    }
+  }
+
   // ─── Main execution flow ──────────────────────────────────────────────────
 
   async executeSignal(signal: ExecuteSignalParams): Promise<void> {

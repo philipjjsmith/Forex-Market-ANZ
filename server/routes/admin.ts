@@ -4,6 +4,7 @@ import { sql } from 'drizzle-orm';
 import { signalGenerator } from '../services/signal-generator';
 import { twelveDataAPI } from '../services/twelve-data';
 import { exchangeRateAPI } from '../services/exchangerate-api';
+import { ctraderExecutor } from '../services/ctrader-executor';
 import { requireAuth, requireAdmin } from '../auth-middleware';
 
 export function registerAdminRoutes(app: Express) {
@@ -13,6 +14,44 @@ export function registerAdminRoutes(app: Express) {
    * GET /api/admin/health
    * Returns system health status
    */
+  /**
+   * GET /api/admin/ctrader-diagnose  — READ ONLY.
+   *
+   * Reports the executor's arming state and enumerates the accounts on this cTID with their
+   * live/demo flags. **Places no orders**; it never reaches NEW_ORDER_REQ.
+   *
+   * Needed because the credentials live only in Render, so the connection cannot be tested from
+   * a developer machine without copying secrets around. Demo mode selects `isLive === false`, and
+   * if no demo account exists the executor must refuse rather than fall back to a live one —
+   * this is how you find that out before arming anything.
+   */
+  app.get("/api/admin/ctrader-diagnose", requireAuth, requireAdmin, async (_req, res) => {
+    const state = {
+      enabled: process.env.CTRADER_ENABLED === 'true',
+      mode: process.env.CTRADER_MODE ?? '(unset -> demo)',
+      allowLive: process.env.CTRADER_ALLOW_LIVE === 'true',
+      configured: (ctraderExecutor as any).isConfigured === true,
+      resolvedMode: (ctraderExecutor as any).isLiveMode ? 'LIVE' : 'DEMO',
+    };
+    try {
+      const r = await ctraderExecutor.listAccounts();
+      const demoCount = r.accounts.filter(a => !a.isLive).length;
+      res.json({
+        success: true, state, host: r.host, accounts: r.accounts,
+        demoAccounts: demoCount,
+        verdict: demoCount > 0
+          ? 'A demo account exists — demo mode can run.'
+          : 'No demo account. Demo mode will refuse to run (correct and safe). Create one in cTrader.',
+      });
+    } catch (e: any) {
+      res.status(200).json({
+        success: false, state,
+        error: String(e?.message).slice(0, 300),
+        hint: 'Most often the refresh token belongs to a closed account, or has expired/been revoked. Re-run the OAuth flow to mint a new one.',
+      });
+    }
+  });
+
   app.get("/api/admin/health", requireAuth, requireAdmin, async (req, res) => {
     try {
       // Get pending signals count
