@@ -301,7 +301,7 @@ export function registerAdminRoutes(app: Express) {
             NULLIF(COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'STOP_HIT')), 0),
             2
           ) as win_rate
-        FROM signal_history
+        FROM signal_history_deduped
         WHERE outcome != 'PENDING'
           AND trade_live = true
           AND tier = 'HIGH'
@@ -318,7 +318,7 @@ export function registerAdminRoutes(app: Express) {
           SELECT
             DATE(outcome_time) as date,
             SUM(profit_loss_pips) as daily_pips
-          FROM signal_history
+          FROM signal_history_deduped
           WHERE outcome != 'PENDING'
             AND trade_live = true
             AND tier = 'HIGH'
@@ -347,7 +347,7 @@ export function registerAdminRoutes(app: Express) {
             NULLIF(COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'STOP_HIT')), 0),
             2
           ) as win_rate
-        FROM signal_history
+        FROM signal_history_deduped
         WHERE outcome != 'PENDING'
           AND trade_live = true
           AND tier = 'HIGH'
@@ -371,7 +371,7 @@ export function registerAdminRoutes(app: Express) {
             NULLIF(COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'STOP_HIT')), 0),
             2
           ) as win_rate
-        FROM signal_history
+        FROM signal_history_deduped
         WHERE outcome != 'PENDING'
           AND trade_live = true
           AND tier = 'HIGH'
@@ -428,7 +428,7 @@ export function registerAdminRoutes(app: Express) {
             NULLIF(COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'STOP_HIT')), 0),
             2
           ) as win_rate
-        FROM signal_history
+        FROM signal_history_deduped
         WHERE outcome != 'PENDING'
           ${dateFilter}
           ${strategyVersionFilter}
@@ -443,7 +443,7 @@ export function registerAdminRoutes(app: Express) {
           SELECT
             DATE(outcome_time) as date,
             SUM(profit_loss_pips) as daily_pips
-          FROM signal_history
+          FROM signal_history_deduped
           WHERE outcome != 'PENDING'
             ${dateFilter}
             ${strategyVersionFilter}
@@ -470,7 +470,7 @@ export function registerAdminRoutes(app: Express) {
             NULLIF(COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'STOP_HIT')), 0),
             2
           ) as win_rate
-        FROM signal_history
+        FROM signal_history_deduped
         WHERE outcome != 'PENDING'
           ${dateFilter}
           ${strategyVersionFilter}
@@ -492,7 +492,7 @@ export function registerAdminRoutes(app: Express) {
             NULLIF(COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'STOP_HIT')), 0),
             2
           ) as win_rate
-        FROM signal_history
+        FROM signal_history_deduped
         WHERE outcome != 'PENDING'
           ${dateFilter}
           ${strategyVersionFilter}
@@ -613,7 +613,7 @@ export function registerAdminRoutes(app: Express) {
             NULLIF(COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'STOP_HIT')), 0),
             2
           ) as win_rate
-        FROM signal_history
+        FROM signal_history_deduped
         WHERE outcome != 'PENDING'
           ${dateFilter}
       `);
@@ -626,7 +626,7 @@ export function registerAdminRoutes(app: Express) {
           SELECT
             DATE(outcome_time) as date,
             SUM(profit_loss_pips) as daily_pips
-          FROM signal_history
+          FROM signal_history_deduped
           WHERE outcome != 'PENDING'
             ${dateFilter}
           GROUP BY DATE(outcome_time)
@@ -651,7 +651,7 @@ export function registerAdminRoutes(app: Express) {
             NULLIF(COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'STOP_HIT')), 0),
             2
           ) as win_rate
-        FROM signal_history
+        FROM signal_history_deduped
         WHERE outcome != 'PENDING'
           ${dateFilter}
         GROUP BY DATE_TRUNC('month', outcome_time)
@@ -671,7 +671,7 @@ export function registerAdminRoutes(app: Express) {
             NULLIF(COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'STOP_HIT')), 0),
             2
           ) as win_rate
-        FROM signal_history
+        FROM signal_history_deduped
         WHERE outcome != 'PENDING'
           ${dateFilter}
         GROUP BY symbol
@@ -751,7 +751,7 @@ export function registerAdminRoutes(app: Express) {
           ROUND(SUM(profit_loss_pips)::numeric, 2) as total_pips,
           ROUND(100.0 * COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT')) /
             NULLIF(COUNT(*) FILTER (WHERE outcome != 'PENDING'), 0), 2) as win_rate
-        FROM signal_history
+        FROM signal_history_deduped
         WHERE trade_live = true AND tier = 'HIGH' AND outcome != 'PENDING'
         GROUP BY DATE_TRUNC('month', outcome_time)
         ORDER BY month DESC
@@ -767,7 +767,7 @@ export function registerAdminRoutes(app: Express) {
           ROUND(SUM(profit_loss_pips)::numeric, 2) as total_pips,
           ROUND(100.0 * COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT')) /
             NULLIF(COUNT(*) FILTER (WHERE outcome != 'PENDING'), 0), 2) as win_rate
-        FROM signal_history
+        FROM signal_history_deduped
         WHERE trade_live = true AND tier = 'HIGH' AND outcome != 'PENDING'
         GROUP BY symbol
         ORDER BY total_pips ASC
@@ -782,7 +782,7 @@ export function registerAdminRoutes(app: Express) {
           ROUND(SUM(profit_loss_pips)::numeric, 2) as total_pips,
           ROUND(100.0 * COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT')) /
             NULLIF(COUNT(*) FILTER (WHERE outcome != 'PENDING'), 0), 2) as win_rate
-        FROM signal_history
+        FROM signal_history_deduped
         WHERE trade_live = true AND tier = 'HIGH' AND outcome != 'PENDING'
         GROUP BY strategy_version
         ORDER BY total_pips ASC
@@ -798,7 +798,7 @@ export function registerAdminRoutes(app: Express) {
           profit_loss_pips,
           strategy_version,
           outcome_time
-        FROM signal_history
+        FROM signal_history_deduped
         WHERE trade_live = true AND tier = 'HIGH' AND outcome != 'PENDING'
         ORDER BY outcome_time DESC
         LIMIT 50
@@ -817,7 +817,7 @@ export function registerAdminRoutes(app: Express) {
             NULLIF(COUNT(*) FILTER (WHERE outcome != 'PENDING'), 0), 2) as win_rate,
           COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT')) as wins,
           COUNT(*) FILTER (WHERE outcome = 'STOP_HIT') as losses
-        FROM signal_history
+        FROM signal_history_deduped
         WHERE trade_live = true AND tier = 'HIGH' AND outcome != 'PENDING'
       `);
 
@@ -827,7 +827,7 @@ export function registerAdminRoutes(app: Express) {
           COUNT(*) as count,
           MIN(created_at) as first_signal,
           MAX(created_at) as latest_signal
-        FROM signal_history
+        FROM signal_history_deduped
         WHERE strategy_version = '2.2.0'
           AND outcome = 'PENDING'
           AND trade_live = true
@@ -846,7 +846,7 @@ export function registerAdminRoutes(app: Express) {
             NULLIF(COUNT(*), 0), 2) as win_rate,
           MIN(outcome_time) as first_completion,
           MAX(outcome_time) as latest_completion
-        FROM signal_history
+        FROM signal_history_deduped
         WHERE created_at >= '2025-11-04 05:44:16 UTC'
           AND outcome != 'PENDING'
           AND trade_live = true
