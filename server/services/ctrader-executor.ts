@@ -13,7 +13,7 @@
  * Auth:     AppAuth → GetAccounts → AccountAuth → SymbolLookup → NewOrder
  */
 
-import tls from 'tls';
+import WebSocket from 'ws';
 import { EventEmitter } from 'events';
 
 const LIVE_HOST = 'live.ctraderapi.com';
@@ -121,48 +121,64 @@ class CTraderExecutor {
 
   // ─── TCP connection ───────────────────────────────────────────────────────
 
-  private openConnection(hostOverride?: string): Promise<{ socket: tls.TLSSocket; emitter: EventEmitter }> {
+  /**
+   * Open a WebSocket to the cTrader proxy.
+   *
+   * PORT 5036 SPEAKS WEBSOCKET, NOT RAW FRAMED TCP. This previously used tls.connect() with a
+   * 4-byte big-endian length prefix — the framing the docs describe for the PROTOBUF transport on
+   * 5035 — and cTrader silently discarded every message. Proven directly: an identical
+   * ApplicationAuthReq carrying deliberately invalid credentials got 20s of silence over raw TCP
+   * on both hosts, and a proper `CH_CLIENT_AUTH_FAILURE` reply in 580ms over wss. That silence is
+   * why the executor never worked, on any host, since it was written.
+   *
+   * WebSocket frames carry their own length, so there is NO manual length prefix here.
+   *
+   * Uses the `ws` package, not the global WebSocket: global WebSocket only exists on Node 22+, and
+   * this repo pins no Node version (no engines field, no .nvmrc, no render.yaml pin), so Render is
+   * free to build on Node 20 where the global is undefined. `ws` is already a direct dependency.
+   */
+  private openConnection(hostOverride?: string): Promise<{ socket: WebSocket; emitter: EventEmitter }> {
     return new Promise((resolve, reject) => {
-      // MUST use this.host, not LIVE_HOST — otherwise demo mode still dials the live server.
-      const socket = tls.connect({ host: hostOverride ?? this.host, port: LIVE_PORT, rejectUnauthorized: true });
+      const host = hostOverride ?? this.host;
+      const url = `wss://${host}:${LIVE_PORT}`;
+      const socket = new WebSocket(url);
       const emitter = new EventEmitter();
       emitter.setMaxListeners(20);
-      let buf = Buffer.alloc(0);
 
-      socket.once('secureConnect', () => {
-        console.log(`[cTrader] TLS connected to ${hostOverride ?? this.host}:${LIVE_PORT} ✅`);
+      const failTimer = setTimeout(() => {
+        try { socket.close(); } catch { /* already closing */ }
+        reject(new Error(`WebSocket did not open within 20s (${url})`));
+      }, 20000);
+
+      socket.on('open', () => {
+        clearTimeout(failTimer);
+        console.log(`[cTrader] WebSocket connected to ${url} ✅`);
         resolve({ socket, emitter });
       });
 
-      socket.on('data', (chunk) => {
-        buf = Buffer.concat([buf, chunk]);
-        // Parse all complete messages from the buffer
-        while (buf.length >= 4) {
-          const msgLen = buf.readUInt32BE(0); // 4-byte big-endian length prefix (network byte order)
-          if (buf.length < 4 + msgLen) break;
-          const msgBuf = buf.subarray(4, 4 + msgLen);
-          buf = buf.subarray(4 + msgLen);
-          try {
-            const msg = JSON.parse(msgBuf.toString('utf8'));
-            console.log(`[cTrader] ← type:${msg.payloadType}`, CTraderExecutor.redact(msg.payload));
-            emitter.emit(`type:${msg.payloadType}`, msg);
-          } catch { /* skip malformed */ }
-        }
+      socket.on('message', (raw: any) => {
+        try {
+          const msg = JSON.parse(raw.toString());
+          console.log(`[cTrader] ← type:${msg.payloadType}`, CTraderExecutor.redact(msg.payload));
+          emitter.emit(`type:${msg.payloadType}`, msg);
+          // 2142 is ProtoOAErrorRes — surface it rather than letting callers time out blind.
+          if (msg.payloadType === 2142) {
+            emitter.emit('protoError', new Error(`${msg.payload?.errorCode}: ${msg.payload?.description}`));
+          }
+        } catch { /* ignore non-JSON frames */ }
       });
 
-      socket.on('error', (err) => {
-        console.error('[cTrader] Socket error:', err.message);
-        reject(err);
+      socket.on('error', (e: any) => {
+        clearTimeout(failTimer);
+        reject(new Error(`WebSocket error connecting to ${url}: ${e?.message ?? e}`));
       });
 
-      socket.setTimeout(30000, () => {
-        socket.destroy();
-        reject(new Error('Connection timed out after 30s'));
+      socket.on('close', (code: number) => {
+        clearTimeout(failTimer);
+        emitter.emit('closed', code);
       });
     });
   }
-
-  // ─── Message helpers ──────────────────────────────────────────────────────
 
   private msgSeq = 0;
 
@@ -176,42 +192,30 @@ class CTraderExecutor {
     return JSON.stringify(safe).slice(0, 150);
   }
 
-  private send(socket: tls.TLSSocket, payloadType: number, payload: object): void {
-    // clientMsgId is how cTrader correlates a response to its request. Without it the server
-    // can silently drop the message — which presents exactly as "TLS connected, request sent,
-    // no reply ever arrives", the symptom seen here on BOTH hosts.
+  private send(socket: WebSocket, payloadType: number, payload: object): void {
+    // clientMsgId is how cTrader correlates a reply to its request.
     const clientMsgId = `m${Date.now()}_${++this.msgSeq}`;
-    const json = JSON.stringify({ clientMsgId, payloadType, payload });
-    const msgBuf = Buffer.from(json, 'utf8');
-    const lenBuf = Buffer.alloc(4);
-    lenBuf.writeUInt32BE(msgBuf.length, 0);
     // NEVER log the raw payload: it carries clientSecret and access tokens.
     console.log(`[cTrader] → type:${payloadType}`, CTraderExecutor.redact(payload));
-    socket.write(Buffer.concat([lenBuf, msgBuf]));
+    // WebSocket frames are self-delimiting — do NOT prepend a length prefix here.
+    socket.send(JSON.stringify({ clientMsgId, payloadType, payload }));
   }
 
-  private waitFor(emitter: EventEmitter, payloadType: number, timeoutMs = 10000): Promise<any> {
+  private waitFor(emitter: EventEmitter, payloadType: number, timeoutMs = 25000): Promise<any> {
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        cleanup();
-        reject(new Error(`Timeout (${timeoutMs}ms) waiting for payloadType ${payloadType}`));
-      }, timeoutMs);
-
+      const onMsg = (m: any) => { cleanup(); resolve(m); };
+      const onErr = (e: Error) => { cleanup(); reject(e); };
+      const timer = setTimeout(() => { cleanup(); reject(new Error(`Timeout (${timeoutMs}ms) waiting for payloadType ${payloadType}`)); }, timeoutMs);
       const cleanup = () => {
         clearTimeout(timer);
-        emitter.off(`type:${payloadType}`, onOk);
-        emitter.off(`type:${PT.ERROR_RES}`, onErr);
-        emitter.off(`type:${PT.COMMON_ERROR}`, onErr);
+        emitter.off(`type:${payloadType}`, onMsg);
+        emitter.off('protoError', onErr);
       };
-
-      const onOk  = (msg: any) => { cleanup(); resolve(msg); };
-      const onErr = (msg: any) => { cleanup(); reject(new Error(`cTrader error: ${JSON.stringify(msg.payload)}`)); };
-
-      emitter.on(`type:${payloadType}`, onOk);
-      emitter.on(`type:${PT.ERROR_RES}`,    onErr);
-      emitter.on(`type:${PT.COMMON_ERROR}`, onErr);
+      emitter.once(`type:${payloadType}`, onMsg);
+      emitter.once('protoError', onErr);
     });
   }
+
 
   // ─── Position sizing ──────────────────────────────────────────────────────
 
@@ -254,7 +258,7 @@ class CTraderExecutor {
         accounts: all.map(a => ({ id: a.ctidTraderAccountId, isLive: a.isLive === true })),
       };
     } finally {
-      try { socket.destroy(); } catch { /* already closed */ }
+      try { socket.close(); } catch { /* already closed */ }
     }
   }
 
@@ -279,7 +283,7 @@ class CTraderExecutor {
 
     console.log(`[cTrader] mode=${this.isLiveMode ? 'LIVE (REAL MONEY)' : 'DEMO'} host=${this.host}`);
 
-    let socket: tls.TLSSocket | null = null;
+    let socket: WebSocket | null = null;
     try {
       // Refresh access token if needed
       const accessToken = await this.getAccessToken();
@@ -376,7 +380,7 @@ class CTraderExecutor {
       // Never crash signal generation — log and continue
       console.error('[cTrader] ❌ Execution failed:', err.message);
     } finally {
-      socket?.destroy();
+      socket?.close();
     }
   }
 }
