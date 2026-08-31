@@ -198,6 +198,141 @@ export function resolveTrade(
   return null;   // still open at the end of the data
 }
 
+/**
+ * Resolve one trade under the DEPLOYED payoff instead of the engine's all-or-nothing one.
+ *
+ * WHY THIS EXISTS
+ *
+ * `BACKTEST_RESULT_2026-08-30.md` disclosed that the backtest "models neither the historical nor
+ * the deployed system": `ForexMarketANZ_EA.mq5` splits every signal into TWO orders sharing one
+ * stop — 50% at TP1 and 50% at TP3 — while `resolveTrade` above books 100% at TP1. It also noted
+ * the TP3 leg "cannot be reconstructed from this trade set at all", because `resolveTrade`
+ * RETURNS the moment TP1 is touched, so `mfeR` is truncated at the resolving bar and everything
+ * after it is invisible.
+ *
+ * This function keeps walking. It never returns early, so `mfeR` here is the true excursion to
+ * expiry and both legs are resolved independently against the SAME stop.
+ *
+ * THE DEPLOYED PARAMETERS, read from the EA rather than assumed:
+ *   USE_PARTIAL_PROFITS      = true
+ *   PARTIAL_CLOSE_PERCENT_1  = 50.0   // at TP1, commented "3.0x ATR"
+ *   PARTIAL_CLOSE_PERCENT_2  = 50.0   // at TP3, commented "12.0x ATR"
+ *   grep for breakeven/trail in the EA returns ZERO matches — neither leg is ever moved.
+ *
+ * TP3 is derived as `4x the TP1 DISTANCE`, not as a fixed multiple of R. TP1 is 3.0xATR and TP3
+ * is 12.0xATR, so their ratio is exactly 4 regardless of the stop. Deriving TP3 from R instead
+ * would be wrong: the MIN_SL_PIPS floor widens the stop on some signals without widening the
+ * target, so TP1/risk actually ranges 1.56-2.02 across the trade set rather than being a clean 2.
+ *
+ * The within-bar tie rule is inherited deliberately: if a bar touches both the stop and a target,
+ * the stop wins. At 5-minute granularity the true order is unknowable, and choosing the target is
+ * the easiest way to invent an edge.
+ */
+export interface SplitLeg {
+  leg: 'TP1' | 'TP3';
+  fraction: number;
+  outcome: Outcome;
+  at: Date;
+  price: number;
+}
+
+export interface SplitResolution {
+  legs: SplitLeg[];
+  /** True maximum favourable excursion to EXPIRY, never truncated at a resolving bar. */
+  mfeR: number;
+  maeR: number;
+}
+
+export function resolveTradeSplit(
+  t: Trade, bars: Ohlc[], expiry: Date, tp3DistanceMultiple = 4
+): SplitResolution | null {
+  const isLong = t.type === 'LONG';
+  const risk = Math.abs(t.entry - t.stop);
+  if (risk <= 0) return null;
+
+  const tp1 = t.target;
+  const tp3 = t.entry + tp3DistanceMultiple * (tp1 - t.entry);   // signed: works both directions
+
+  let mfe = 0, mae = 0;
+  let legA: SplitLeg | null = null;   // 50% at TP1
+  let legB: SplitLeg | null = null;   // 50% at TP3
+
+  for (const b of bars) {
+    if (b.timestamp < t.openedAt) continue;
+
+    const favourable = isLong ? b.high - t.entry : t.entry - b.low;
+    const adverse = isLong ? t.entry - b.low : b.high - t.entry;
+    mfe = Math.max(mfe, favourable / risk);
+    mae = Math.max(mae, adverse / risk);
+
+    if (b.timestamp >= expiry) {
+      const close = { outcome: 'EXPIRED' as Outcome, at: b.timestamp, price: b.close };
+      if (!legA) legA = { leg: 'TP1', fraction: 0.5, ...close };
+      if (!legB) legB = { leg: 'TP3', fraction: 0.5, ...close };
+      break;
+    }
+
+    const hitStop = isLong ? b.low <= t.stop : b.high >= t.stop;
+
+    // The stop is shared, so it closes whichever legs are still open — including a TP3 leg that
+    // had already run past TP1. There is no breakeven move in the EA, so that giveback is real.
+    if (hitStop) {
+      const gapped = isLong ? b.open <= t.stop : b.open >= t.stop;
+      const px = gapped ? b.open : t.stop;
+      const close = { outcome: 'STOP_HIT' as Outcome, at: b.timestamp, price: px };
+      if (!legA) legA = { leg: 'TP1', fraction: 0.5, ...close };
+      if (!legB) legB = { leg: 'TP3', fraction: 0.5, ...close };
+      break;
+    }
+
+    if (!legA) {
+      const hitTp1 = isLong ? b.high >= tp1 : b.low <= tp1;
+      if (hitTp1) {
+        const gapped = isLong ? b.open >= tp1 : b.open <= tp1;
+        legA = { leg: 'TP1', fraction: 0.5, outcome: 'TP1_HIT', at: b.timestamp, price: gapped ? b.open : tp1 };
+      }
+    }
+    if (!legB) {
+      const hitTp3 = isLong ? b.high >= tp3 : b.low <= tp3;
+      if (hitTp3) {
+        const gapped = isLong ? b.open >= tp3 : b.open <= tp3;
+        legB = { leg: 'TP3', fraction: 0.5, outcome: 'TP1_HIT', at: b.timestamp, price: gapped ? b.open : tp3 };
+      }
+    }
+    if (legA && legB) break;
+  }
+
+  if (!legA || !legB) return null;   // still open at the end of the data — caller decides
+  return { legs: [legA, legB], mfeR: mfe, maeR: mae };
+}
+
+/**
+ * R for a split trade: the size-weighted sum of the legs, each costed on its own exit and its own
+ * holding period. Entry cost is unchanged because total volume is unchanged — two half-size fills
+ * instead of one full-size one — so only the exit half-spread is split, and the swap is charged
+ * per leg by that leg's own duration. The TP3 leg is held longer and pays more swap; that is real.
+ */
+export function costSplit(t: Trade, res: SplitResolution, cfg: EngineConfig): {
+  r: number; netPips: number; legR: number[];
+} {
+  const pip = pipSize(t.symbol);
+  const isLong = t.type === 'LONG';
+  const riskPips = Math.abs(t.entry - t.stop) / pip;
+  const halfSpread = (cfg.spreadPips[t.symbol] ?? 1.5) / 2;
+  const swapRate = cfg.swapPipsPerNight[t.symbol] ?? 0.3;
+
+  let netPips = 0;
+  const legR: number[] = [];
+  for (const leg of res.legs) {
+    const gross = (isLong ? leg.price - t.entry : t.entry - leg.price) / pip;
+    const swap = swapNights(t.openedAt, leg.at) * swapRate;
+    const net = gross - halfSpread - swap;
+    netPips += leg.fraction * net;
+    legR.push(riskPips > 0 ? net / riskPips : 0);
+  }
+  return { r: riskPips > 0 ? netPips / riskPips : 0, netPips, legR };
+}
+
 /** Apply spread and swap, and express the result in R. */
 export function costTrade(t: Trade, cfg: EngineConfig): void {
   const pip = pipSize(t.symbol);
