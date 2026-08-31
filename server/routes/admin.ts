@@ -301,7 +301,15 @@ export function registerAdminRoutes(app: Express) {
             100.0 * COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT')) /
             NULLIF(COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'STOP_HIT')), 0),
             2
-          ) as win_rate
+          ) as win_rate,
+          ROUND(AVG(EXTRACT(EPOCH FROM (outcome_time - created_at)) / 3600)::numeric, 1) as avg_hold_hours,
+          ROUND(MAX(profit_loss_pips)::numeric, 1) as best_trade_pips,
+          ROUND(MIN(profit_loss_pips)::numeric, 1) as worst_trade_pips,
+          ROUND(STDDEV_SAMP(profit_loss_pips)::numeric, 4) as sd_pips,
+          COUNT(*) FILTER (WHERE type = 'LONG') as longs,
+          COUNT(*) FILTER (WHERE type = 'SHORT') as shorts,
+          COUNT(*) FILTER (WHERE type = 'LONG'  AND outcome IN ('TP1_HIT','TP2_HIT','TP3_HIT')) as long_wins,
+          COUNT(*) FILTER (WHERE type = 'SHORT' AND outcome IN ('TP1_HIT','TP2_HIT','TP3_HIT')) as short_wins
         FROM signal_history_deduped
         WHERE outcome != 'PENDING'
           AND trade_live = true
@@ -393,8 +401,13 @@ export function registerAdminRoutes(app: Express) {
       const fxifyTotalLossPips = parseInt(fxifyOverall.losses) * fxifyAvgLossPips;
       const fxifyProfitFactor = fxifyTotalLossPips > 0 ? fxifyTotalWinPips / fxifyTotalLossPips : 0;
 
-      const fxifyAvgProfitPerTrade = parseFloat(fxifyOverall.total_profit_pips) / fxifyTotalTrades || 0;
-      const fxifySharpeRatio = fxifyAvgProfitPerTrade > 0 ? (fxifyAvgProfitPerTrade / 100) : 0;
+      // Real Sharpe: mean / sd of per-trade pips. The previous version was `mean / 100` with
+      // no variance term and was clamped to 0 whenever the mean was negative, so it could never
+      // report a losing system as losing. Allowed to be negative now, because it usually is.
+      const fxifyAvgProfitPerTrade = fxifyTotalTrades > 0
+        ? parseFloat(fxifyOverall.total_profit_pips) / fxifyTotalTrades : 0;
+      const fxifySdPips = parseFloat(fxifyOverall.sd_pips) || 0;
+      const fxifySharpeRatio = fxifySdPips > 0 ? fxifyAvgProfitPerTrade / fxifySdPips : 0;
 
       // FXIFY Max Drawdown
       let fxifyPeak = 0;
@@ -428,7 +441,15 @@ export function registerAdminRoutes(app: Express) {
             100.0 * COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT')) /
             NULLIF(COUNT(*) FILTER (WHERE outcome IN ('TP1_HIT', 'TP2_HIT', 'TP3_HIT', 'STOP_HIT')), 0),
             2
-          ) as win_rate
+          ) as win_rate,
+          ROUND(AVG(EXTRACT(EPOCH FROM (outcome_time - created_at)) / 3600)::numeric, 1) as avg_hold_hours,
+          ROUND(MAX(profit_loss_pips)::numeric, 1) as best_trade_pips,
+          ROUND(MIN(profit_loss_pips)::numeric, 1) as worst_trade_pips,
+          ROUND(STDDEV_SAMP(profit_loss_pips)::numeric, 4) as sd_pips,
+          COUNT(*) FILTER (WHERE type = 'LONG') as longs,
+          COUNT(*) FILTER (WHERE type = 'SHORT') as shorts,
+          COUNT(*) FILTER (WHERE type = 'LONG'  AND outcome IN ('TP1_HIT','TP2_HIT','TP3_HIT')) as long_wins,
+          COUNT(*) FILTER (WHERE type = 'SHORT' AND outcome IN ('TP1_HIT','TP2_HIT','TP3_HIT')) as short_wins
         FROM signal_history_deduped
         WHERE outcome != 'PENDING'
           ${dateFilter}
@@ -512,8 +533,13 @@ export function registerAdminRoutes(app: Express) {
       const allTotalLossPips = parseInt(allOverall.losses) * allAvgLossPips;
       const allProfitFactor = allTotalLossPips > 0 ? allTotalWinPips / allTotalLossPips : 0;
 
-      const allAvgProfitPerTrade = parseFloat(allOverall.total_profit_pips) / allTotalTrades || 0;
-      const allSharpeRatio = allAvgProfitPerTrade > 0 ? (allAvgProfitPerTrade / 100) : 0;
+      // Real Sharpe: mean / sd of per-trade pips. The previous version was `mean / 100` with
+      // no variance term and was clamped to 0 whenever the mean was negative, so it could never
+      // report a losing system as losing. Allowed to be negative now, because it usually is.
+      const allAvgProfitPerTrade = allTotalTrades > 0
+        ? parseFloat(allOverall.total_profit_pips) / allTotalTrades : 0;
+      const allSdPips = parseFloat(allOverall.sd_pips) || 0;
+      const allSharpeRatio = allSdPips > 0 ? allAvgProfitPerTrade / allSdPips : 0;
 
       // All signals max drawdown
       let allPeak = 0;
@@ -537,7 +563,66 @@ export function registerAdminRoutes(app: Express) {
       const winRateDiff = fxifyWinRate - allWinRate;
       const profitDiff = parseFloat(fxifyOverall.total_profit_pips) - parseFloat(allOverall.total_profit_pips);
 
+      // Reconciliation status, open exposure and the live risk configuration.
+      //
+      // Global, not per-arm: they describe the record and the system, not a filtered slice.
+      // This panel exists because the dashboard has twice reported untrue numbers - fabricated
+      // winning trades served as real, and a corrected outcome column no route read. The reader
+      // is now told how much of the record was re-derived from candles and how much of it
+      // DISAGREED with what the system originally recorded.
+      const integrityResult = await db.execute(sql`
+        SELECT
+          COUNT(*) as total,
+          COUNT(corrected_outcome) as reconciled,
+          COUNT(*) FILTER (WHERE corrected_outcome IS NOT NULL
+                             AND corrected_outcome <> raw_outcome) as disagreed,
+          MAX(last_validated_at) as last_validated_at
+        FROM signal_history_deduped
+      `);
+      const integ = (integrityResult as any)[0];
+
+      // Realised and unrealised are never summed. Every figure in the arms above is REALISED.
+      const openResult = await db.execute(sql`
+        SELECT COUNT(*) as pending, MIN(created_at) as oldest_pending_at
+        FROM signal_history_deduped WHERE outcome = 'PENDING'
+      `);
+      const openRow = (openResult as any)[0];
+
+      // Read from the service rather than restated, so this cannot drift from the live config.
+      const propConfig = propFirmService.getConfig();
+      const reconciledCount = parseInt(integ.reconciled) || 0;
+      const disagreedCount = parseInt(integ.disagreed) || 0;
+
       res.json({
+        integrity: {
+          totalRows: parseInt(integ.total) || 0,
+          reconciled: reconciledCount,
+          disagreed: disagreedCount,
+          disagreementPct: reconciledCount > 0
+            ? parseFloat((100 * disagreedCount / reconciledCount).toFixed(1))
+            : 0,
+          lastValidatedAt: integ.last_validated_at,
+          note: 'Outcomes re-derived from 5-minute candles. "disagreed" is how many differed '
+              + 'from what the system originally recorded.',
+        },
+        open: {
+          pending: parseInt(openRow.pending) || 0,
+          oldestPendingAt: openRow.oldest_pending_at,
+          note: 'Unrealised. Never combined with the realised figures.',
+        },
+        riskConfig: {
+          maxTradesPerDay: propConfig.maxTradesPerDay,
+          riskPerTradePercent: propConfig.riskPerTrade,
+          positionSizeHighPercent: propFirmService.getPositionSize('HIGH'),
+          positionSizeMediumPercent: propFirmService.getPositionSize('MEDIUM'),
+          signalCooldownMinutes: 240,
+          highTierConfidence: 90,
+          confidenceScaleMax: 130,
+          maxConcurrentCorrelated: null,
+          correlationControlNote: 'No correlation control exists. The 240-minute cooldown is '
+              + 'PER SYMBOL and only prevents sequential re-entry, so simultaneous signals on '
+              + 'correlated pairs (EUR/USD and USD/CHF run about -0.9) are not restricted.',
+        },
         fxifyOnly: {
           overall: {
             totalSignals: parseInt(fxifyOverall.total_signals),
@@ -548,8 +633,21 @@ export function registerAdminRoutes(app: Express) {
             avgWinPips: fxifyAvgWinPips,
             avgLossPips: fxifyAvgLossPips,
             profitFactor: parseFloat(fxifyProfitFactor.toFixed(2)),
-            sharpeRatio: parseFloat(fxifySharpeRatio.toFixed(2)),
+            sharpeRatio: parseFloat(fxifySharpeRatio.toFixed(4)),
+            sharpeNote: 'mean / sd of per-trade pips. Negative is a real value, not an error.',
+            sdPips: parseFloat(fxifySdPips.toFixed(2)),
             maxDrawdown: parseFloat(fxifyMaxDrawdown.toFixed(2)),
+            avgHoldHours: parseFloat(fxifyOverall.avg_hold_hours) || 0,
+            bestTradePips: parseFloat(fxifyOverall.best_trade_pips) || 0,
+            worstTradePips: parseFloat(fxifyOverall.worst_trade_pips) || 0,
+            longs: parseInt(fxifyOverall.longs) || 0,
+            shorts: parseInt(fxifyOverall.shorts) || 0,
+            longWinRate: parseInt(fxifyOverall.longs) > 0
+              ? parseFloat((100 * parseInt(fxifyOverall.long_wins) / parseInt(fxifyOverall.longs)).toFixed(1))
+              : 0,
+            shortWinRate: parseInt(fxifyOverall.shorts) > 0
+              ? parseFloat((100 * parseInt(fxifyOverall.short_wins) / parseInt(fxifyOverall.shorts)).toFixed(1))
+              : 0,
           },
           cumulativeProfit: fxifyCumulativeProfitResult as any[],
           monthlyComparison: fxifyMonthlyResult as any[],
@@ -565,8 +663,21 @@ export function registerAdminRoutes(app: Express) {
             avgWinPips: allAvgWinPips,
             avgLossPips: allAvgLossPips,
             profitFactor: parseFloat(allProfitFactor.toFixed(2)),
-            sharpeRatio: parseFloat(allSharpeRatio.toFixed(2)),
+            sharpeRatio: parseFloat(allSharpeRatio.toFixed(4)),
+            sharpeNote: 'mean / sd of per-trade pips. Negative is a real value, not an error.',
+            sdPips: parseFloat(allSdPips.toFixed(2)),
             maxDrawdown: parseFloat(allMaxDrawdown.toFixed(2)),
+            avgHoldHours: parseFloat(allOverall.avg_hold_hours) || 0,
+            bestTradePips: parseFloat(allOverall.best_trade_pips) || 0,
+            worstTradePips: parseFloat(allOverall.worst_trade_pips) || 0,
+            longs: parseInt(allOverall.longs) || 0,
+            shorts: parseInt(allOverall.shorts) || 0,
+            longWinRate: parseInt(allOverall.longs) > 0
+              ? parseFloat((100 * parseInt(allOverall.long_wins) / parseInt(allOverall.longs)).toFixed(1))
+              : 0,
+            shortWinRate: parseInt(allOverall.shorts) > 0
+              ? parseFloat((100 * parseInt(allOverall.short_wins) / parseInt(allOverall.shorts)).toFixed(1))
+              : 0,
           },
           cumulativeProfit: allCumulativeProfitResult as any[],
           monthlyComparison: allMonthlyResult as any[],
