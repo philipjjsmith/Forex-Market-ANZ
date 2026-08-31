@@ -1249,7 +1249,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).send(`<h2>❌ Token exchange failed: ${tokens.errorCode} — ${tokens.description}</h2>`);
       }
 
-      console.log('[cTrader OAuth] ✅ Refresh token:', tokens.refreshToken);
+      // NEVER log the token itself. Render's log history is retained and was already the
+      // route by which CTRADER_CLIENT_SECRET leaked; printing the refresh token here would
+      // expose the new credential the instant it is minted, and cTrader offers no regenerate
+      // control — recovering means deleting and recreating the whole app. Length only.
+      console.log(`[cTrader OAuth] ✅ Refresh token minted (${tokens.refreshToken?.length ?? 0} chars) — shown in the browser only.`);
 
       return res.send(`<!DOCTYPE html><html><body style="font-family:sans-serif;max-width:640px;margin:60px auto;padding:20px">
         <h1 style="color:green">✅ cTrader Authorization Successful!</h1>
@@ -1263,7 +1267,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           <tr><td style="padding:6px;border:1px solid #ddd"><code>CTRADER_REFRESH_TOKEN</code></td><td style="padding:6px;border:1px solid #ddd">value above ☝️</td></tr>
           <tr><td style="padding:6px;border:1px solid #ddd"><code>CTRADER_ACCOUNT_BALANCE</code></td><td style="padding:6px;border:1px solid #ddd">2500</td></tr>
         </table>
-        <p style="margin-top:20px;color:green"><strong>Once deployed — the next HIGH-tier signal will auto-trade on your The5ers account.</strong></p>
+        <p style="margin-top:20px"><strong>This does NOT enable live trading.</strong> Execution stays on the
+        DEMO host unless <code>CTRADER_MODE=live</code> AND <code>CTRADER_ALLOW_LIVE=true</code> are both set.
+        Leave them unset.</p>
+        <p style="color:#b00"><strong>Treat the token above as a password.</strong> Paste it into Render only —
+        do not send it over chat or email.</p>
       </body></html>`);
     } catch (err: any) {
       console.error('[cTrader OAuth] Error:', err.message);
