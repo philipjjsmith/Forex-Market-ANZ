@@ -109,9 +109,12 @@ function reachesExpiry(bars: any, expiresAt: Date): boolean {
     const end = new Date(r.expires_at);
     try {
       const bars = await twelveDataAPI.fetchCandlesInWindow(r.symbol, '5min', start, end);
-      if (!bars || bars.length === 0) {
+      // Array.isArray, not `.length === 0`: a STRING also has a length, so a non-array return
+      // slipped past the old guard and was then stored by db.json() as a jsonb string scalar.
+      // Measured: 1 row of 307 landed that way before this check existed.
+      if (!Array.isArray(bars) || bars.length === 0) {
         empty++;
-        console.log(`  ~ ${r.signal_id} ${r.symbol}: no bars returned`);
+        console.log(`  ~ ${r.signal_id} ${r.symbol}: no usable bars (got ${typeof bars})`);
         continue;
       }
       await db`

@@ -16,6 +16,11 @@
  * USAGE
  *   npx tsx scripts/counterfactual-exits.ts             # every row that has a usable path
  *   npx tsx scripts/counterfactual-exits.ts --min-bars=100
+ *
+ * Reads `signal_history_deduped`, NEVER the raw table. The raw table over-counts 4.31x (307 rows
+ * collapse to ~70 real trades) and the duplicates cluster on losers, so scoring exit rules on it
+ * would weight the same trade several times and bias every rule downward by a different amount.
+ * This is the single most repeated mistake in this project's history.
  */
 import 'dotenv/config';
 import postgres from 'postgres';
@@ -82,8 +87,8 @@ function scoreExit(
   const rows: any[] = await db`
     SELECT signal_id, symbol, type, entry_price, stop_loss, tp1, outcome,
            corrected_outcome, profit_loss_pips, outcome_candles
-    FROM signal_history
-    WHERE data_quality = 'production' AND outcome_candles IS NOT NULL
+    FROM signal_history_deduped
+    WHERE outcome_candles IS NOT NULL
     ORDER BY created_at DESC
   `;
 
