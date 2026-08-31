@@ -7,6 +7,7 @@ import { exchangeRateAPI } from '../services/exchangerate-api';
 import { ctraderExecutor, CTRADER_HOSTS } from '../services/ctrader-executor';
 import { requireAuth, requireAdmin } from '../auth-middleware';
 import { propFirmService } from '../services/prop-firm-config';
+import { MAX_EFFECTIVE_EXPOSURE } from '../services/correlation-guard';
 
 export function registerAdminRoutes(app: Express) {
   console.log('✅ Admin routes registered');
@@ -576,6 +577,7 @@ export function registerAdminRoutes(app: Express) {
           COUNT(corrected_outcome) as reconciled,
           COUNT(*) FILTER (WHERE corrected_outcome IS NOT NULL
                              AND corrected_outcome <> raw_outcome) as disagreed,
+          COUNT(*) FILTER (WHERE requires_approval) as escalated,
           MAX(last_validated_at) as last_validated_at
         FROM signal_history_deduped
       `);
@@ -601,6 +603,7 @@ export function registerAdminRoutes(app: Express) {
           disagreementPct: reconciledCount > 0
             ? parseFloat((100 * disagreedCount / reconciledCount).toFixed(1))
             : 0,
+          escalated: parseInt(integ.escalated) || 0,
           lastValidatedAt: integ.last_validated_at,
           note: 'Outcomes re-derived from 5-minute candles. "disagreed" is how many differed '
               + 'from what the system originally recorded.',
@@ -618,10 +621,13 @@ export function registerAdminRoutes(app: Express) {
           signalCooldownMinutes: 240,
           highTierConfidence: 90,
           confidenceScaleMax: 130,
-          maxConcurrentCorrelated: null,
-          correlationControlNote: 'No correlation control exists. The 240-minute cooldown is '
-              + 'PER SYMBOL and only prevents sequential re-entry, so simultaneous signals on '
-              + 'correlated pairs (EUR/USD and USD/CHF run about -0.9) are not restricted.',
+          maxEffectiveExposure: MAX_EFFECTIVE_EXPOSURE,
+          correlationControlNote: 'Effective exposure counts the candidate as 1.0 and adds '
+              + 'direction x direction x measured correlation for every open position, so a '
+              + 'signal that compounds an existing bet is held for approval rather than '
+              + 'auto-executed. Correlations are measured from ~24,573 aligned hourly returns '
+              + '(2022-2026): EUR/USD vs GBP/USD +0.78 is the strongest pairing, and EUR/USD vs '
+              + 'USD/CHF is -0.75, where OPPOSITE directions are the same bet twice.',
         },
         fxifyOnly: {
           overall: {
@@ -854,6 +860,7 @@ export function registerAdminRoutes(app: Express) {
           COUNT(corrected_outcome) as reconciled,
           COUNT(*) FILTER (WHERE corrected_outcome IS NOT NULL
                              AND corrected_outcome <> raw_outcome) as disagreed,
+          COUNT(*) FILTER (WHERE requires_approval) as escalated,
           MAX(last_validated_at) as last_validated_at
         FROM signal_history_deduped
       `);
@@ -882,6 +889,7 @@ export function registerAdminRoutes(app: Express) {
           disagreementPct: reconciledCount > 0
             ? parseFloat((100 * disagreedCount / reconciledCount).toFixed(1))
             : 0,
+          escalated: parseInt(integ.escalated) || 0,
           lastValidatedAt: integ.last_validated_at,
           note: 'Outcomes re-derived from 5-minute candles. "disagreed" is how many differed '
               + 'from what the system originally recorded.',
@@ -899,10 +907,13 @@ export function registerAdminRoutes(app: Express) {
           signalCooldownMinutes: 240,
           highTierConfidence: 90,
           confidenceScaleMax: 130,
-          maxConcurrentCorrelated: null,
-          correlationControlNote: 'No correlation control exists. The 240-minute cooldown is '
-              + 'PER SYMBOL and only prevents sequential re-entry, so simultaneous signals on '
-              + 'correlated pairs (EUR/USD and USD/CHF run about -0.9) are not restricted.',
+          maxEffectiveExposure: MAX_EFFECTIVE_EXPOSURE,
+          correlationControlNote: 'Effective exposure counts the candidate as 1.0 and adds '
+              + 'direction x direction x measured correlation for every open position, so a '
+              + 'signal that compounds an existing bet is held for approval rather than '
+              + 'auto-executed. Correlations are measured from ~24,573 aligned hourly returns '
+              + '(2022-2026): EUR/USD vs GBP/USD +0.78 is the strongest pairing, and EUR/USD vs '
+              + 'USD/CHF is -0.75, where OPPOSITE directions are the same bet twice.',
         },
         overall: {
           totalSignals: parseInt(overall.total_signals),

@@ -7,6 +7,7 @@ import { parameterService } from './parameter-service';
 import { propFirmService } from './prop-firm-config';
 import { sessionAnalyzer } from './session-analyzer';
 import { telegramNotifier } from './telegram-notifier';
+import { evaluateCorrelation, MAX_EFFECTIVE_EXPOSURE } from './correlation-guard';
 import { ctraderExecutor } from './ctrader-executor';
 import { getSignalNumber } from './signal-stats';
 import { recordAnalysis, linkProvenanceToSignal } from './provenance';
@@ -47,6 +48,9 @@ interface Signal {
   tier: 'HIGH' | 'MEDIUM';
   tradeLive: boolean;
   positionSizePercent: number;
+  /** Set by the correlation guard. Delivered and recorded, but never auto-executed. */
+  requiresApproval?: boolean;
+  approvalReason?: string | null;
   orderType: string;
   executionType: string;
   indicators: {
@@ -1405,6 +1409,39 @@ export class SignalGenerator {
             signalsGenerated++;
             signal.symbol = symbol; // Set the correct symbol
 
+            // 🔗 CORRELATION GUARD (2026-08-31)
+            //
+            // Every pair in the traded set has USD on one side, so every signal is a USD bet in
+            // a different costume. Until now nothing stopped the system holding three copies of
+            // one view at once: the 240-minute cooldown is PER SYMBOL and only prevents
+            // sequential re-entry. Pre-registration §7 named the consequence -- "simultaneous
+            // signals are one bet booked several times" -- and nothing was ever done about it.
+            //
+            // The signal is NOT dropped when the cap is exceeded. It is recorded and delivered
+            // like any other signal, so the forward out-of-sample dataset stays complete, but it
+            // is held back from automatic execution and marked for a human decision. Dropping it
+            // would put a hole in the only clean dataset this project has left.
+            const openRows = await db.execute(sql`
+              SELECT symbol, type FROM signal_history
+              WHERE outcome = 'PENDING' AND data_quality = 'production'
+            `);
+            const verdict = evaluateCorrelation(
+              { symbol, type: signal.type },
+              (openRows as any[]).map(r => ({ symbol: r.symbol, type: r.type }))
+            );
+            if (!verdict.allowed) {
+              console.log(
+                `🔗 [Correlation] ${symbol} ${signal.type} held for approval — ` +
+                `exposure ${verdict.exposure.toFixed(2)} > cap ${verdict.cap.toFixed(2)}`
+              );
+            }
+            if (verdict.hasUnknownPairs) {
+              console.log('⚠️ [Correlation] an open position sits on a pair absent from the '
+                + 'measured matrix and was counted as independent.');
+            }
+            signal.requiresApproval = !verdict.allowed;
+            signal.approvalReason = verdict.reason;
+
             // Track signal to database (both HIGH and MEDIUM tiers)
             try {
               // Store 15-min candles for chart visualization (better granularity than 1H)
@@ -1435,7 +1472,12 @@ export class SignalGenerator {
                 signalNumber,
                 orderType: signal.orderType,
               });
-              // Auto-execute on The5ers cTrader (HIGH tier only; no-op until CTRADER_ env vars set)
+              // Auto-execute on The5ers cTrader (HIGH tier only; no-op until CTRADER_ env vars set).
+              // An escalated signal is delivered but never auto-traded -- that is the whole point
+              // of the approval gate. It stays in the database and in every statistic.
+              if (signal.requiresApproval) {
+                console.log(`⏸️  [Approval] ${symbol} delivered but NOT auto-executed. ${signal.approvalReason}`);
+              } else {
               await ctraderExecutor.executeSignal({
                 symbol: signal.symbol,
                 type: signal.type,
@@ -1446,6 +1488,7 @@ export class SignalGenerator {
                 tier: signal.tier,
                 positionSizePercent: signal.positionSizePercent,
               });
+              }
             } catch (error) {
               console.error(`❌ Failed to track ${symbol} signal:`, error);
             }
@@ -1537,7 +1580,9 @@ export class SignalGenerator {
         created_at,
         expires_at,
         outcome,
-        data_quality
+        data_quality,
+        requires_approval,
+        approval_reason
       ) VALUES (
         ${signal.id},
         ${systemUserId},
@@ -1563,7 +1608,9 @@ export class SignalGenerator {
         NOW(),
         NOW() + INTERVAL '48 hours',
         'PENDING',
-        'production'
+        'production',
+        ${signal.requiresApproval ?? false},
+        ${signal.approvalReason ?? null}
       )
       ON CONFLICT (signal_id) DO NOTHING
     `);

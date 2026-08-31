@@ -153,6 +153,7 @@ interface IntegrityPanel {
   reconciled: number;
   disagreed: number;
   disagreementPct: number;
+  escalated: number;
   lastValidatedAt: string | null;
   note: string;
 }
@@ -171,7 +172,7 @@ interface RiskConfigPanel {
   signalCooldownMinutes: number;
   highTierConfidence: number;
   confidenceScaleMax: number;
-  maxConcurrentCorrelated: number | null;
+  maxEffectiveExposure: number;
   correlationControlNote: string;
 }
 
@@ -1520,10 +1521,15 @@ export default function Admin() {
                         <div>
                           {dualGrowthStats.riskConfig?.signalCooldownMinutes}min cooldown
                           {' · correlation cap: '}
-                          <span className="text-amber-400">
-                            {dualGrowthStats.riskConfig?.maxConcurrentCorrelated ?? 'none'}
+                          <span className="text-emerald-400">
+                            {dualGrowthStats.riskConfig?.maxEffectiveExposure?.toFixed(2)} exposure
                           </span>
                         </div>
+                        {(dualGrowthStats.integrity?.escalated ?? 0) > 0 && (
+                          <div className="text-amber-400">
+                            {dualGrowthStats.integrity?.escalated} signal(s) held for approval
+                          </div>
+                        )}
                       </div>
                       <div className="mt-2 text-xs text-slate-500 leading-snug">
                         {dualGrowthStats.riskConfig?.correlationControlNote}
