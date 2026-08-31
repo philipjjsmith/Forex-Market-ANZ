@@ -130,7 +130,7 @@ class CTraderExecutor {
       let buf = Buffer.alloc(0);
 
       socket.once('secureConnect', () => {
-        console.log('[cTrader] TLS connected to live.ctraderapi.com:5036 ✅');
+        console.log(`[cTrader] TLS connected to ${hostOverride ?? this.host}:${LIVE_PORT} ✅`);
         resolve({ socket, emitter });
       });
 
@@ -144,7 +144,7 @@ class CTraderExecutor {
           buf = buf.subarray(4 + msgLen);
           try {
             const msg = JSON.parse(msgBuf.toString('utf8'));
-            console.log(`[cTrader] ← type:${msg.payloadType}`, JSON.stringify(msg.payload ?? {}).substring(0, 150));
+            console.log(`[cTrader] ← type:${msg.payloadType}`, CTraderExecutor.redact(msg.payload));
             emitter.emit(`type:${msg.payloadType}`, msg);
           } catch { /* skip malformed */ }
         }
@@ -164,12 +164,29 @@ class CTraderExecutor {
 
   // ─── Message helpers ──────────────────────────────────────────────────────
 
+  private msgSeq = 0;
+
+  /** Redact anything secret before it can reach a log sink. */
+  private static redact(payload: any): string {
+    const SECRET = /^(clientId|clientSecret|accessToken|refreshToken)$/i;
+    const safe: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(payload ?? {})) {
+      safe[k] = SECRET.test(k) ? `<redacted:${String(v).length}chars>` : v;
+    }
+    return JSON.stringify(safe).slice(0, 150);
+  }
+
   private send(socket: tls.TLSSocket, payloadType: number, payload: object): void {
-    const json = JSON.stringify({ payloadType, payload });
+    // clientMsgId is how cTrader correlates a response to its request. Without it the server
+    // can silently drop the message — which presents exactly as "TLS connected, request sent,
+    // no reply ever arrives", the symptom seen here on BOTH hosts.
+    const clientMsgId = `m${Date.now()}_${++this.msgSeq}`;
+    const json = JSON.stringify({ clientMsgId, payloadType, payload });
     const msgBuf = Buffer.from(json, 'utf8');
     const lenBuf = Buffer.alloc(4);
     lenBuf.writeUInt32BE(msgBuf.length, 0);
-    console.log(`[cTrader] → type:${payloadType}`, JSON.stringify(payload).substring(0, 150));
+    // NEVER log the raw payload: it carries clientSecret and access tokens.
+    console.log(`[cTrader] → type:${payloadType}`, CTraderExecutor.redact(payload));
     socket.write(Buffer.concat([lenBuf, msgBuf]));
   }
 
