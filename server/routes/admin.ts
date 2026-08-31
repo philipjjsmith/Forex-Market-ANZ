@@ -91,6 +91,22 @@ export function registerAdminRoutes(app: Express) {
     }
   });
 
+  /** GET = list open demo positions (read-only). POST = close them (needs the confirm string). */
+  app.get("/api/admin/ctrader-positions", requireAuth, requireAdmin, async (_req, res) => {
+    try { res.json(await ctraderExecutor.demoPositions()); }
+    catch (err: any) { res.status(400).json({ error: err?.message ?? 'failed' }); }
+  });
+
+  app.post("/api/admin/ctrader-positions/close", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      res.json(await ctraderExecutor.demoPositions({
+        close: true,
+        confirm: (req.body?.confirm ?? req.query.confirm ?? '') as string,
+        positionId: req.body?.positionId ? Number(req.body.positionId) : undefined,
+      }));
+    } catch (err: any) { res.status(400).json({ error: err?.message ?? 'failed' }); }
+  });
+
   app.get("/api/admin/health", requireAuth, requireAdmin, async (req, res) => {
     try {
       // Get pending signals count

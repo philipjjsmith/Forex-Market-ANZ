@@ -56,6 +56,9 @@ const PT = {
   ACCOUNT_AUTH_REQ:  2102,
   ACCOUNT_AUTH_RES:  2103,
   NEW_ORDER_REQ:     2106,
+  CLOSE_POSITION_REQ: 2111,
+  RECONCILE_REQ:     2124,
+  RECONCILE_RES:     2125,
   SYMBOLS_LIST_REQ:  2114,
   SYMBOLS_LIST_RES:  2115,
   SYMBOL_BY_ID_REQ:  2116,
@@ -496,6 +499,73 @@ class CTraderExecutor {
     await this.saveRefreshToken(token);
     this.accessToken = null;   // force the next call to use the new token
     this.tokenExpiry = 0;
+  }
+
+  /**
+   * List open positions on the DEMO account, and optionally CLOSE them. Never touches live.
+   *
+   * The executor could open a position but had no way to close one, which is half a trading
+   * system. The smoke test deliberately left position 285950003 open because closing it meant
+   * guessing a payload type — this implements it properly instead.
+   *
+   * Reconciles FIRST and closes using the volume the broker reports, rather than the volume we
+   * think we sent. A close request carrying the wrong volume is a partial close, which would
+   * silently leave exposure behind while reporting success.
+   */
+  async demoPositions(opts: { close?: boolean; confirm?: string; positionId?: number } = {}): Promise<any> {
+    if (!this.isConfigured) throw new Error('cTrader credentials are not configured.');
+    if (this.isLiveMode) throw new Error('REFUSED: live mode is active. This only ever operates on demo.');
+    if (opts.close && opts.confirm !== 'CLOSE_DEMO_POSITIONS') {
+      throw new Error('Refused: closing requires the confirmation string.');
+    }
+
+    const accessToken = await this.getAccessToken();
+    const { socket, emitter } = await this.openConnection(DEMO_HOST);
+    try {
+      this.send(socket, PT.APP_AUTH_REQ, { clientId: this.clientId!, clientSecret: this.clientSecret! });
+      await this.waitFor(emitter, PT.APP_AUTH_RES);
+
+      this.send(socket, PT.GET_ACCOUNTS_REQ, { accessToken });
+      const accts: any[] = (await this.waitFor(emitter, PT.GET_ACCOUNTS_RES)).payload?.ctidTraderAccount ?? [];
+      const demo = accts.filter((a: any) => a.isLive !== true);
+      if (!demo.length) throw new Error('REFUSED: no demo account on this token.');
+      const accountId = demo[0].ctidTraderAccountId;
+
+      this.send(socket, PT.ACCOUNT_AUTH_REQ, { ctidTraderAccountId: accountId, accessToken });
+      await this.waitFor(emitter, PT.ACCOUNT_AUTH_RES);
+
+      this.send(socket, PT.RECONCILE_REQ, { ctidTraderAccountId: accountId });
+      const rec = await this.waitFor(emitter, PT.RECONCILE_RES, 20000);
+      const positions: any[] = rec.payload?.position ?? [];
+      const open = positions.map((p: any) => ({
+        positionId: p.positionId,
+        symbolId:   p.tradeData?.symbolId,
+        side:       p.tradeData?.tradeSide === 1 ? 'BUY' : 'SELL',
+        volume:     p.tradeData?.volume,
+        price:      p.price,
+        status:     p.positionStatus,
+      }));
+
+      if (!opts.close) return { accountId, accountIsLive: false, openPositions: open };
+
+      const targets = opts.positionId ? open.filter(p => p.positionId === opts.positionId) : open;
+      const closed: any[] = [];
+      for (const p of targets) {
+        if (!p.volume || p.volume <= 0) { closed.push({ ...p, result: 'skipped — broker reports zero volume' }); continue; }
+        this.send(socket, PT.CLOSE_POSITION_REQ, {
+          ctidTraderAccountId: accountId, positionId: p.positionId, volume: p.volume,
+        });
+        try {
+          const ev = await this.waitFor(emitter, PT.EXECUTION_EVENT, 20000);
+          closed.push({ ...p, result: 'closed', executionType: ev.payload?.executionType });
+        } catch (e: any) {
+          closed.push({ ...p, result: `FAILED: ${e.message}` });
+        }
+      }
+      return { accountId, accountIsLive: false, requested: targets.length, closed };
+    } finally {
+      try { socket.close(); } catch { /* already closed */ }
+    }
   }
 
   /**

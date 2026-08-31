@@ -276,6 +276,32 @@ export default function Admin() {
     }
   };
 
+  /** Open demo positions: list (read-only) and close. Never touches live — enforced server-side. */
+  const [positions, setPositions] = useState<any>(null);
+  const [posLoading, setPosLoading] = useState(false);
+
+  const callPositions = async (close: boolean) => {
+    setPosLoading(true);
+    setPositions(null);
+    try {
+      const token = getToken();
+      const res = await fetch(close ? API_ENDPOINTS.ADMIN_CTRADER_POSITIONS_CLOSE : API_ENDPOINTS.ADMIN_CTRADER_POSITIONS, {
+        method: close ? 'POST' : 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` }),
+        },
+        credentials: 'include',
+        ...(close ? { body: JSON.stringify({ confirm: 'CLOSE_DEMO_POSITIONS' }) } : {}),
+      });
+      setPositions(await res.json());
+    } catch (err: any) {
+      setPositions({ error: err?.message ?? 'request failed' });
+    } finally {
+      setPosLoading(false);
+    }
+  };
+
   // Fetch system health
   const { data: health, isLoading: healthLoading } = useQuery<SystemHealth>({
     queryKey: [API_ENDPOINTS.ADMIN_HEALTH],
@@ -767,6 +793,23 @@ export default function Admin() {
             {smoke && (
               <pre className="mt-3 text-xs text-slate-200 bg-slate-900/80 rounded p-3 overflow-x-auto max-h-80">
                 {JSON.stringify(smoke, null, 2)}
+              </pre>
+            )}
+          </div>
+
+          <div className="border-t border-slate-600/50 pt-3 mt-3">
+            <p className="text-xs text-slate-400 mb-2">Open positions on the demo account.</p>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => callPositions(false)} disabled={posLoading} data-testid="button-positions-list">
+                {posLoading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Working…</> : <>List open positions</>}
+              </Button>
+              <Button variant="destructive" onClick={() => callPositions(true)} disabled={posLoading} data-testid="button-positions-close">
+                Close all demo positions
+              </Button>
+            </div>
+            {positions && (
+              <pre className="mt-3 text-xs text-slate-200 bg-slate-900/80 rounded p-3 overflow-x-auto max-h-80">
+                {JSON.stringify(positions, null, 2)}
               </pre>
             )}
           </div>
