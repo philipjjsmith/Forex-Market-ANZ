@@ -4,6 +4,8 @@ import { API_ENDPOINTS } from '../../client/src/config/api';
 import { twelveDataAPI } from './twelve-data';
 import { telegramNotifier } from './telegram-notifier';
 import { getMonthWinCount, getMonthLossCount, getMonthNetPips, getCurrentStreak, getSignalNumber } from './signal-stats';
+import { sessionAnalyzer } from './session-analyzer';
+import { reachesExpiry } from './outcome-path';
 
 /**
  * Outcome Validator Service
@@ -80,6 +82,12 @@ export class OutcomeValidator {
     try {
       // 0. Backstop first — close anything unresolvable before it can block a symbol.
       await this.closeUnresolvableSignals();
+
+      // 0.5 Complete any resolution path that stops short of its window.
+      //
+      // Deliberately placed BEFORE the pending-signal fetch: that path returns early when there
+      // is nothing pending, which is the ordinary state, so anything after it would rarely run.
+      await this.completeResolutionPaths();
 
       // 1. Fetch all PENDING signals
       const pendingSignals = await this.fetchPendingSignals();
@@ -191,6 +199,83 @@ export class OutcomeValidator {
     `);
 
     return result as any[];
+  }
+
+  /**
+   * Complete resolution paths that stop short of their window.
+   *
+   * `outcome_candles` is written when a trade RESOLVES, clamped to `now` — so a signal that stops
+   * out after two hours stores two hours, and the remaining 46 have not happened yet. That is the
+   * ordinary shape of every forward row, and a path ending where the CURRENT stop fired cannot
+   * answer what a wider stop or a breakeven would have done: the evidence stops exactly where the
+   * counterfactual starts. Storing the path at all is pointless without this step.
+   *
+   * `scripts/backfill-outcome-paths.ts` does the same work by hand. It has to keep existing for
+   * back-dated repair, but relying on someone remembering to run it loses data on a DEADLINE:
+   * the free tier stops serving 5-minute history for old dates (measured — June rows return 13.6h
+   * of a 48h window), so an un-completed tail becomes permanently unrecoverable.
+   *
+   * Budget: one API call per row completed, and zero when there is nothing to do. Guarded by a
+   * per-run cap, a 30-day floor (older rows can no longer be filled, so retrying them would spend
+   * a call per run forever), and a kill-zone check so this never competes with signal generation
+   * for the shared Twelve Data key.
+   */
+  private async completeResolutionPaths(): Promise<void> {
+    const MAX_PER_RUN = 3;
+
+    try {
+      if (sessionAnalyzer.isInKillZone()) return;
+
+      const rows = (await db.execute(sql`
+        SELECT signal_id, symbol, created_at, expires_at, outcome_candles
+        FROM signal_history
+        WHERE data_quality = 'production'
+          AND expires_at < NOW()
+          AND created_at >= NOW() - INTERVAL '30 days'
+        ORDER BY created_at DESC
+      `)) as any[];
+
+      const todo = rows.filter(
+        r => !reachesExpiry(r.outcome_candles, new Date(r.expires_at), new Date(r.created_at))
+      );
+      if (todo.length === 0) return;
+
+      console.log(`🧩 Completing ${Math.min(todo.length, MAX_PER_RUN)} of ${todo.length} truncated resolution path(s)`);
+
+      for (const r of todo.slice(0, MAX_PER_RUN)) {
+        try {
+          const start = new Date(Math.floor(new Date(r.created_at).getTime() / 300_000) * 300_000);
+          const bars = await twelveDataAPI.fetchCandlesInWindow(
+            r.symbol, '5min', start, new Date(r.expires_at)
+          );
+
+          // Array.isArray, not `.length === 0` — a STRING also has a length, and storing one
+          // yields a jsonb string scalar that every `Array.isArray` consumer skips in silence.
+          //
+          // Note the UPDATE below carries NO `::jsonb` cast, matching updateSignalOutcome above.
+          // An explicit cast is what makes a driver bind the payload as a JSON *string scalar*
+          // (`"[{...}]"` rather than `[{...}]`); that is how the backfill silently wrote one bad
+          // row before `hasPath` started checking Array.isArray. This path is already proven to
+          // store a jsonb array — every production row it wrote reads back as `array`.
+          if (!Array.isArray(bars) || bars.length === 0) {
+            console.warn(`⚠️  No bars to complete ${r.signal_id} (${r.symbol})`);
+            continue;
+          }
+
+          await db.execute(sql`
+            UPDATE signal_history
+            SET outcome_candles = ${JSON.stringify(bars)}, updated_at = NOW()
+            WHERE signal_id = ${r.signal_id}
+          `);
+          console.log(`✅ Completed path for ${r.signal_id}: ${bars.length} bars`);
+        } catch (e: any) {
+          console.error(`⚠️  Could not complete path for ${r.signal_id}:`, e?.message ?? e);
+        }
+      }
+    } catch (e) {
+      // Never let this stop outcome validation — it is data enrichment, not a trade decision.
+      console.error('⚠️  Resolution-path completion failed:', e);
+    }
   }
 
   /**

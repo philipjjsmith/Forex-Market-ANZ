@@ -23,7 +23,7 @@
  *
  *   npx tsx scripts/test-outcome-path-completeness.ts
  */
-import { hasPath, reachesExpiry, lastTradeableBarOpen, TOLERANCE_MS } from './lib/outcome-path';
+import { hasPath, reachesExpiry, lastTradeableBarOpen, TOLERANCE_MS } from '../server/services/outcome-path';
 
 let pass = 0;
 const fails: string[] = [];

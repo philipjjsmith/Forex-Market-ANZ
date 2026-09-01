@@ -36,7 +36,7 @@
 import 'dotenv/config';
 import postgres from 'postgres';
 import { twelveDataAPI } from '../server/services/twelve-data';
-import { hasPath, reachesExpiry } from './lib/outcome-path';
+import { hasPath, reachesExpiry } from '../server/services/outcome-path';
 
 const arg = (k: string, d: string) =>
   process.argv.find(a => a.startsWith(`--${k}=`))?.split('=')[1] ?? d;

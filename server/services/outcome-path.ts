@@ -2,15 +2,16 @@
  * Is a stored resolution path COMPLETE?
  *
  * Extracted from `backfill-outcome-paths.ts` on 2026-09-01 so the predicate can be tested
- * directly. That script is a top-level IIFE — importing it would run the backfill — so the
- * helpers could not otherwise be exercised without hitting the live database and the Twelve Data
- * budget. See `scripts/test-outcome-path-completeness.ts`.
+ * directly — that script is a top-level IIFE, so importing it would run the backfill — and then
+ * moved here, because production owns it: `outcome-validator.ts` completes truncated paths on the
+ * validate-outcomes cron, and the script is the manual/back-dated path to the same work.
+ * See `scripts/test-outcome-path-completeness.ts`.
  *
  * These decide what the backfill WRITES, so they are worth assertions: too strict and it re-fetches
  * correct data on every run until the API budget is gone; too loose and forward signals keep the
  * truncated paths that make the counterfactual exit test unanswerable.
  */
-import { isMarketClosed } from '../../server/services/twelve-data';
+import { isMarketClosed } from './twelve-data';
 
 /** One bar of slack, so a feed that publishes the final bar late is not chased forever. */
 export const TOLERANCE_MS = 15 * 60_000;
