@@ -100,8 +100,8 @@ which would put expectancy at roughly **+0.010 R** — positive.
 
 ## What this changes
 
-1. **Every published expectancy for this system understated it by ~0.021 R.** The honest figure
-   for the system as deployed is **−0.0339 R**, not −0.0551 R.
+1. **Every published expectancy for this system understated it by ~0.020 R.** The honest figure
+   for the system as deployed is **−0.0357 R**, not −0.0551 R.
 2. **The §3 kill criterion is still not met**, and is now further from being met.
 3. **The "third system" defect is closed.** The backtest now models the payoff the EA actually
    uses. It still does not model the *historical* system (v3.3.0 on Twelve Data) — Amendment 3
