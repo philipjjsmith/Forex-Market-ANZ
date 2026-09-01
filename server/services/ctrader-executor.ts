@@ -813,6 +813,16 @@ class CTraderExecutor {
       const volume = minVolume ?? 100;
       if (minVolume === undefined) volumeSource += ' — volume=100 is UNVERIFIED';
 
+      // Recorded the same way an automatic execution is, so the operator's own test order is
+      // durable evidence rather than a JSON blob in a browser tab that closes. Written BEFORE the
+      // reply, so an order that goes out and then times out still leaves a trace it was sent.
+      const recId = await this.record({
+        symbol: light.symbolName, side: 'LONG', tier: 'SMOKE_TEST', status: 'sent',
+        skipReason: 'operator smoke test — minimum volume, no SL/TP',
+        mode: 'demo', host: DEMO_HOST, accountId, accountIsLive: account.isLive === true,
+        brokerSymbolId: symbolId, requestedVolume: volume, lots: volume / LOTS_TO_VOLUME,
+      });
+
       this.send(socket, PT.NEW_ORDER_REQ, {
         ctidTraderAccountId: accountId,
         symbolId,
@@ -824,6 +834,17 @@ class CTraderExecutor {
       record(exec);
 
       const pos = exec.payload?.position;
+
+      // executionType 2 = ACCEPTED, 3 = FILLED. Stored distinctly for the same reason the
+      // automatic path does it: acceptance is not evidence of a fill.
+      await this.amend(recId, {
+        status: exec.payload?.executionType === 3 ? 'filled' : 'accepted',
+        executionType: exec.payload?.executionType ?? null,
+        orderId: exec.payload?.order?.orderId ?? null,
+        positionId: pos?.positionId ?? exec.payload?.order?.positionId ?? null,
+        fillPrice: pos?.price ?? exec.payload?.deal?.executionPrice ?? null,
+      });
+
       return {
         placed: true,
         host: DEMO_HOST,
