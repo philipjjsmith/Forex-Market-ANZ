@@ -27,11 +27,16 @@
  *   npx tsx scripts/backfill-outcome-paths.ts            # dry run, reports what it would do
  *   npx tsx scripts/backfill-outcome-paths.ts --apply    # writes
  *   npx tsx scripts/backfill-outcome-paths.ts --apply --limit=50
- *   npx tsx scripts/backfill-outcome-paths.ts --apply --repair   # re-fetch partial paths too
+ *   npx tsx scripts/backfill-outcome-paths.ts --apply --repair   # ignore the age guard too
+ *
+ * Completing truncated paths is the DEFAULT as of 2026-09-01. It used to sit behind `--repair`
+ * because the reaches-expiry test counted every weekend-spanning window as partial, so the
+ * default could not be trusted to stop. That test is now market-hours aware.
  */
 import 'dotenv/config';
 import postgres from 'postgres';
 import { twelveDataAPI } from '../server/services/twelve-data';
+import { hasPath, reachesExpiry } from './lib/outcome-path';
 
 const arg = (k: string, d: string) =>
   process.argv.find(a => a.startsWith(`--${k}=`))?.split('=')[1] ?? d;
@@ -39,42 +44,6 @@ const APPLY = process.argv.includes('--apply');
 const LIMIT = parseInt(arg('limit', '40'), 10);   // free tier is 800 calls/day; stay well under
 
 const db = postgres(process.env.DATABASE_URL!, { ssl: 'require', connect_timeout: 20 });
-
-/**
- * A usable path is a jsonb ARRAY, not a jsonb string.
- *
- * postgres.js binds a JS string to a `::jsonb` cast as a JSON *string scalar*, so
- * `${JSON.stringify(bars)}::jsonb` silently stores `"[{...}]"` rather than `[{...}]`.
- * Verified with `jsonb_typeof`: rows written that way came back as 'string' while the
- * validator's own rows are 'array'. Reading them back gives a JS string, and every consumer
- * that does `Array.isArray()` skips the row without complaining.
- *
- * Writing now uses `db.json(bars)`, and this check treats anything non-array as missing so the
- * affected rows are repaired rather than left looking done.
- */
-const hasPath = (bars: any) => Array.isArray(bars) && bars.length > 0;
-
-/**
- * Whether a stored path actually runs to expiry.
- *
- * Kept SEPARATE from `hasPath` on purpose. Twelve Data's free tier has limited 5-minute history,
- * so for older signals it returns only what it holds — measured: recent signals come back with
- * ~375 bars (~31h, which is a full 48h window minus the weekend), while June signals return 164
- * bars (13.6h). Those can never satisfy a reaches-expiry test, so treating that test as the
- * backfill condition would retry them on every run forever and quietly burn the API budget.
- *
- * Default behaviour therefore skips anything with a path at all. `--repair` re-fetches partial
- * ones, for when more history becomes available or the tier changes.
- *
- * Note that a 48h window spanning a weekend ALWAYS reads as partial: the last bar is Friday's
- * close, hours before the Sunday expiry timestamp. That is correct data, not a gap, so `--repair`
- * would re-fetch those every time. It is deliberately opt-in for that reason.
- */
-function reachesExpiry(bars: any, expiresAt: Date): boolean {
-  if (!hasPath(bars)) return false;
-  const last = new Date(bars[bars.length - 1].timestamp).getTime();
-  return last >= expiresAt.getTime() - 10 * 60_000;
-}
 
 (async () => {
   const rows: any[] = await db`
@@ -85,17 +54,30 @@ function reachesExpiry(bars: any, expiresAt: Date): boolean {
     ORDER BY created_at DESC
   `;
 
+  // Rows too old for the feed to still hold 5-minute history are REPORTED but not retried.
+  //
+  // Without this, a row whose tail can never be fetched would be re-attempted on every run,
+  // spending one API call each time, forever. Measured June rows already return only ~13.6h of a
+  // 48h window. `--repair` overrides the guard for a one-off attempt at older rows.
   const REPAIR = process.argv.includes('--repair');
-  const todo = REPAIR
-    ? rows.filter(r => !reachesExpiry(r.outcome_candles, new Date(r.expires_at)))
-    : rows.filter(r => !hasPath(r.outcome_candles));
+  const MAX_AGE_DAYS = parseInt(arg('max-age-days', '30'), 10);
+  const cutoff = Date.now() - MAX_AGE_DAYS * 86_400_000;
+
+  const incomplete = rows.filter(
+    r => !reachesExpiry(r.outcome_candles, new Date(r.expires_at), new Date(r.created_at))
+  );
+  const todo = REPAIR ? incomplete : incomplete.filter(r => new Date(r.created_at).getTime() >= cutoff);
+  const stale = incomplete.length - todo.length;
 
   const withPath = rows.filter(r => hasPath(r.outcome_candles)).length;
-  const full = rows.filter(r => reachesExpiry(r.outcome_candles, new Date(r.expires_at))).length;
   console.log(`production signals past expiry : ${rows.length}`);
   console.log(`  have SOME path               : ${withPath}`);
-  console.log(`  path reaches expiry          : ${full}`);
-  console.log(`need backfilling               : ${todo.length}${REPAIR ? '  (--repair: includes partial paths)' : ''}`);
+  console.log(`  path runs to last open bar   : ${rows.length - incomplete.length}`);
+  console.log(`  truncated                    : ${incomplete.length}`);
+  if (stale > 0) {
+    console.log(`    of which too old to retry  : ${stale}  (created > ${MAX_AGE_DAYS}d ago; --repair to force)`);
+  }
+  console.log(`need backfilling               : ${todo.length}`);
   console.log(`this run will attempt          : ${Math.min(todo.length, LIMIT)}  (limit ${LIMIT})`);
   if (!APPLY) {
     console.log('\nDRY RUN — nothing written. Re-run with --apply to write.');
