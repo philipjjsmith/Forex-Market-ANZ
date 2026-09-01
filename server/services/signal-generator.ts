@@ -1189,8 +1189,19 @@ export class MACrossoverStrategy {
       tier,
       tradeLive,
       positionSizePercent,
-      orderType: signalType === 'LONG' ? 'Buy Limit' : 'Sell Limit',
-      executionType: 'PENDING',
+      // MARKET, because that is what both executors actually send.
+      //
+      // This said 'Buy Limit' / 'Sell Limit' until 2026-08-31 while ctrader-executor.ts sent a
+      // market order and ForexMarketANZ_EA.mq5 called PlaceMarketOrder. Pre-registration §6 flagged
+      // it: "Signals are labelled 'Buy Limit' but both executors send MARKET orders, and the
+      // stated entry is measurably 5-8 pips stale."
+      //
+      // It is not a cosmetic mismatch. A subscriber told "Buy Limit at 1.08500" places a RESTING
+      // order; if price never returns they never enter, while this system records a fill at that
+      // price. Their results and our record then diverge permanently, in a direction nothing
+      // measures. 26 of 72 stored trades carry the wrong label (the older 46 correctly say MARKET).
+      orderType: 'MARKET',
+      executionType: 'IMMEDIATE',
       indicators: {
         fastMA: oneHourFastMA.toFixed(5),
         slowMA: oneHourSlowMA.toFixed(5),

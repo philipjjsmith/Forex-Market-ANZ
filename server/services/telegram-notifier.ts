@@ -142,14 +142,31 @@ class TelegramNotifier {
 
   // ─── Signal Alert ──────────────────────────────────────────────────────────
 
+  /**
+   * TP1 ONLY. TP2 and TP3 are computed and stored, but never advertised.
+   *
+   * They were shown until 2026-08-31, and every one of them was a promise the system could not
+   * keep:
+   *   - `checkOutcomeFromCandles` returns only TP1_HIT | STOP_HIT | EXPIRED, so TP2_HIT and
+   *     TP3_HIT are UNREACHABLE outcomes. Across 72 deduplicated trades the record is
+   *     STOP_HIT 44 / TP1_HIT 24 / EXPIRED 4 — neither has ever been written, and neither can be.
+   *   - the cTrader executor, which is the system of record, sends ONE order with
+   *     `takeProfit: targets[0]`. TP2 and TP3 are not traded on that path at all.
+   *   - TP2 (6.0xATR) is used by nothing anywhere: not the validator, not either executor.
+   *
+   * A subscriber reading "TP2 +40 pips" reasonably takes it as an objective the system tracks.
+   * It is not tracked and, on the live path, not traded. So it is not shown.
+   *
+   * The values remain in SignalNotification and in the database because the MT5 EA still reads
+   * TP3 for its 50/50 split. Removing them from the alert does not remove them from the data.
+   */
   async sendSignalAlert(signal: SignalNotification): Promise<void> {
     if (!this.isEnabled) return;
 
     const pipFactor = signal.symbol.includes('JPY') ? 100 : 10000;
     const slPips    = Math.abs(signal.entry - signal.stop)   * pipFactor;
     const tp1Pips   = Math.abs(signal.tp1   - signal.entry)  * pipFactor;
-    const tp2Pips   = Math.abs(signal.tp2   - signal.entry)  * pipFactor;
-    const tp3Pips   = Math.abs(signal.tp3   - signal.entry)  * pipFactor;
+    // tp2/tp3 are deliberately NOT shown. See the block comment on the alert body below.
 
     const isHigh    = signal.tier === 'HIGH';
     const direction = signal.type === 'LONG' ? '🟢 LONG' : '🔴 SHORT';
@@ -178,8 +195,6 @@ class TelegramNotifier {
       `📍 Entry:  \`${signal.entry.toFixed(5)}\``,
       `🛑 Stop:   \`${signal.stop.toFixed(5)}\`  \\(${TelegramNotifier.esc(slPips.toFixed(1))} pips\\)`,
       `🎯 TP1:   \`${signal.tp1.toFixed(5)}\`  \\(\\+${TelegramNotifier.esc(tp1Pips.toFixed(1))} pips \\| ${rr}R\\)`,
-      `🎯 TP2:   \`${signal.tp2.toFixed(5)}\`  \\(\\+${TelegramNotifier.esc(tp2Pips.toFixed(1))} pips\\)`,
-      `🎯 TP3:   \`${signal.tp3.toFixed(5)}\`  \\(\\+${TelegramNotifier.esc(tp3Pips.toFixed(1))} pips\\)`,
     ];
 
     if (rationaleLines) {

@@ -157,16 +157,14 @@ export function ComprehensiveSignalCard({ signal, candles, onToggleSave, isSaved
           `1. Wait for the price to reach ${signal.entry} (Entry Price) - Current price is ${signal.currentPrice}`,
           `2. Place a ${signal.orderType.replace(/_/g, ' ')} order to ${isLong ? 'buy' : 'sell'} ${signal.symbol}`,
           `3. Set your Stop Loss at ${signal.stop} to limit potential losses`,
-          `4. Set Take Profit levels at ${signal.targets[0]} (TP1), ${signal.targets[1]} (TP2), or ${signal.targets[2]} (TP3)`,
-          `5. Order execution type: ${signal.executionType.replace(/_/g, ' ')} - ${getExecutionTypeInfo(signal.executionType).description}`,
-          `6. Consider closing 1/3 of your position at each target level`
+          `4. Set your Take Profit at ${signal.targets[0]} (TP1) - this is the only target the system trades and tracks`,
+          `5. Order execution type: ${signal.executionType.replace(/_/g, ' ')} - ${getExecutionTypeInfo(signal.executionType).description}`
         ],
         expert: [
           `Order Type: ${signal.orderType} | Execution: ${signal.executionType}`,
           `Entry: ${signal.entry} (Current: ${signal.currentPrice}) | Stop: ${signal.stop} | R:R = 1:${signal.riskReward}`,
           `Position size: Risk 1-2% of account capital`,
-          `Partial exit strategy: 30% at TP1, 40% at TP2, 30% at TP3`,
-          `Trail stop to breakeven after TP1 is hit`,
+          `Exit: 100% at TP1. No partial exits, no trail, no breakeven move.`,
           `Higher timeframe trend: ${signal.indicators.htfTrend}`
         ]
       },
@@ -211,17 +209,17 @@ export function ComprehensiveSignalCard({ signal, candles, onToggleSave, isSaved
           {
             level: 'TP1 (Conservative)',
             value: signal.targets[0],
-            explanation: `First target at ${signal.targets[0]}. Consider taking 30% profit here to secure gains.`
+            explanation: `First target at ${signal.targets[0]}. The position closes here in full - this is the only target that is traded and tracked.`
           },
           {
-            level: 'TP2 (Moderate)',
+            level: 'TP2 (reference only - NOT traded)',
             value: signal.targets[1],
-            explanation: `Second target at ${signal.targets[1]}. This is ${signal.riskReward}x your risk - a solid reward.`
+            explanation: `Shown for context at ${signal.targets[1]}. Nothing in the system trades or records this level - the outcome validator can only ever write TP1_HIT, STOP_HIT or EXPIRED.`
           },
           {
-            level: 'TP3 (Aggressive)',
+            level: 'TP3 (reference only - NOT traded)',
             value: signal.targets[2],
-            explanation: `Third target at ${signal.targets[2]}. Only achievable in strong trends. Consider trailing stop.`
+            explanation: `Shown for context at ${signal.targets[2]}. Not traded on the live path and never recorded as an outcome.`
           }
         ],
         riskRewardRatio: `For every $1 you risk, you can potentially make ${signal.riskReward}. This is a favorable risk/reward ratio.`
@@ -267,9 +265,7 @@ export function ComprehensiveSignalCard({ signal, candles, onToggleSave, isSaved
 
 Entry: ${signal.entry}
 SL: ${signal.stop}
-TP1: ${signal.targets[0]} (33%)
-TP2: ${signal.targets[1]} (33%)
-TP3: ${signal.targets[2]} (34%)
+TP: ${signal.targets[0]} (100%)
 R:R: 1:${signal.riskReward}
 Risk: 1-2%${signal.stopLimitPrice ? `\nStop Limit: ${signal.stopLimitPrice}` : ''}`;
 
@@ -326,9 +322,7 @@ Risk: 1-2%${signal.stopLimitPrice ? `\nStop Limit: ${signal.stopLimitPrice}` : '
 
 Entry: ${signal.entry}
 SL: ${signal.stop}
-TP1: ${signal.targets[0]} (33%)
-TP2: ${signal.targets[1]} (33%)
-TP3: ${signal.targets[2]} (34%)
+TP: ${signal.targets[0]} (100%)
 R:R: 1:${signal.riskReward}
 Risk: 1-2%${signal.stopLimitPrice ? `\nStop Limit: ${signal.stopLimitPrice}` : ''}`;
   };
