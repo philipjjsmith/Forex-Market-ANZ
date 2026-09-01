@@ -6,6 +6,7 @@
 import 'dotenv/config';
 import postgres from 'postgres';
 import { propFirmService } from '../server/services/prop-firm-config';
+import { MAX_EFFECTIVE_EXPOSURE } from '../server/services/correlation-guard';
 
 const db = postgres(process.env.DATABASE_URL!, { ssl: 'require', connect_timeout: 15 });
 
@@ -95,7 +96,10 @@ const db = postgres(process.env.DATABASE_URL!, { ssl: 'require', connect_timeout
     positionSizeHigh: propFirmService.getPositionSize('HIGH'),
     positionSizeMedium: propFirmService.getPositionSize('MEDIUM'),
     signalCooldownMinutes: 240,
-    maxConcurrentCorrelated: 'none (null)',
+    // Was hardcoded 'none (null)' — true when this script was written in Phase 1, and FALSE
+    // since the correlation guard shipped in 55d8d6d. The handler returns the real cap and
+    // Admin.tsx renders it, so the literal made this check contradict the page it verifies.
+    maxEffectiveExposure: MAX_EFFECTIVE_EXPOSURE,
   }]);
 
   await db.end();
