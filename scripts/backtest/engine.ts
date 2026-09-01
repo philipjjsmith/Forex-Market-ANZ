@@ -219,10 +219,18 @@ export function resolveTrade(
  *   PARTIAL_CLOSE_PERCENT_2  = 50.0   // at TP3, commented "12.0x ATR"
  *   grep for breakeven/trail in the EA returns ZERO matches — neither leg is ever moved.
  *
- * TP3 is derived as `4x the TP1 DISTANCE`, not as a fixed multiple of R. TP1 is 3.0xATR and TP3
- * is 12.0xATR, so their ratio is exactly 4 regardless of the stop. Deriving TP3 from R instead
- * would be wrong: the MIN_SL_PIPS floor widens the stop on some signals without widening the
- * target, so TP1/risk actually ranges 1.56-2.02 across the trade set rather than being a clean 2.
+ * TP3 is derived as `3x the TP1 DISTANCE`, not as a fixed multiple of R.
+ *
+ * CORRECTED 2026-08-31. This first shipped as 4x, taken from the EA's own comment
+ * ("PARTIAL_CLOSE_PERCENT_2 = 50.0  // Close % at TP3 (12.0x ATR)"). That comment is STALE: the
+ * EA does not compute TP3, it receives it. The generator that actually produces it uses
+ * `TP3_MULTIPLIER = 9.0` against `TP1_MULTIPLIER = 3.0` (signal-generator.ts:1137-1139), a ratio
+ * of 3. Verified against 72 real stored signals: median TP3-distance / TP1-distance = 3.004,
+ * and median TP3/risk = 5.992 (i.e. 6:1, which is 9.0/1.5). Using 4x placed TP3 33% too far away
+ * and understated the runner leg.
+ *
+ * Deriving TP3 from R instead would also be wrong: the MIN_SL_PIPS floor widens the stop on some
+ * signals without widening the target, so TP1/risk ranges 1.56-2.02 rather than being a clean 2.
  *
  * The within-bar tie rule is inherited deliberately: if a bar touches both the stop and a target,
  * the stop wins. At 5-minute granularity the true order is unknowable, and choosing the target is
@@ -244,7 +252,7 @@ export interface SplitResolution {
 }
 
 export function resolveTradeSplit(
-  t: Trade, bars: Ohlc[], expiry: Date, tp3DistanceMultiple = 4
+  t: Trade, bars: Ohlc[], expiry: Date, tp3DistanceMultiple = 3
 ): SplitResolution | null {
   const isLong = t.type === 'LONG';
   const risk = Math.abs(t.entry - t.stop);

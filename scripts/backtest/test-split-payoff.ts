@@ -26,7 +26,7 @@ const T0 = Date.UTC(2026, 0, 5, 8, 0, 0);
 const bar = (i: number, o: number, h: number, l: number, c: number): Ohlc =>
   ({ timestamp: new Date(T0 + i * 300_000), open: o, high: h, low: l, close: c } as any);
 
-/** LONG: entry 1.10000, stop 1.09800 (20 pips = 1R), TP1 1.10400 (2R), so TP3 = 1.11600 (8R). */
+/** LONG: entry 1.10000, stop 1.09800 (20 pips = 1R), TP1 1.10400 (2R), so TP3 = 1.11200 (6R). */
 const long = (): Trade => ({
   symbol: 'EUR/USD', type: 'LONG', openedAt: new Date(T0),
   entry: 1.10000, stop: 1.09800, target: 1.10400, confidence: 100, tier: 'HIGH',
@@ -37,25 +37,25 @@ console.log('\n1. TP3 is derived from the TP1 DISTANCE (x4), not from R');
 {
   // Deliberately break TP1==2R: widen the stop only, as MIN_SL_PIPS does.
   const t = long(); t.stop = 1.09700;           // now 30 pips risk, TP1 is only 1.33R
-  const bars = [bar(0, 1.10000, 1.11700, 1.09999, 1.11650)];  // reaches 1.11600
+  const bars = [bar(0, 1.10000, 1.11300, 1.09999, 1.11250)];  // reaches 1.11200
   const r = resolveTradeSplit(t, bars, EXPIRY)!;
-  near('TP3 leg fills at 1.11600 (= entry + 4 x 400 pips-of-distance)', r.legs[1].price, 1.11600);
-  check('TP3 was NOT taken as 8 x the widened R', r.legs[1].price !== 1.10000 + 8 * 0.00300);
+  near('TP3 leg fills at 1.11200 (= entry + 3 x 400 pips-of-distance)', r.legs[1].price, 1.11200);
+  check('TP3 was NOT taken as 6 x the widened R', r.legs[1].price !== 1.10000 + 6 * 0.00300);
 }
 
 console.log('\n2. straight to TP3 — both legs win');
 {
-  const bars = [bar(0, 1.10000, 1.11700, 1.09999, 1.11650)];
+  const bars = [bar(0, 1.10000, 1.11300, 1.09999, 1.11250)];
   const r = resolveTradeSplit(long(), bars, EXPIRY)!;
   near('leg A at TP1', r.legs[0].price, 1.10400);
-  near('leg B at TP3', r.legs[1].price, 1.11600);
+  near('leg B at TP3', r.legs[1].price, 1.11200);
   const { legR, r: combined } = costSplit(long(), r, DEFAULT_CONFIG);
   // EUR/USD spread 1.0 pip -> 0.5 pip on exit, over a 20-pip risk = exactly 0.025R per leg.
   // Same bar, so zero nights of swap.
   near('leg A = 2R - 0.025R', legR[0], 1.975, 1e-9);
-  near('leg B = 8R - 0.025R', legR[1], 7.975, 1e-9);
-  near('combined = half of each', combined, 0.5 * 1.975 + 0.5 * 7.975, 1e-9);
-  check('cost WAS deducted (not a clean 2 and 8)', legR[0] < 2 && legR[1] < 8);
+  near('leg B = 6R - 0.025R', legR[1], 5.975, 1e-9);
+  near('combined = half of each', combined, 0.5 * 1.975 + 0.5 * 5.975, 1e-9);
+  check('cost WAS deducted (not a clean 2 and 6)', legR[0] < 2 && legR[1] < 6);
 }
 
 console.log('\n3. THE CRITICAL CASE: TP1 hit, then the SHARED stop takes the runner back');
@@ -118,10 +118,10 @@ console.log('\n7. still open at the end of the data returns null, never a loss')
 console.log('\n8. SHORT is the mirror image');
 {
   const t: Trade = { ...long(), type: 'SHORT', entry: 1.10000, stop: 1.10200, target: 1.09600 };
-  const bars = [bar(0, 1.10000, 1.10001, 1.08300, 1.08350)];   // straight down past TP3 1.08400
+  const bars = [bar(0, 1.10000, 1.10001, 1.08700, 1.08750)];   // straight down past TP3 1.08800
   const r = resolveTradeSplit(t, bars, EXPIRY)!;
   near('leg A at TP1', r.legs[0].price, 1.09600);
-  near('leg B at TP3 = 1.08400', r.legs[1].price, 1.08400);
+  near('leg B at TP3 = 1.08800', r.legs[1].price, 1.08800);
 }
 
 console.log('\n9. within one bar, a touched stop beats a touched target');

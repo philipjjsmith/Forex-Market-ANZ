@@ -26,6 +26,8 @@ import {
 
 const FROM = new Date('2022-08-01'), TO = new Date('2026-08-01');
 const EXPIRY_H = DEFAULT_CONFIG.expiryHours;
+/** Must match resolveTradeSplit's default. TP3 is 9.0xATR against TP1 at 3.0xATR = 3x. */
+const TP3_DISTANCE_MULTIPLE = 3;
 
 const mean = (a: number[]) => a.reduce((x, y) => x + y, 0) / a.length;
 const sd = (a: number[]) => {
@@ -93,7 +95,11 @@ function bootstrapCI(rows: Array<{ day: string; r: number }>, iters = 10000): [n
     const { r: rNew } = costSplit(t, newRes, DEFAULT_CONFIG);
     rowsNew.push({ day, r: rNew });
 
-    if (newRes.legs[1].outcome === 'TP1_HIT' && newRes.legs[1].price === t.entry + 4 * (t.target - t.entry)) tp3Hits++;
+    // Compare against the SAME multiple the resolver used. This was hardcoded to 4 while the
+    // resolver moved to 3, so it silently reported "TP3 reached 0 of 1095" — a closer target
+    // cannot be hit less often, which is what exposed it.
+    const tp3Price = t.entry + TP3_DISTANCE_MULTIPLE * (t.target - t.entry);
+    if (newRes.legs[1].outcome === 'TP1_HIT' && Math.abs(newRes.legs[1].price - tp3Price) < 1e-9) tp3Hits++;
     if (newRes.legs[0].outcome === 'TP1_HIT' && newRes.legs[1].outcome === 'STOP_HIT') giveback++;
     mfeSum += newRes.mfeR; mfeN++;
   }
@@ -120,7 +126,7 @@ function bootstrapCI(rows: Array<{ day: string; r: number }>, iters = 10000): [n
        : 'difference is NOT significant — the interval spans zero'}`);
 
   line('\n  what the runner leg actually did:');
-  line(`    TP3 (8R-equivalent) reached      ${tp3Hits} of ${rNew.length}  (${(100 * tp3Hits / rNew.length).toFixed(1)}%)`);
+  line(`    TP3 (6R, i.e. 9.0xATR) reached      ${tp3Hits} of ${rNew.length}  (${(100 * tp3Hits / rNew.length).toFixed(1)}%)`);
   line(`    ran past TP1 then stopped out    ${giveback}  (${(100 * giveback / rNew.length).toFixed(1)}%)  <- the cost of no breakeven`);
   line(`    mean TRUE mfe to expiry          ${(mfeSum / mfeN).toFixed(3)} R   (previously truncated at the resolving bar)`);
 
