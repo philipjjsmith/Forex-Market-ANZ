@@ -64,6 +64,16 @@ const PT = {
   SYMBOL_BY_ID_REQ:  2116,
   SYMBOL_BY_ID_RES:  2117,
   EXECUTION_EVENT:   2126,
+  /**
+   * ProtoOAOrderErrorEvent. An order REJECTION arrives as its own payload type, not as the
+   * generic ProtoOAErrorRes (2142) — so a rejected order used to produce complete silence
+   * and a 20-second 'Timeout waiting for payloadType 2126'.
+   *
+   * That is the same trap this executor already fell into once: a timeout was the system's
+   * only way of reporting a protocol error, and a timeout reads like a network problem. It
+   * cost days of misdiagnosis then; it cost an evening here.
+   */
+  ORDER_ERROR_EVENT: 2132,
   GET_ACCOUNTS_REQ:  2149,
   GET_ACCOUNTS_RES:  2150,
   ERROR_RES:         2142,
@@ -266,9 +276,17 @@ class CTraderExecutor {
           const msg = JSON.parse(raw.toString());
           console.log(`[cTrader] ← type:${msg.payloadType}`, CTraderExecutor.redact(msg.payload));
           emitter.emit(`type:${msg.payloadType}`, msg);
-          // 2142 is ProtoOAErrorRes — surface it rather than letting callers time out blind.
-          if (msg.payloadType === 2142) {
-            emitter.emit('protoError', new Error(`${msg.payload?.errorCode}: ${msg.payload?.description}`));
+          // Surface BOTH error shapes rather than letting callers time out blind.
+          //   2142 ProtoOAErrorRes      — generic (bad credentials, bad request)
+          //   2132 ProtoOAOrderErrorEvent — an order was REJECTED, and it does NOT come back as
+          //        2142. Without this branch a rejection is indistinguishable from silence, and
+          //        the caller reports "Timeout waiting for payloadType 2126" while the broker has
+          //        in fact already answered with the reason.
+          if (msg.payloadType === 2142 || msg.payloadType === 2132) {
+            const p = msg.payload ?? {};
+            const why = [p.errorCode, p.description].filter(Boolean).join(': ') || 'no reason given';
+            const tag = msg.payloadType === 2132 ? 'ORDER REJECTED' : 'PROTOCOL ERROR';
+            emitter.emit('protoError', new Error(`${tag} — ${why}`));
           }
         } catch { /* ignore non-JSON frames */ }
       });
@@ -769,6 +787,9 @@ class CTraderExecutor {
     const transcript: any[] = [];
     const record = (m: any) => transcript.push({ type: m.payloadType, payload: CTraderExecutor.redact(m.payload) });
 
+    // Declared out here so the catch below can amend the row the try block created.
+    let recId: string | null = null;
+
     try {
       this.send(socket, PT.APP_AUTH_REQ, { clientId: this.clientId!, clientSecret: this.clientSecret! });
       record(await this.waitFor(emitter, PT.APP_AUTH_RES));
@@ -816,7 +837,7 @@ class CTraderExecutor {
       // Recorded the same way an automatic execution is, so the operator's own test order is
       // durable evidence rather than a JSON blob in a browser tab that closes. Written BEFORE the
       // reply, so an order that goes out and then times out still leaves a trace it was sent.
-      const recId = await this.record({
+      recId = await this.record({
         symbol: light.symbolName, side: 'LONG', tier: 'SMOKE_TEST', status: 'sent',
         skipReason: 'operator smoke test — minimum volume, no SL/TP',
         mode: 'demo', host: DEMO_HOST, accountId, accountIsLive: account.isLive === true,
@@ -860,6 +881,20 @@ class CTraderExecutor {
         entryPrice: pos?.price ?? exec.payload?.deal?.executionPrice,
         transcript,
       };
+    } catch (err: any) {
+      // RETURN the failure instead of throwing it, so the transcript survives.
+      //
+      // Previously any failure propagated to the route, which replied with `{placed:false,
+      // error}` and nothing else — so the single most useful diagnostic, the actual sequence of
+      // messages exchanged with the broker, was collected and then discarded at the moment it
+      // was needed. A bare "Timeout waiting for payloadType 2126" tells you nothing about which
+      // step failed or what the broker last said.
+      const msg = err?.message ?? String(err);
+      await this.amend(recId, {
+        status: /ORDER REJECTED/.test(msg) ? 'rejected' : 'error',
+        error: msg,
+      });
+      return { placed: false, error: msg, host: DEMO_HOST, transcript };
     } finally {
       try { socket.close(); } catch { /* already closed */ }
     }
