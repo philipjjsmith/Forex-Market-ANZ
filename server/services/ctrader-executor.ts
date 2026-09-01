@@ -71,6 +71,8 @@ const PT = {
 } as const;
 
 export interface ExecuteSignalParams {
+  /** The signal this order came from, so `ctrader_executions` can be joined to `signal_history`. */
+  signalId?: string;
   symbol: string;
   type: 'LONG' | 'SHORT';
   entry: number;
@@ -351,13 +353,88 @@ class CTraderExecutor {
 
   // ─── Main execution flow ──────────────────────────────────────────────────
 
+  /**
+   * Record one execution DECISION, skips included.
+   *
+   * Before 2026-09-01 this path recorded nothing at all — no writer to `auto_trades` existed
+   * anywhere in the repo — so the only evidence an order was ever placed was a console.log on
+   * Render's free tier, where logs do not survive a restart. The system could not answer
+   * "did we take that trade?", which is the one question auto-execution has to be able to answer.
+   *
+   * Skips are recorded for the reason `signal_provenance` records non-fires: a signal that was
+   * skipped because the arming switch was off is indistinguishable, from the database, from a
+   * signal the executor never saw. "Nothing happened" is the case you cannot diagnose later.
+   *
+   * NEVER throws. A bookkeeping failure must not stop or alter a trade.
+   */
+  async record(row: Record<string, any>): Promise<string | null> {
+    try {
+      const r = (await db.execute(sql`
+        INSERT INTO ctrader_executions
+          (signal_id, symbol, side, tier, confidence, signal_entry, signal_stop, signal_tp1,
+           position_size_percent, status, skip_reason, mode, host, account_id, account_is_live,
+           broker_symbol_id, requested_volume, lots, execution_type, order_id, position_id,
+           fill_price, error, reconciled_at, reconciled_open)
+        VALUES
+          (${row.signalId ?? null}, ${row.symbol ?? null}, ${row.side ?? null}, ${row.tier ?? null},
+           ${row.confidence ?? null}, ${row.signalEntry ?? null}, ${row.signalStop ?? null},
+           ${row.signalTp1 ?? null}, ${row.positionSizePercent ?? null}, ${row.status},
+           ${row.skipReason ?? null}, ${row.mode ?? null}, ${row.host ?? null},
+           ${row.accountId ?? null}, ${row.accountIsLive ?? null}, ${row.brokerSymbolId ?? null},
+           ${row.requestedVolume ?? null}, ${row.lots ?? null}, ${row.executionType ?? null},
+           ${row.orderId ?? null}, ${row.positionId ?? null}, ${row.fillPrice ?? null},
+           ${row.error ?? null}, ${row.reconciledAt ?? null}, ${row.reconciledOpen ?? null})
+        RETURNING id
+      `)) as any[];
+      return r?.[0]?.id ?? null;
+    } catch (e: any) {
+      console.error('[cTrader] could not record execution decision:', e?.message ?? e);
+      return null;
+    }
+  }
+
+  /** Update a row written earlier in the same attempt. Never throws. */
+  private async amend(id: string | null, patch: Record<string, any>): Promise<void> {
+    if (!id) return;
+    try {
+      await db.execute(sql`
+        UPDATE ctrader_executions SET
+          status          = COALESCE(${patch.status ?? null}, status),
+          execution_type  = COALESCE(${patch.executionType ?? null}, execution_type),
+          order_id        = COALESCE(${patch.orderId ?? null}, order_id),
+          position_id     = COALESCE(${patch.positionId ?? null}, position_id),
+          fill_price      = COALESCE(${patch.fillPrice ?? null}, fill_price),
+          error           = COALESCE(${patch.error ?? null}, error),
+          reconciled_at   = COALESCE(${patch.reconciledAt ?? null}, reconciled_at),
+          reconciled_open = COALESCE(${patch.reconciledOpen ?? null}, reconciled_open)
+        WHERE id = ${id}
+      `);
+    } catch (e: any) {
+      console.error('[cTrader] could not amend execution record:', e?.message ?? e);
+    }
+  }
+
   async executeSignal(signal: ExecuteSignalParams): Promise<void> {
+    // Every exit below writes a row. A signal skipped because the arming switch is off looks
+    // exactly like a signal the executor never saw, unless the skip itself is recorded.
+    const base = {
+      signalId: signal.signalId, symbol: signal.symbol, side: signal.type, tier: signal.tier,
+      confidence: signal.confidence, signalEntry: signal.entry, signalStop: signal.stop,
+      signalTp1: signal.targets?.[0], positionSizePercent: signal.positionSizePercent,
+      mode: this.isLiveMode ? 'live' : 'demo', host: this.host,
+    };
+
     // Only HIGH tier trades live — MEDIUM is practice only
-    if (signal.tier !== 'HIGH') return;
+    if (signal.tier !== 'HIGH') {
+      await this.record({ ...base, status: 'skipped_tier', skipReason: `tier=${signal.tier}` });
+      return;
+    }
 
     // Arming switch first, so credentials alone can never place an order.
     if (!ctraderEnabled()) {
       console.log('[cTrader] DISABLED (CTRADER_ENABLED is not "true"). No order placed.');
+      await this.record({ ...base, status: 'skipped_disabled',
+        skipReason: 'CTRADER_ENABLED is not "true"' });
       return;
     }
 
@@ -365,8 +442,12 @@ class CTraderExecutor {
       // Deliberately does NOT tell the operator which variables to set. Setting them used to be
       // the only gate between a signal and a real trade.
       console.log('[cTrader] Enabled but not configured — credentials missing. No order placed.');
+      await this.record({ ...base, status: 'skipped_unconfigured',
+        skipReason: 'credentials missing' });
       return;
     }
+
+    let recId: string | null = null;
 
     console.log(`[cTrader] mode=${this.isLiveMode ? 'LIVE (REAL MONEY)' : 'DEMO'} host=${this.host}`);
 
@@ -444,6 +525,9 @@ class CTraderExecutor {
       let volume      = this.calcVolume(signal.symbol, slPips, signal.positionSizePercent ?? 1.0);
       if (volume <= 0) {
         console.log(`[cTrader] positionSizePercent=${signal.positionSizePercent} -> zero volume. No order placed.`);
+        await this.record({ ...base, status: 'skipped_zero_volume', accountId,
+          accountIsLive: matching[0].isLive === true, brokerSymbolId: symbolId,
+          skipReason: `positionSizePercent=${signal.positionSizePercent}` });
         return;
       }
 
@@ -477,13 +561,67 @@ class CTraderExecutor {
         takeProfit: signal.targets[0],                   // TP1 at 2:1 R:R
       });
 
+      // Recorded BEFORE the reply, so an order that is sent and then times out still leaves
+      // evidence that it went to the broker. A missing row means the order was never sent; a
+      // 'sent' row that never advances means we do not know what happened to it, which is a
+      // materially different and much worse situation.
+      recId = await this.record({
+        ...base, status: 'sent', accountId, accountIsLive: matching[0].isLive === true,
+        brokerSymbolId: symbolId, requestedVolume: volume, lots,
+      });
+
       // Wait for execution confirmation
-      await this.waitFor(emitter, PT.EXECUTION_EVENT, 15000);
-      console.log(`[cTrader] ✅ EXECUTED: ${signal.type} ${signal.symbol} | ${lots} lots | SL: ${signal.stop.toFixed(5)} | TP: ${signal.targets[0].toFixed(5)}`);
+      const exec = await this.waitFor(emitter, PT.EXECUTION_EVENT, 15000);
+
+      // executionType 2 = ORDER_ACCEPTED, 3 = ORDER_FILLED.
+      //
+      // This used to log "✅ EXECUTED" on ANY execution event. Acceptance is not a fill — the
+      // project established that on 2026-08-31 when the first order was placed, and the smoke
+      // test was corrected while this path was not. A rejected or unfilled order reported
+      // success, and nothing was written down to contradict it later.
+      const execType = exec.payload?.executionType;
+      const pos      = exec.payload?.position;
+      const positionId = pos?.positionId ?? exec.payload?.order?.positionId ?? null;
+      const fillPrice  = pos?.price ?? exec.payload?.deal?.executionPrice ?? null;
+      const filled     = execType === 3;
+
+      await this.amend(recId, {
+        status: filled ? 'filled' : 'accepted',
+        executionType: execType ?? null,
+        orderId: exec.payload?.order?.orderId ?? null,
+        positionId, fillPrice,
+      });
+
+      // Reconcile settles it. The broker's own position list is the only thing that proves a
+      // position exists — this is what confirmed the first order on 2026-08-31, and it is cheap
+      // here because the socket is already authenticated.
+      let reconciledOpen: boolean | null = null;
+      try {
+        this.send(socket, PT.RECONCILE_REQ, { ctidTraderAccountId: accountId });
+        const rec = await this.waitFor(emitter, PT.RECONCILE_RES, 20000);
+        const open: any[] = rec.payload?.position ?? [];
+        reconciledOpen = positionId
+          ? open.some((x: any) => x.positionId === positionId)
+          : open.length > 0;
+        await this.amend(recId, {
+          status: reconciledOpen ? 'filled' : undefined,
+          reconciledAt: new Date().toISOString(), reconciledOpen,
+        });
+      } catch (e: any) {
+        console.warn(`[cTrader] could not reconcile after order: ${e.message}`);
+      }
+
+      console.log(
+        `[cTrader] ${reconciledOpen ? '✅ OPEN AT BROKER' : filled ? '✅ FILLED' : '📨 ACCEPTED (not confirmed filled)'}: `
+        + `${signal.type} ${signal.symbol} | ${lots} lots | executionType=${execType} `
+        + `| positionId=${positionId ?? 'none'} | SL: ${signal.stop.toFixed(5)} | TP: ${signal.targets[0].toFixed(5)}`
+      );
 
     } catch (err: any) {
       // Never crash signal generation — log and continue
       console.error('[cTrader] ❌ Execution failed:', err.message);
+      if (recId) await this.amend(recId, { status: 'error', error: err.message });
+      else await this.record({ ...base, status: 'error', error: err.message });
     } finally {
       socket?.close();
     }

@@ -1488,8 +1488,18 @@ export class SignalGenerator {
               // of the approval gate. It stays in the database and in every statistic.
               if (signal.requiresApproval) {
                 console.log(`⏸️  [Approval] ${symbol} delivered but NOT auto-executed. ${signal.approvalReason}`);
+                // Recorded, so a held signal is distinguishable from one the executor never saw.
+                await ctraderExecutor.record({
+                  signalId: signal.id, symbol: signal.symbol, side: signal.type,
+                  tier: signal.tier, confidence: signal.confidence,
+                  signalEntry: signal.entry, signalStop: signal.stop,
+                  signalTp1: signal.targets?.[0],
+                  positionSizePercent: signal.positionSizePercent,
+                  status: 'skipped_approval', skipReason: signal.approvalReason,
+                });
               } else {
               await ctraderExecutor.executeSignal({
+                signalId: signal.id,
                 symbol: signal.symbol,
                 type: signal.type,
                 entry: signal.entry,
