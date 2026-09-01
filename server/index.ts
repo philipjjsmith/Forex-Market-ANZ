@@ -138,6 +138,28 @@ app.use(express.urlencoded({ extended: false }));
 // Explicit OPTIONS handler for all routes (backup CORS handling)
 app.options('*', cors());
 
+/**
+ * GET /api/build — unauthenticated, so a deploy can actually be VERIFIED.
+ *
+ * Verifying that a push reached Render was, until now, only possible by diffing the client bundle
+ * hash — which works solely when client code changed. A server-only push leaves the hash
+ * identical, so the check matches instantly and reports success without having verified anything.
+ * That produced a false "deploy landed" twice on 2026-09-01, and most of this codebase's recent
+ * changes are server-only.
+ *
+ * `RENDER_GIT_COMMIT` is injected by Render at build time. Locally it is absent, which is itself
+ * accurate information rather than a failure.
+ *
+ * Deliberately unauthenticated and deliberately minimal: a commit SHA and a start time. It
+ * reveals nothing an attacker could use that the public repo does not already show, and gating it
+ * behind auth would defeat the point — the checks that need it run without a session.
+ */
+const BUILD_SHA = process.env.RENDER_GIT_COMMIT ?? 'local';
+const STARTED_AT = new Date().toISOString();
+app.get('/api/build', (_req, res) => {
+  res.json({ sha: BUILD_SHA, shortSha: BUILD_SHA.slice(0, 7), startedAt: STARTED_AT });
+});
+
 // Session configuration with Supabase REST API store
 app.use(session({
   store: new SupabaseSessionStore(),
