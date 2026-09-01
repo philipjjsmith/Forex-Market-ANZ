@@ -97,8 +97,21 @@ app.use(cors({
     // Allow requests with no origin (mobile apps, curl, etc)
     if (!origin) return callback(null, true);
 
+    // The API's own origin is on this list deliberately.
+    //
+    // Render serves the built SPA as well as the API, and index.html marks both bundles
+    // `crossorigin` — so a browser loading the app from the Render domain requests its own
+    // assets in CORS mode, with an Origin header. Without the entry below the app rejects its
+    // own origin, both assets return 500 "Not allowed by CORS", #root never mounts, and the
+    // page is BLANK. curl shows 200 for the same URLs because curl sends no Origin, so the
+    // usual health check says everything is fine.
+    //
+    // That cost real time on 2026-09-01: the Render URL was read as "the site is down" while
+    // the actual front-end (Cloudflare Pages, below) was serving correctly the whole time.
+    // Diagnose this class of fault with `curl -H "Origin: <the site>"`, never a plain curl.
     const allowedOrigins = [
-      'https://forex-market-anz.pages.dev',
+      'https://forex-market-anz.pages.dev',      // Cloudflare Pages — the real front-end
+      'https://forex-market-anz.onrender.com',   // Render — API, and the SPA copy it also serves
       'http://localhost:5000',
       'http://localhost:5173'
     ];
