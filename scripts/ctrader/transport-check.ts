@@ -11,6 +11,11 @@
  *
  * USAGE: npx tsx scripts/ctrader/transport-check.ts
  */
+// dotenv BEFORE the executor import: it pulls in server/db.ts, which throws at module load if
+// DATABASE_URL is unset. Without this the check cannot run at all — which is a poor property for
+// a regression tool whose whole job is being runnable anywhere. It still reaches no database.
+import 'dotenv/config';
+
 process.env.CTRADER_CLIENT_ID = 'invalid_probe_id';
 process.env.CTRADER_CLIENT_SECRET = 'invalid_probe_secret';
 import { ctraderExecutor } from '../../server/services/ctrader-executor';
