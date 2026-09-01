@@ -32,7 +32,11 @@ export function registerAdminRoutes(app: Express) {
       enabled: process.env.CTRADER_ENABLED === 'true',
       mode: process.env.CTRADER_MODE ?? '(unset -> demo)',
       allowLive: process.env.CTRADER_ALLOW_LIVE === 'true',
-      configured: (ctraderExecutor as any).isConfigured === true,
+      // The real gate, which consults the PERSISTED token — not the env seed, whose value is
+      // dead after its first use. Both are shown so a disagreement is visible rather than
+      // silently deciding whether signals execute.
+      configured: await ctraderExecutor.configured(),
+      configuredFromEnvSeed: (ctraderExecutor as any).isConfiguredFromEnv === true,
       resolvedMode: (ctraderExecutor as any).isLiveMode ? 'LIVE' : 'DEMO',
     };
     // Probe BOTH hosts read-only. APP_AUTH uses only CLIENT_ID/CLIENT_SECRET and never the

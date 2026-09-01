@@ -99,8 +99,32 @@ class CTraderExecutor {
     return parseFloat(process.env.CTRADER_ACCOUNT_BALANCE || '2500');
   }
 
-  get isConfigured(): boolean {
+  /**
+   * Env-only view of configuration. Kept because it is synchronous, but it is NOT the gate —
+   * see `configured()`. `CTRADER_REFRESH_TOKEN` is a cold-start SEED whose value is dead the
+   * moment it is first spent (cTrader rotates on every refresh), so its presence says nothing
+   * about whether a usable credential exists.
+   */
+  get isConfiguredFromEnv(): boolean {
     return !!(this.clientId && this.clientSecret && this.refreshToken);
+  }
+
+  /**
+   * Whether a usable credential actually exists. THIS is the gate.
+   *
+   * It used to be the env-only getter above, which checked `CTRADER_REFRESH_TOKEN` while
+   * `currentRefreshToken()` reads the PERSISTED token from `ctrader_auth` and treats the env var
+   * as a seed. Those two disagreed in the direction that fails silently: delete the spent env
+   * seed — the obvious cleanup, and one this file's own comments invite — and every signal is
+   * skipped with "Enabled but not configured" while a perfectly good rotated token sits in the
+   * database. Nothing would have said so; `auto_trades` was empty either way.
+   *
+   * No looser than before: client id and secret are still required, and a refresh token must
+   * still exist. It is only sourced correctly now.
+   */
+  async configured(): Promise<boolean> {
+    if (!this.clientId || !this.clientSecret) return false;
+    return !!(await this.currentRefreshToken());
   }
 
   /** Demo unless BOTH CTRADER_MODE=live and CTRADER_ALLOW_LIVE=true are set. */
@@ -332,7 +356,7 @@ class CTraderExecutor {
    * CTRADER_ENABLED — reading the account list is not execution.
    */
   async listAccounts(hostOverride?: string, timeoutMs = 25000): Promise<{ host: string; mode: string; accounts: { id: unknown; isLive: boolean }[] }> {
-    if (!this.isConfigured) throw new Error('cTrader credentials are not configured');
+    if (!(await this.configured())) throw new Error('cTrader credentials are not configured');
     const accessToken = await this.getAccessToken();
     const { socket, emitter } = await this.openConnection(hostOverride);
     try {
@@ -438,7 +462,7 @@ class CTraderExecutor {
       return;
     }
 
-    if (!this.isConfigured) {
+    if (!(await this.configured())) {
       // Deliberately does NOT tell the operator which variables to set. Setting them used to be
       // the only gate between a signal and a real trade.
       console.log('[cTrader] Enabled but not configured — credentials missing. No order placed.');
@@ -651,7 +675,7 @@ class CTraderExecutor {
    * silently leave exposure behind while reporting success.
    */
   async demoPositions(opts: { close?: boolean; confirm?: string; positionId?: number } = {}): Promise<any> {
-    if (!this.isConfigured) throw new Error('cTrader credentials are not configured.');
+    if (!(await this.configured())) throw new Error('cTrader credentials are not configured.');
     if (this.isLiveMode) throw new Error('REFUSED: live mode is active. This only ever operates on demo.');
     if (opts.close && opts.confirm !== 'CLOSE_DEMO_POSITIONS') {
       throw new Error('Refused: closing requires the confirmation string.');
@@ -735,7 +759,7 @@ class CTraderExecutor {
     if (confirm !== 'PLACE_DEMO_ORDER') {
       throw new Error('Refused: confirmation string absent. This places a REAL order.');
     }
-    if (!this.isConfigured) throw new Error('Refused: cTrader credentials are not configured.');
+    if (!(await this.configured())) throw new Error('Refused: cTrader credentials are not configured.');
     if (this.isLiveMode) {
       throw new Error('REFUSED: live mode is active (CTRADER_MODE=live and CTRADER_ALLOW_LIVE=true). This test only ever runs on demo.');
     }

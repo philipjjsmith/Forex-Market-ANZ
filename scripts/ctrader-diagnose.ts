@@ -18,7 +18,8 @@ import { ctraderExecutor } from '../server/services/ctrader-executor';
   console.log(`  CTRADER_ENABLED    : ${process.env.CTRADER_ENABLED === 'true' ? 'true' : 'not set (executor disabled)'}`);
   console.log(`  CTRADER_MODE       : ${process.env.CTRADER_MODE ?? 'not set -> demo'}`);
   console.log(`  CTRADER_ALLOW_LIVE : ${process.env.CTRADER_ALLOW_LIVE === 'true' ? 'true' : 'not set'}`);
-  console.log(`  credentials present: ${(ctraderExecutor as any).isConfigured ? 'yes' : 'NO'}`);
+  // configured() consults the PERSISTED token; the env seed is dead after its first use.
+  console.log(`  credentials present: ${await ctraderExecutor.configured() ? 'yes' : 'NO'}`    + ` (env seed present: ${(ctraderExecutor as any).isConfiguredFromEnv ? 'yes' : 'no'})`);
   console.log(`  resolved mode      : ${(ctraderExecutor as any).isLiveMode ? 'LIVE (REAL MONEY)' : 'DEMO'}\n`);
 
   try {
