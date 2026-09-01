@@ -335,7 +335,7 @@ export default function Admin() {
   };
 
   // Fetch system health
-  const { data: health, isLoading: healthLoading } = useQuery<SystemHealth>({
+  const { data: health, isLoading: healthLoading, isError: healthError } = useQuery<SystemHealth>({
     queryKey: [API_ENDPOINTS.ADMIN_HEALTH],
     queryFn: async () => {
       const token = getToken();
@@ -610,7 +610,18 @@ export default function Admin() {
     return () => clearInterval(interval);
   }, [health?.signalGenerator.nextRun]);
 
-  if (isCheckingAuth || healthLoading) {
+  // Blank the page only while genuinely waiting on a FIRST load — never because a background
+  // refetch is in flight, and never because health is failing.
+  //
+  // In React Query v5 `isLoading` is `isPending && isFetching`, and `isPending` stays true for as
+  // long as the query has no data. So a health endpoint returning 500 made this condition true
+  // again on every 10-second refetch: the entire Admin page unmounted to this spinner and
+  // remounted, roughly every 10 seconds, destroying all component state each time — including an
+  // ARMED demo order, which is why the confirm button kept vanishing before it could be clicked.
+  //
+  // Health is one card. It must not be able to take down the page, least of all the cTrader
+  // controls, which do not depend on it at all.
+  if (isCheckingAuth || (healthLoading && !health && !healthError)) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <Loader2 className="h-8 w-8 animate-spin text-blue-500" />

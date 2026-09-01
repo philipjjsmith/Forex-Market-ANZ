@@ -595,13 +595,22 @@ export class TwelveDataAPI {
 
     for (const key of keys) {
       const entry = await storage.getItem(key) as CacheEntry | undefined;
-      if (entry) {
-        entries.push({
-          pair: key,
-          candleCount: entry.candles.length,
-          age: Math.round((Date.now() - entry.timestamp) / 1000),
-        });
-      }
+
+      // Not every value in this store is a candle entry. The daily usage counter lives in the
+      // same node-persist namespace (see getUsageStats), so `entry.candles` is undefined for it
+      // and reading `.length` threw — which took out GET /api/admin/health with a 500 and, via
+      // React Query keeping `isPending` true while data was absent, made the whole Admin page
+      // unmount to a spinner every 10 seconds and lose all local UI state.
+      //
+      // Array.isArray, never a truthiness or `.length` check: a string has a length too.
+      const candles = (entry as any)?.candles;
+      if (!Array.isArray(candles)) continue;
+
+      entries.push({
+        pair: key,
+        candleCount: candles.length,
+        age: Math.round((Date.now() - (entry as any).timestamp) / 1000),
+      });
     }
 
     return {
