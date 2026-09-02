@@ -170,7 +170,11 @@ export function registerAdminRoutes(app: Express) {
       results.signalAlert = await telegramNotifier.sendSignalAlert({
         symbol: 'USD/CHF', type: 'LONG', entry: 0.81333, stop: 0.81238,
         tp1: 0.81523, tp2: 0.81713, tp3: 0.82188, confidence: 108, tier: 'HIGH',
-        riskReward: 2, rationale: ['FORMAT TEST — not a real signal'],
+        // rationale is a STRING, not an array — sendSignalAlert calls .split() on it. The first
+        // run of this test passed an array and failed with "signal.rationale.split is not a
+        // function", which is the test doing its job: a wrong fixture caught here rather than a
+        // wrong assumption surviving into a real signal.
+        riskReward: 2, rationale: 'FORMAT TEST - not a real signal',
         version: 'format-test', signalNumber: 0, orderType: 'MARKET',
       } as any);
 
