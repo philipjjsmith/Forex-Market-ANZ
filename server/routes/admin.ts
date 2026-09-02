@@ -5,6 +5,7 @@ import { signalGenerator } from '../services/signal-generator';
 import { twelveDataAPI } from '../services/twelve-data';
 import { exchangeRateAPI } from '../services/exchangerate-api';
 import { ctraderExecutor, CTRADER_HOSTS } from '../services/ctrader-executor';
+import { syncBrokerDeals } from '../services/broker-deals';
 import { requireAuth, requireAdmin } from '../auth-middleware';
 import { propFirmService } from '../services/prop-firm-config';
 import { MAX_EFFECTIVE_EXPOSURE } from '../services/correlation-guard';
@@ -103,6 +104,55 @@ export function registerAdminRoutes(app: Express) {
       res.json(await ctraderExecutor.smokeTestDemoOrder(confirm, symbol));
     } catch (err: any) {
       res.status(400).json({ placed: false, error: err?.message ?? 'smoke test failed' });
+    }
+  });
+
+  /**
+   * POST /api/admin/broker-deals/sync — pull cTrader's own deal history.
+   *
+   * READ-ONLY against the broker: it fetches history and places, amends and closes nothing. POST
+   * rather than GET because it WRITES to our database (and so must not be triggerable by a
+   * prefetch or a monitor URL), not because it risks anything at the broker.
+   *
+   * This is what makes modelled outcomes falsifiable. Until it existed, every win/loss and pip
+   * figure came from scanning candles, and nothing had ever been checked against a real fill.
+   */
+  app.post("/api/admin/broker-deals/sync", requireAuth, requireAdmin, async (_req, res) => {
+    try {
+      res.json(await syncBrokerDeals());
+    } catch (err: any) {
+      res.status(400).json({ error: err?.message ?? 'deal sync failed' });
+    }
+  });
+
+  /**
+   * GET /api/admin/broker-deals — what the broker says, next to what we modelled.
+   *
+   * The comparison is the point. `signal_history` holds the modelled outcome; `ctrader_deals`
+   * holds what actually filled and closed. Showing them apart would let them drift; showing them
+   * together is what surfaces slippage, swap and gap-throughs.
+   */
+  app.get("/api/admin/broker-deals", requireAuth, requireAdmin, async (_req, res) => {
+    try {
+      const deals = await db.execute(sql`
+        SELECT deal_id, position_id, symbol_id, trade_side, filled_volume, execution_price,
+               deal_status, is_close, entry_price, gross_profit, swap, close_commission,
+               net_profit, balance_after, executed_at
+        FROM ctrader_deals ORDER BY executed_at DESC NULLS LAST LIMIT 50
+      `);
+      const closed = await db.execute(sql`
+        SELECT e.symbol, e.side, e.tier, e.signal_id, e.position_id,
+               e.signal_entry, e.broker_entry_price, e.fill_price,
+               e.signal_stop, e.signal_tp1, e.exit_price, e.realized_pnl,
+               e.created_at, e.closed_at
+        FROM ctrader_executions e
+        WHERE e.position_id IS NOT NULL
+        ORDER BY e.created_at DESC LIMIT 50
+      `);
+      const [sync] = (await db.execute(sql`SELECT * FROM ctrader_deal_sync WHERE id = 1`)) as any[];
+      res.json({ sync: sync ?? null, orders: closed, deals });
+    } catch (err: any) {
+      res.status(400).json({ error: err?.message ?? 'failed' });
     }
   });
 

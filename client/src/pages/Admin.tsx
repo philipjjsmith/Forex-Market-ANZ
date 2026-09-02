@@ -308,6 +308,34 @@ export default function Admin() {
     }
   };
 
+  /**
+   * Broker ground truth. `sync` pulls cTrader's own deal history (read-only at the broker, writes
+   * to our DB); otherwise it just reads back what we already hold, alongside the modelled figures.
+   */
+  const [brokerDeals, setBrokerDeals] = useState<any>(null);
+  const [dealsLoading, setDealsLoading] = useState(false);
+
+  const callBrokerDeals = async (sync: boolean) => {
+    setDealsLoading(true);
+    setBrokerDeals(null);
+    try {
+      const token = getToken();
+      const res = await fetch(sync ? API_ENDPOINTS.ADMIN_BROKER_DEALS_SYNC : API_ENDPOINTS.ADMIN_BROKER_DEALS, {
+        method: sync ? 'POST' : 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` }),
+        },
+        credentials: 'include',
+      });
+      setBrokerDeals(await res.json());
+    } catch (err: any) {
+      setBrokerDeals({ error: err?.message ?? 'request failed' });
+    } finally {
+      setDealsLoading(false);
+    }
+  };
+
   /** Open demo positions: list (read-only) and close. Never touches live — enforced server-side. */
   const [positions, setPositions] = useState<any>(null);
   const [posLoading, setPosLoading] = useState(false);
@@ -853,6 +881,26 @@ export default function Admin() {
             {positions && (
               <pre className="mt-3 text-xs text-slate-200 bg-slate-900/80 rounded p-3 overflow-x-auto max-h-80">
                 {JSON.stringify(positions, null, 2)}
+              </pre>
+            )}
+          </div>
+
+          <div className="border-t border-slate-600/50 pt-3 mt-3">
+            <p className="text-xs text-slate-400 mb-2">
+              Broker ground truth. Every win/loss figure elsewhere is <strong>modelled</strong> from
+              candles; this is what actually filled and closed, including swap and commission.
+            </p>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => callBrokerDeals(true)} disabled={dealsLoading} data-testid="button-deals-sync">
+                {dealsLoading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Working…</> : <>Sync broker deals</>}
+              </Button>
+              <Button variant="outline" onClick={() => callBrokerDeals(false)} disabled={dealsLoading} data-testid="button-deals-show">
+                Broker vs modelled
+              </Button>
+            </div>
+            {brokerDeals && (
+              <pre className="mt-3 text-xs text-slate-200 bg-slate-900/80 rounded p-3 overflow-x-auto max-h-80">
+                {JSON.stringify(brokerDeals, null, 2)}
               </pre>
             )}
           </div>

@@ -39,6 +39,8 @@ export const API_ENDPOINTS = {
   ADMIN_CTRADER_SMOKE_TEST: `${API_BASE_URL}/api/admin/ctrader-smoke-test`,
   ADMIN_CTRADER_POSITIONS: `${API_BASE_URL}/api/admin/ctrader-positions`,
   ADMIN_CTRADER_POSITIONS_CLOSE: `${API_BASE_URL}/api/admin/ctrader-positions/close`,
+  ADMIN_BROKER_DEALS: `${API_BASE_URL}/api/admin/broker-deals`,
+  ADMIN_BROKER_DEALS_SYNC: `${API_BASE_URL}/api/admin/broker-deals/sync`,
   ADMIN_TRIGGER_GENERATION: `${API_BASE_URL}/api/admin/trigger-generation`,
   ADMIN_GROWTH_STATS: `${API_BASE_URL}/api/admin/growth-stats`,
   ADMIN_GROWTH_STATS_DUAL: `${API_BASE_URL}/api/admin/growth-stats-dual`,

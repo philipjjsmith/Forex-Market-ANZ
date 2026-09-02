@@ -60,6 +60,9 @@ const PT = {
   CLOSE_POSITION_REQ: 2111,
   RECONCILE_REQ:     2124,
   RECONCILE_RES:     2125,
+  /** Deal history. Verified against help.ctrader.com/open-api/model-messages on 2026-09-02. */
+  DEAL_LIST_REQ:     2133,
+  DEAL_LIST_RES:     2134,
   SYMBOLS_LIST_REQ:  2114,
   SYMBOLS_LIST_RES:  2115,
   SYMBOL_BY_ID_REQ:  2116,
@@ -680,6 +683,80 @@ class CTraderExecutor {
     await this.saveRefreshToken(token);
     this.accessToken = null;   // force the next call to use the new token
     this.tokenExpiry = 0;
+  }
+
+  /**
+   * Read the broker's own deal history. READ-ONLY — places, amends and closes nothing.
+   *
+   * This is ground truth. `reconcile` reports only what is OPEN right now, so a position that has
+   * already closed is invisible to it — which is precisely the position whose outcome we need.
+   * ProtoOADealListRes returns every execution in a window, and a deal carrying
+   * `closePositionDetail` is a CLOSING deal reporting realised profit, swap and commission.
+   *
+   * PAGINATION IS NOT OPTIONAL. The response carries `hasMore`, meaning the server truncated the
+   * result to its own chunk size. Ignoring it would silently drop deals and produce a record that
+   * looks complete and is not — the same shape of defect as the truncated resolution paths. The
+   * loop advances past the newest deal seen and refuses to spin forever.
+   *
+   * Timestamps are Unix ms. The docs bound them (>= 0, <= 2147483646000) but state no maximum
+   * window for deals; callers chunk anyway, because the tick endpoints DO cap at one week and
+   * matching that is cheaper than discovering the limit in production.
+   */
+  async listDeals(fromMs: number, toMs: number, maxRows = 1000): Promise<any[]> {
+    if (!(await this.configured())) throw new Error('cTrader credentials are not configured.');
+    if (this.isLiveMode) throw new Error('REFUSED: live mode is active. This only ever reads demo.');
+
+    const accessToken = await this.getAccessToken();
+    const { socket, emitter } = await this.openConnection(DEMO_HOST);
+    try {
+      this.send(socket, PT.APP_AUTH_REQ, { clientId: this.clientId!, clientSecret: this.clientSecret! });
+      await this.waitFor(emitter, PT.APP_AUTH_RES);
+
+      this.send(socket, PT.GET_ACCOUNTS_REQ, { accessToken });
+      const accts: any[] = (await this.waitFor(emitter, PT.GET_ACCOUNTS_RES)).payload?.ctidTraderAccount ?? [];
+      const demo = accts.filter((a: any) => a.isLive !== true);
+      if (!demo.length) throw new Error('REFUSED: no demo account on this token.');
+      const accountId = demo[0].ctidTraderAccountId;
+
+      this.send(socket, PT.ACCOUNT_AUTH_REQ, { ctidTraderAccountId: accountId, accessToken });
+      await this.waitFor(emitter, PT.ACCOUNT_AUTH_RES);
+
+      const all: any[] = [];
+      const seen = new Set<number>();
+      let cursor = fromMs;
+
+      // Hard page cap. A server that keeps answering hasMore=true without advancing would
+      // otherwise loop until the process dies.
+      for (let page = 0; page < 20; page++) {
+        this.send(socket, PT.DEAL_LIST_REQ, {
+          ctidTraderAccountId: accountId, fromTimestamp: cursor, toTimestamp: toMs, maxRows,
+        });
+        const res = await this.waitFor(emitter, PT.DEAL_LIST_RES, 30000);
+        const deals: any[] = res.payload?.deal ?? [];
+
+        let added = 0;
+        for (const d of deals) {
+          if (d?.dealId === undefined || seen.has(d.dealId)) continue;
+          seen.add(d.dealId);
+          all.push(d);
+          added++;
+        }
+
+        if (!res.payload?.hasMore || deals.length === 0) break;
+
+        // Advance past the newest deal in this page. +1ms so the boundary deal is not re-fetched
+        // forever; de-duplication by dealId covers the case where several share a timestamp.
+        const newest = Math.max(...deals.map((d: any) => Number(d.executionTimestamp ?? d.createTimestamp ?? 0)));
+        const next = newest + 1;
+        if (!Number.isFinite(next) || next <= cursor || added === 0) break;   // no forward progress
+        cursor = next;
+      }
+
+      console.log(`[cTrader] deal history: ${all.length} deal(s) between ${new Date(fromMs).toISOString()} and ${new Date(toMs).toISOString()}`);
+      return all;
+    } finally {
+      try { socket.close(); } catch { /* already closed */ }
+    }
   }
 
   /**
