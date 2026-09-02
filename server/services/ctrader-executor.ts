@@ -15,6 +15,7 @@
 
 import WebSocket from 'ws';
 import { db } from '../db';
+import { exchangeRateAPI } from './exchangerate-api';
 import { sql } from 'drizzle-orm';
 import { EventEmitter } from 'events';
 
@@ -834,14 +835,45 @@ class CTraderExecutor {
       const volume = minVolume ?? 100;
       if (minVolume === undefined) volumeSource += ' — volume=100 is UNVERIFIED';
 
+      // SL and TP, exactly as a real trade carries them.
+      //
+      // The test used to send a bare market order. That left two things unproven: whether the
+      // broker ACCEPTS the order shape a real signal sends (absolute stopLoss and takeProfit on a
+      // market order — if that shape were rejected, the smoke test would have passed while every
+      // real signal failed), and it left the position needing manual cleanup.
+      //
+      // Geometry matches production: the R:R is the real 2:1 (SL_MULTIPLIER 1.5 / TP1_MULTIPLIER
+      // 3.0), and the stop distance is the real MIN_SL_PIPS floor for the symbol. The ONE
+      // difference from a live signal is that the distance is that floor rather than 1.5xATR,
+      // because a smoke test has no market analysis behind it to derive an ATR from. The order
+      // SHAPE — which is what this test exists to prove — is identical.
+      const pipFactor = symbol.includes('JPY') ? 100 : 10000;
+      const MIN_SL_PIPS: Record<string, number> = { 'EUR/USD': 8, 'USD/CHF': 8, 'GBP/USD': 10, 'USD/JPY': 6 };
+      const slPips = MIN_SL_PIPS[symbol] ?? 8;
+
+      let refPrice: number | undefined;
+      try {
+        const quotes = await exchangeRateAPI.fetchAllQuotes();
+        refPrice = quotes.find(q => q.symbol === symbol)?.exchangeRate;
+      } catch (e: any) {
+        console.warn(`[cTrader] smoke test could not fetch a reference price: ${e.message}`);
+      }
+
+      // Absolute levels, rounded to the pair's price precision. BUY: stop below, target above.
+      const digits = symbol.includes('JPY') ? 3 : 5;
+      const stopLoss   = refPrice ? +(refPrice - slPips / pipFactor).toFixed(digits) : undefined;
+      const takeProfit = refPrice ? +(refPrice + (slPips * 2) / pipFactor).toFixed(digits) : undefined;
+
       // Recorded the same way an automatic execution is, so the operator's own test order is
       // durable evidence rather than a JSON blob in a browser tab that closes. Written BEFORE the
-      // reply, so an order that goes out and then times out still leaves a trace it was sent.
+      // reply, so an order that goes out and then times out still leaves a trace it was sent —
+      // and it now carries the SL/TP levels actually sent, so the row states the whole request.
       recId = await this.record({
         symbol: light.symbolName, side: 'LONG', tier: 'SMOKE_TEST', status: 'sent',
-        skipReason: 'operator smoke test — minimum volume, no SL/TP',
+        skipReason: `operator smoke test — broker minimum volume, ${stopLoss ? '2:1 SL/TP as production' : 'NO SL/TP (no reference price)'}`,
         mode: 'demo', host: DEMO_HOST, accountId, accountIsLive: account.isLive === true,
         brokerSymbolId: symbolId, requestedVolume: volume, lots: volume / LOTS_TO_VOLUME,
+        signalEntry: refPrice ?? null, signalStop: stopLoss ?? null, signalTp1: takeProfit ?? null,
       });
 
       this.send(socket, PT.NEW_ORDER_REQ, {
@@ -850,6 +882,10 @@ class CTraderExecutor {
         orderType: 1,   // MARKET
         tradeSide: 1,   // BUY
         volume,
+        // Omitted entirely if no reference price was available — sending undefined levels would
+        // be worse than sending none, and a bare order is still a valid connectivity test.
+        ...(stopLoss   !== undefined ? { stopLoss }   : {}),
+        ...(takeProfit !== undefined ? { takeProfit } : {}),
       });
       const exec = await this.waitFor(emitter, PT.EXECUTION_EVENT, 20000);
       record(exec);
@@ -898,6 +934,10 @@ class CTraderExecutor {
 
       return {
         placed: true,
+        referencePrice: refPrice ?? null,
+        stopLoss: stopLoss ?? null,
+        takeProfit: takeProfit ?? null,
+        riskRewardSent: stopLoss && takeProfit ? '2:1 (production geometry)' : 'NONE — no reference price',
         brokerConfirmedOpen: reconciledOpen,
         confirmedVolume,
         confirmedPrice,
