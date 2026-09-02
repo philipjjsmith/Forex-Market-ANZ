@@ -75,6 +75,38 @@ export function descale(raw: unknown, moneyDigits: unknown): number | null {
   return v / Math.pow(10, d);
 }
 
+/**
+ * Build the position-closed alert text.
+ *
+ * EXPORTED so the admin format-test sends byte-identical text to what a real close sends — a test
+ * that reproduces the template proves only that the copy works, and copies drift. Pure function.
+ */
+export function buildCloseAlertMessage(a: {
+  win: boolean; exitPrice: any; entryPrice: any;
+  grossProfit: number | null; swap: number | null; closeCommission: number | null;
+  netProfit: number | null; balanceAfter: number | null; positionId: any;
+}): string {
+  const f = (v: number | null) => (v === null || v === undefined ? '—' : v.toFixed(2));
+  return `${a.win ? '🟢' : '🔴'} <b>POSITION CLOSED — DEMO</b>
+
+`
+    + `Exit: ${a.exitPrice ?? '—'}
+`
+    + `Entry: ${a.entryPrice ?? '—'}
+`
+    + `Gross: ${f(a.grossProfit)}
+`
+    + `Swap: ${f(a.swap)}
+`
+    + `Commission: ${f(a.closeCommission)}
+`
+    + `<b>Net: ${f(a.netProfit)}</b>
+`
+    + `Balance: ${f(a.balanceAfter)}
+`
+    + `Position: <code>${a.positionId}</code>`;
+}
+
 export interface SyncResult {
   ranFrom: string;
   ranTo: string;
@@ -229,24 +261,11 @@ async function storeDeal(d: any): Promise<{ stored: boolean; appliedClose: boole
         const row = res[0] as any;
         const win = (netProfit ?? 0) >= 0;
         await telegramNotifier.sendText(
-          `${win ? '🟢' : '🔴'} <b>POSITION CLOSED — DEMO</b>
-
-`
-          + `Exit: ${d.executionPrice ?? '—'}
-`
-          + `Entry: ${cpd?.entryPrice ?? '—'}
-`
-          + `Gross: ${grossProfit === null ? '—' : grossProfit.toFixed(2)}
-`
-          + `Swap: ${swap === null ? '—' : swap.toFixed(2)}
-`
-          + `Commission: ${closeCommission === null ? '—' : closeCommission.toFixed(2)}
-`
-          + `<b>Net: ${netProfit === null ? '—' : netProfit.toFixed(2)}</b>
-`
-          + `Balance: ${balanceAfter === null ? '—' : balanceAfter.toFixed(2)}
-`
-          + `Position: <code>${d.positionId}</code>`,
+          buildCloseAlertMessage({
+            win, exitPrice: d.executionPrice, entryPrice: cpd?.entryPrice,
+            grossProfit, swap, closeCommission, netProfit, balanceAfter,
+            positionId: d.positionId,
+          }),
           'paid', 'HTML'
         );
       } catch (e: any) {

@@ -312,6 +312,29 @@ export default function Admin() {
   const [tgTest, setTgTest] = useState<any>(null);
   const [tgLoading, setTgLoading] = useState(false);
 
+  /** Send one of EVERY alert type and report which arrived. Uses the real builders. */
+  const sendFormatTest = async () => {
+    setTgLoading(true);
+    setTgTest(null);
+    try {
+      const token = getToken();
+      const res = await fetch(API_ENDPOINTS.ADMIN_TELEGRAM_FORMAT_TEST, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` }),
+        },
+        credentials: 'include',
+        body: JSON.stringify({ confirm: 'SEND_FORMAT_TESTS' }),
+      });
+      setTgTest(await res.json());
+    } catch (err: any) {
+      setTgTest({ error: err?.message ?? 'request failed' });
+    } finally {
+      setTgLoading(false);
+    }
+  };
+
   const sendTelegramTest = async () => {
     setTgLoading(true);
     setTgTest(null);
@@ -918,6 +941,9 @@ export default function Admin() {
             <div className="flex gap-2 flex-wrap">
               <Button variant="outline" onClick={sendTelegramTest} disabled={tgLoading} data-testid="button-telegram-test">
                 {tgLoading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Sending…</> : <>Send test alert to phone</>}
+              </Button>
+              <Button variant="outline" onClick={sendFormatTest} disabled={tgLoading} data-testid="button-telegram-format-test">
+                Test ALL alert formats
               </Button>
               <Button variant="outline" onClick={() => callBrokerDeals(true)} disabled={dealsLoading} data-testid="button-deals-sync">
                 {dealsLoading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Working…</> : <>Sync broker deals</>}

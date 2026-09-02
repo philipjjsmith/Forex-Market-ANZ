@@ -85,6 +85,38 @@ const PT = {
   COMMON_ERROR:      50,
 } as const;
 
+/**
+ * Build the execution alert text.
+ *
+ * EXPORTED so the admin format-test sends byte-identical text to what a real trade sends. A test
+ * that reproduces the template instead of calling it proves only that the copy works, and the copy
+ * drifts. Pure function: no I/O, no side effects.
+ */
+export function buildExecutionAlertMessage(a: {
+  live: boolean; state: string; symbol: string; type: string; lots: number;
+  fillPrice: number | null; stop: number; target: number;
+  confidence: number; tier: string; positionId: number | null;
+}): string {
+  return `🤖 <b>AUTO-EXECUTED — ${a.live ? '⚠️ LIVE' : 'DEMO'}</b>
+`
+    + `${a.state}
+
+`
+    + `<b>${a.symbol} ${a.type}</b>
+`
+    + `Size: ${a.lots} lots
+`
+    + `Entry: ${a.fillPrice ? Number(a.fillPrice).toFixed(5) : 'pending fill'}
+`
+    + `Stop: ${a.stop.toFixed(5)}
+`
+    + `Target: ${a.target.toFixed(5)}
+`
+    + `Confidence: ${a.confidence} (${a.tier})
+`
+    + `Position: <code>${a.positionId ?? 'none'}</code>`;
+}
+
 export interface ExecuteSignalParams {
   /** The signal this order came from, so `ctrader_executions` can be joined to `signal_history`. */
   signalId?: string;
@@ -715,25 +747,12 @@ class CTraderExecutor {
           : filled ? 'FILLED ✅'
           : 'ACCEPTED (not confirmed filled) 📨';
         const alert = await telegramNotifier.sendText(
-          `🤖 <b>AUTO-EXECUTED — ${this.isLiveMode ? '⚠️ LIVE' : 'DEMO'}</b>
-`
-          + `${state}
-
-`
-          + `<b>${signal.symbol} ${signal.type}</b>
-`
-          + `Size: ${lots} lots
-`
-          + `Entry: ${fillPrice ? Number(fillPrice).toFixed(5) : 'pending fill'}
-`
-          + `Stop: ${signal.stop.toFixed(5)}
-`
-          + `Target: ${signal.targets[0].toFixed(5)}
-`
-          + `Confidence: ${signal.confidence} (${signal.tier})
-`
-          + `Position: <code>${positionId ?? 'none'}</code>`,
-          'paid', 'HTML'   // these use <b>/<code>; MarkdownV2 would 400 on the periods alone
+          buildExecutionAlertMessage({
+            live: this.isLiveMode, state, symbol: signal.symbol, type: signal.type,
+            lots, fillPrice, stop: signal.stop, target: signal.targets[0],
+            confidence: signal.confidence, tier: signal.tier, positionId,
+          }),
+          'paid', 'HTML'   // <b>/<code>; MarkdownV2 would 400 on the periods alone
         );
 
         // RECORD whether it actually arrived. sendText RETURNS failure rather than throwing, so

@@ -271,8 +271,8 @@ class TelegramNotifier {
    * The values remain in SignalNotification and in the database because the MT5 EA still reads
    * TP3 for its 50/50 split. Removing them from the alert does not remove them from the data.
    */
-  async sendSignalAlert(signal: SignalNotification): Promise<void> {
-    if (!this.isEnabled) return;
+  async sendSignalAlert(signal: SignalNotification): Promise<{ ok: boolean; errors: string[] }> {
+    if (!this.isEnabled) return { ok: false, errors: ['Telegram is not configured'] };
 
     const pipFactor = signal.symbol.includes('JPY') ? 100 : 10000;
     const slPips    = Math.abs(signal.entry - signal.stop)   * pipFactor;
@@ -315,13 +315,15 @@ class TelegramNotifier {
     lines.push(``, DISCLAIMER);
 
     const chatId = isHigh ? this.chatIdPaid : this.chatIdFree;
-    if (chatId) await this.sendToChannel(lines.join('\n'), chatId);
+    if (!chatId) return { ok: false, errors: ['no chat id for this tier'] };
+    const r = await this.sendToChannel(lines.join('\n'), chatId);
+    return { ok: r.ok, errors: r.ok ? [] : [r.error ?? 'unknown'] };
   }
 
   // ─── Outcome Alert ─────────────────────────────────────────────────────────
 
-  async sendOutcomeAlert(data: OutcomeNotification): Promise<void> {
-    if (!this.isEnabled) return;
+  async sendOutcomeAlert(data: OutcomeNotification): Promise<{ ok: boolean; errors: string[] }> {
+    if (!this.isEnabled) return { ok: false, errors: ['Telegram is not configured'] };
 
     const numStr  = data.signalNumber ? `\\#${data.signalNumber} ` : '';
     const sym     = TelegramNotifier.esc(data.symbol);
@@ -392,7 +394,9 @@ class TelegramNotifier {
     lines.push(``, DISCLAIMER);
 
     const chatId = data.tier === 'HIGH' ? this.chatIdPaid : this.chatIdFree;
-    if (chatId) await this.sendToChannel(lines.join('\n'), chatId);
+    if (!chatId) return { ok: false, errors: ['no chat id for this tier'] };
+    const r = await this.sendToChannel(lines.join('\n'), chatId);
+    return { ok: r.ok, errors: r.ok ? [] : [r.error ?? 'unknown'] };
   }
 
   // ─── Weekly Summary ────────────────────────────────────────────────────────

@@ -8,6 +8,8 @@ import { ctraderExecutor, CTRADER_HOSTS } from '../services/ctrader-executor';
 import { syncBrokerDeals } from '../services/broker-deals';
 import { telegramNotifier } from '../services/telegram-notifier';
 import { buildPerformanceReport } from '../services/performance-report';
+import { buildExecutionAlertMessage } from '../services/ctrader-executor';
+import { buildCloseAlertMessage } from '../services/broker-deals';
 import { requireAuth, requireAdmin } from '../auth-middleware';
 import { propFirmService } from '../services/prop-firm-config';
 import { MAX_EFFECTIVE_EXPOSURE } from '../services/correlation-guard';
@@ -138,6 +140,70 @@ export function registerAdminRoutes(app: Express) {
       res.status(result.ok ? 200 : 400).json({ published: result.ok, errors: result.errors, report });
     } catch (err: any) {
       res.status(400).json({ published: false, error: err?.message ?? 'failed' });
+    }
+  });
+
+  /**
+   * POST /api/admin/telegram-format-test — send ONE of every alert type and report which arrived.
+   *
+   * WHY THIS EXISTS
+   *
+   * Only the plain test alert has ever been confirmed delivering. The signal and outcome alerts
+   * use MarkdownV2, where an unescaped period is a 400, and the OUTCOME alert has never once been
+   * observed arriving in this system's history — there is a recorded month (27 May - 19 Jun 2026)
+   * in which five trades resolved and no outcome notification appeared.
+   *
+   * Waiting for a real trade to find out means losing that trade's notification. This exercises
+   * every format now.
+   *
+   * It calls the REAL builders and the REAL send methods — never a reproduction of the template.
+   * A test that copies the message proves only that the copy works, and copies drift.
+   */
+  app.post("/api/admin/telegram-format-test", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      if (req.body?.confirm !== 'SEND_FORMAT_TESTS') {
+        return res.status(400).json({ error: 'Refused: confirmation string absent.' });
+      }
+      const results: Record<string, any> = {};
+
+      // 1. SIGNAL alert — MarkdownV2, the real method.
+      results.signalAlert = await telegramNotifier.sendSignalAlert({
+        symbol: 'USD/CHF', type: 'LONG', entry: 0.81333, stop: 0.81238,
+        tp1: 0.81523, tp2: 0.81713, tp3: 0.82188, confidence: 108, tier: 'HIGH',
+        riskReward: 2, rationale: ['FORMAT TEST — not a real signal'],
+        version: 'format-test', signalNumber: 0, orderType: 'MARKET',
+      } as any);
+
+      // 2. OUTCOME alert — MarkdownV2. The one with no delivery history.
+      results.outcomeAlert = await telegramNotifier.sendOutcomeAlert({
+        signalNumber: 0, symbol: 'USD/CHF', type: 'LONG', outcome: 'STOP_HIT',
+        entryPrice: 0.81459, outcomePrice: 0.81330, profitLossPips: -12.9,
+        stopPips: 12.9, durationMs: 43 * 60_000, tier: 'HIGH',
+        monthWins: 54, monthLosses: 110, monthPips: -555, currentStreak: -1,
+      } as any);
+
+      // 3. EXECUTION alert — HTML, built by the same function production uses.
+      results.executionAlert = await telegramNotifier.sendText(
+        '🧪 <b>FORMAT TEST</b>\n' + buildExecutionAlertMessage({
+          live: false, state: 'OPEN AT BROKER ✅', symbol: 'USD/CHF', type: 'LONG',
+          lots: 0.86, fillPrice: 0.81337, stop: 0.81238, target: 0.81523,
+          confidence: 108, tier: 'HIGH', positionId: 286227046,
+        }), 'paid', 'HTML');
+
+      // 4. CLOSE alert — HTML, same builder as the real close path.
+      results.closeAlert = await telegramNotifier.sendText(
+        '🧪 <b>FORMAT TEST</b>\n' + buildCloseAlertMessage({
+          win: false, exitPrice: 0.81327, entryPrice: 0.81470,
+          grossProfit: -137.15, swap: 0, closeCommission: -7.02,
+          netProfit: -144.17, balanceAfter: 10085.34, positionId: 286259147,
+        }), 'paid', 'HTML');
+
+      const failed = Object.entries(results).filter(([, v]: any) => !v?.ok).map(([k]) => k);
+      res.status(failed.length ? 400 : 200).json({
+        allDelivered: failed.length === 0, failed, results,
+      });
+    } catch (err: any) {
+      res.status(400).json({ error: err?.message ?? 'format test failed' });
     }
   });
 
