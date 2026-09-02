@@ -326,9 +326,14 @@ class TelegramNotifier {
         ``,
         `📊 *This month:* ${data.monthWins}W \\/ ${data.monthLosses}L \\(${wr}%\\) \\| \`${mthPips} pips\``,
       );
+      // DOUBLE-ESCAPE BUG, fixed 2026-09-02. These two strings were written PRE-escaped and then
+      // passed through esc() again. esc() escapes backslashes as well, so the backslash became a
+      // double backslash and the period gained its own escape — subscribers saw a stray backslash
+      // before the period, on the LOSS notification specifically. The text is raw now and is
+      // escaped exactly once, by esc(), which is the only place escaping should happen.
       const streakMsg = data.currentStreak <= -2
-        ? `📉 Loss streak: ${Math.abs(data.currentStreak)} — part of the process\\.`
-        : 'Streak reset — back to work\\.';
+        ? `📉 Loss streak: ${Math.abs(data.currentStreak)} — part of the process.`
+        : 'Streak reset — back to work.';
       lines.push(TelegramNotifier.esc(streakMsg));
 
     } else {
