@@ -274,8 +274,17 @@ export function registerAdminRoutes(app: Express) {
       const exchangeRateCacheHitRate = exchangeRateStats.size > 0 ? 85 : 0;
       const twelveDataCacheHitRate = twelveDataStats.size > 0 ? 75 : 0;
 
+      // Telegram reachability, cached in the notifier so this polled endpoint stays cheap.
+      // Reported here because a broken chat id is invisible everywhere else until a trade fires
+      // and the alert silently fails — which is exactly what happened on 2026-09-02.
+      const telegram = {
+        ...telegramNotifier.configState,
+        reachability: await telegramNotifier.checkChatsReachable(),
+      };
+
       const health = {
         status: 'healthy' as const,
+        telegram,
         signalGenerator: {
           isRunning: false, // We'd track this in a real implementation
           lastRun: new Date().toISOString(), // Placeholder

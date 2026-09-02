@@ -347,14 +347,43 @@ class CTraderExecutor {
 
   // ─── Position sizing ──────────────────────────────────────────────────────
 
-  private calcVolume(symbol: string, slPips: number, positionSizePercent = 1.0): number {
+  /**
+   * Pip value per standard lot, in the account currency (USD).
+   *
+   * This was hardcoded as `symbol.includes('JPY') ? 9 : 10`, which is only correct when USD is the
+   * QUOTE currency. Measured against a real closed trade on 2026-09-02 (position 286259147):
+   * gross -137.15 on 0.78 lots over 14.3 pips gives 137.15 / (0.78 * 14.3) = **$12.30**, not $10.
+   * USD/CHF positions were therefore ~23% too large — an intended 1% risk was really ~1.24%.
+   *
+   *   USD is the QUOTE currency (EUR/USD, GBP/USD, AUD/USD): pip value is fixed at
+   *     pipSize * 100000 = $10. The rate does not enter into it.
+   *   USD is the BASE currency (USD/CHF, USD/JPY): the pip is denominated in the quote currency,
+   *     so it must be converted back: pipSize * 100000 / price.
+   *       USD/CHF @ 0.8133 -> 0.0001 * 100000 / 0.8133 = $12.30  (matches the measured deal)
+   *       USD/JPY @ 160    -> 0.01   * 100000 / 160    = $6.25   (the old constant 9 oversized
+   *                                                               the stop, UNDER-sizing by ~30%)
+   *
+   * `price` is the signal's entry, which is the live rate at signal time — accurate to well
+   * within the precision this needs, and it avoids an extra API call on the execution path.
+   */
+  private pipValuePerLot(symbol: string, price: number): number {
+    const pipSize = symbol.includes('JPY') ? 0.01 : 0.0001;
+    const perLotInQuote = pipSize * 100_000;
+    // Base-currency USD means the P&L lands in the quote currency and must be converted.
+    if (/^USD[\/]/.test(symbol)) {
+      return Number.isFinite(price) && price > 0 ? perLotInQuote / price : perLotInQuote;
+    }
+    return perLotInQuote;   // USD is the quote currency: already in USD
+  }
+
+  private calcVolume(symbol: string, slPips: number, positionSizePercent = 1.0, price = 0): number {
     // Honour the signal's own sizing. This was hardcoded to 1%, so if the HIGH-tier guard were
     // ever relaxed a MEDIUM signal (positionSizePercent = 0, practice only) would have been
     // sized as a full live trade.
     const pct = Number.isFinite(positionSizePercent) ? Math.max(0, positionSizePercent) : 1.0;
     if (pct <= 0) return 0;
     const riskUsd        = this.accountBalance * (pct / 100);
-    const pipValuePerLot = symbol.includes('JPY') ? 9 : 10; // USD value per pip per standard lot
+    const pipValuePerLot = this.pipValuePerLot(symbol, price);
     const lots = Math.min(10, Math.max(0.01,
       Math.round((riskUsd / (slPips * pipValuePerLot)) * 100) / 100
     ));
@@ -453,7 +482,9 @@ class CTraderExecutor {
           fill_price      = COALESCE(${patch.fillPrice ?? null}, fill_price),
           error           = COALESCE(${patch.error ?? null}, error),
           reconciled_at   = COALESCE(${patch.reconciledAt ?? null}, reconciled_at),
-          reconciled_open = COALESCE(${patch.reconciledOpen ?? null}, reconciled_open)
+          reconciled_open = COALESCE(${patch.reconciledOpen ?? null}, reconciled_open),
+          alert_sent      = COALESCE(${patch.alertSent ?? null}, alert_sent),
+          alert_error     = COALESCE(${patch.alertError ?? null}, alert_error)
         WHERE id = ${id}
       `);
     } catch (e: any) {
@@ -569,7 +600,7 @@ class CTraderExecutor {
       // Step 6 — Calculate position size (1% risk)
       const pipFactor = signal.symbol.includes('JPY') ? 100 : 10000;
       const slPips    = Math.abs(signal.entry - signal.stop) * pipFactor;
-      let volume      = this.calcVolume(signal.symbol, slPips, signal.positionSizePercent ?? 1.0);
+      let volume      = this.calcVolume(signal.symbol, slPips, signal.positionSizePercent ?? 1.0, signal.entry);
       if (volume <= 0) {
         console.log(`[cTrader] positionSizePercent=${signal.positionSizePercent} -> zero volume. No order placed.`);
         await this.record({ ...base, status: 'skipped_zero_volume', accountId,
@@ -647,11 +678,16 @@ class CTraderExecutor {
         this.send(socket, PT.RECONCILE_REQ, { ctidTraderAccountId: accountId });
         const rec = await this.waitFor(emitter, PT.RECONCILE_RES, 20000);
         const open: any[] = rec.payload?.position ?? [];
-        reconciledOpen = positionId
-          ? open.some((x: any) => x.positionId === positionId)
-          : open.length > 0;
+        const mine = positionId ? open.find((x: any) => x.positionId === positionId) : undefined;
+        reconciledOpen = positionId ? !!mine : open.length > 0;
         await this.amend(recId, {
           status: reconciledOpen ? 'filled' : undefined,
+          // Backfill the REAL fill price. The execution event reports price 0 when executionType
+          // is 2 (ACCEPTED) — measured on position 286227046, which recorded fill_price 0 while
+          // the broker had filled at 0.81337. Only reconcile carries the true price, so without
+          // this the executions table cannot measure slippage at all. The smoke test already did
+          // this; the automatic path did not.
+          fillPrice: mine?.price ?? undefined,
           reconciledAt: new Date().toISOString(), reconciledOpen,
         });
       } catch (e: any) {
@@ -678,7 +714,7 @@ class CTraderExecutor {
         const state = reconciledOpen ? 'OPEN AT BROKER ✅'
           : filled ? 'FILLED ✅'
           : 'ACCEPTED (not confirmed filled) 📨';
-        await telegramNotifier.sendText(
+        const alert = await telegramNotifier.sendText(
           `🤖 <b>AUTO-EXECUTED — ${this.isLiveMode ? '⚠️ LIVE' : 'DEMO'}</b>
 `
           + `${state}
@@ -699,9 +735,19 @@ class CTraderExecutor {
           + `Position: <code>${positionId ?? 'none'}</code>`,
           'paid', 'HTML'   // these use <b>/<code>; MarkdownV2 would 400 on the periods alone
         );
+
+        // RECORD whether it actually arrived. sendText RETURNS failure rather than throwing, so
+        // the catch below never fires on a rejected message — which is exactly how a full day of
+        // alerts went missing on 2026-09-02 with no trace. Delivery is now a fact in the database.
+        await this.amend(recId, {
+          alertSent: alert.ok,
+          alertError: alert.ok ? undefined : (alert.errors.join('; ') || 'unknown'),
+        });
+        if (!alert.ok) console.error(`[cTrader] EXECUTION ALERT FAILED: ${alert.errors.join('; ')}`);
       } catch (e: any) {
         // A notification failure must never affect a trade that has already been placed.
         console.warn(`[cTrader] execution alert not sent: ${e?.message ?? e}`);
+        await this.amend(recId, { alertSent: false, alertError: String(e?.message ?? e) });
       }
 
     } catch (err: any) {

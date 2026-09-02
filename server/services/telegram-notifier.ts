@@ -136,6 +136,46 @@ class TelegramNotifier {
   }
 
   /**
+   * Are the configured chats actually reachable? Cached, so it is safe on a polled endpoint.
+   *
+   * Config state proves the env vars are SET; it cannot prove they are VALID. On 2026-09-02
+   * `TELEGRAM_CHAT_ID_PAID` held the literal string "FREE" — present, non-empty, and completely
+   * unusable. Every HIGH-tier alert died on "chat not found" for a full day and the config check
+   * reported `paidChannel: "set"` throughout.
+   *
+   * Only Telegram can answer this, so ask it — but at most every 10 minutes, because the admin
+   * health endpoint is polled every 10 seconds and an uncached check would be ~8,600 calls a day.
+   */
+  private reachCache: { at: number; result: any } | null = null;
+
+  async checkChatsReachable(maxAgeMs = 10 * 60_000): Promise<any> {
+    if (this.reachCache && Date.now() - this.reachCache.at < maxAgeMs) {
+      return { ...this.reachCache.result, cached: true };
+    }
+    if (!this.isEnabled) {
+      const r = { ok: false, problems: ['Telegram is not configured'] };
+      this.reachCache = { at: Date.now(), result: r };
+      return r;
+    }
+    const problems: string[] = [];
+    const seen = new Set<string>();
+    for (const [label, chatId] of [['paid', this.chatIdPaid], ['free', this.chatIdFree]] as const) {
+      if (!chatId || seen.has(chatId)) continue;
+      seen.add(chatId);
+      try {
+        const res = await fetch(`https://api.telegram.org/bot${this.botToken}/getChat?chat_id=${encodeURIComponent(chatId)}`);
+        const j: any = await res.json();
+        if (!j?.ok) problems.push(`${label} (${chatId}): ${j?.description ?? 'unreachable'}`);
+      } catch (e: any) {
+        problems.push(`${label} (${chatId}): ${e?.message ?? e}`);
+      }
+    }
+    const result = { ok: problems.length === 0, problems };
+    this.reachCache = { at: Date.now(), result };
+    return result;
+  }
+
+  /**
    * Ask Telegram what the configured chats actually ARE.
    *
    * "It says sent but I see nothing" has two very different causes: the message was rejected, or
