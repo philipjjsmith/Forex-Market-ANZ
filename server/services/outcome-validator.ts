@@ -304,9 +304,9 @@ export class OutcomeValidator {
     try {
       if (sessionAnalyzer.isInKillZone()) return;
 
-      // maxWindows 2: a week per window, so a cold start still catches up over a few cycles
-      // instead of opening a dozen sockets in one pass.
-      const r = await syncBrokerDeals({ maxWindows: 2 });
+      // A bounded bite of history per tick. The watermark advances, so a cold start converges
+      // over a couple of hours unattended rather than trying to pull a year in one pass.
+      const r = await syncBrokerDeals({ maxSpanMs: 14 * 24 * 60 * 60 * 1000 });
       if (r.dealsSeen > 0 || r.closesApplied > 0) {
         console.log(`🧾 Broker deals: ${r.dealsSeen} seen, ${r.dealsStored} stored, ${r.closesApplied} close(s) applied`);
       }

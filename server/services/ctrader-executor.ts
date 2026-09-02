@@ -744,6 +744,11 @@ class CTraderExecutor {
    * matching that is cheaper than discovering the limit in production.
    */
   async listDeals(fromMs: number, toMs: number, maxRows = 1000): Promise<any[]> {
+    /**
+     * Chunk size. The docs state no maximum range for DEAL_LIST, but the tick endpoints cap at one
+     * week and matching that is cheaper than discovering the real limit in production.
+     */
+    const DEAL_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
     if (!(await this.configured())) throw new Error('cTrader credentials are not configured.');
     if (this.isLiveMode) throw new Error('REFUSED: live mode is active. This only ever reads demo.');
 
@@ -764,33 +769,42 @@ class CTraderExecutor {
 
       const all: any[] = [];
       const seen = new Set<number>();
-      let cursor = fromMs;
 
-      // Hard page cap. A server that keeps answering hasMore=true without advancing would
-      // otherwise loop until the process dies.
-      for (let page = 0; page < 20; page++) {
-        this.send(socket, PT.DEAL_LIST_REQ, {
-          ctidTraderAccountId: accountId, fromTimestamp: cursor, toTimestamp: toMs, maxRows,
-        });
-        const res = await this.waitFor(emitter, PT.DEAL_LIST_RES, 30000);
-        const deals: any[] = res.payload?.deal ?? [];
+      // Chunk the whole range on ONE authenticated socket.
+      //
+      // The chunking used to live in the caller, which meant a fresh connection and a fresh OAuth
+      // handshake per week of history. A cold start over a year would have opened ~52 sockets.
+      // The window loop belongs here, where the connection already exists.
+      for (let winStart = fromMs; winStart < toMs; winStart += DEAL_WINDOW_MS) {
+        const winEnd = Math.min(winStart + DEAL_WINDOW_MS, toMs);
+        let cursor = winStart;
 
-        let added = 0;
-        for (const d of deals) {
-          if (d?.dealId === undefined || seen.has(d.dealId)) continue;
-          seen.add(d.dealId);
-          all.push(d);
-          added++;
+        // Hard page cap. A server that keeps answering hasMore=true without advancing would
+        // otherwise loop until the process dies.
+        for (let page = 0; page < 20; page++) {
+          this.send(socket, PT.DEAL_LIST_REQ, {
+            ctidTraderAccountId: accountId, fromTimestamp: cursor, toTimestamp: winEnd, maxRows,
+          });
+          const res = await this.waitFor(emitter, PT.DEAL_LIST_RES, 30000);
+          const deals: any[] = res.payload?.deal ?? [];
+
+          let added = 0;
+          for (const d of deals) {
+            if (d?.dealId === undefined || seen.has(d.dealId)) continue;
+            seen.add(d.dealId);
+            all.push(d);
+            added++;
+          }
+
+          if (!res.payload?.hasMore || deals.length === 0) break;
+
+          // Advance past the newest deal in this page. +1ms so the boundary deal is not re-fetched
+          // forever; de-duplication by dealId covers several deals sharing a timestamp.
+          const newest = Math.max(...deals.map((d: any) => Number(d.executionTimestamp ?? d.createTimestamp ?? 0)));
+          const next = newest + 1;
+          if (!Number.isFinite(next) || next <= cursor || added === 0) break;   // no forward progress
+          cursor = next;
         }
-
-        if (!res.payload?.hasMore || deals.length === 0) break;
-
-        // Advance past the newest deal in this page. +1ms so the boundary deal is not re-fetched
-        // forever; de-duplication by dealId covers the case where several share a timestamp.
-        const newest = Math.max(...deals.map((d: any) => Number(d.executionTimestamp ?? d.createTimestamp ?? 0)));
-        const next = newest + 1;
-        if (!Number.isFinite(next) || next <= cursor || added === 0) break;   // no forward progress
-        cursor = next;
       }
 
       console.log(`[cTrader] deal history: ${all.length} deal(s) between ${new Date(fromMs).toISOString()} and ${new Date(toMs).toISOString()}`);

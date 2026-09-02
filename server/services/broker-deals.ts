@@ -28,13 +28,36 @@ import { ctraderExecutor } from './ctrader-executor';
 import { telegramNotifier } from './telegram-notifier';
 
 /**
- * Chunk size for history requests. The tick endpoints cap at one week; match that rather than
- * discover the deal endpoint's own limit in production.
+ * How far back a COLD START looks — no watermark, nothing to resume from.
+ *
+ * Deliberately generous, and deliberately NOT anchored to our own records. The previous version
+ * anchored to the earliest `ctrader_executions` row carrying a position id, on the reasoning that
+ * no deal of ours could predate our own order record. That reasoning is WRONG, and it cost a real
+ * trade:
+ *
+ *   `ctrader_executions` was created 2026-09-01. Position 285950003 was opened 2026-08-31 — the
+ *   first order this system ever placed, before the table existed. The watermark therefore started
+ *   AFTER a real closed trade, the sync never looked at that window, and our realised P&L was
+ *   short by -0.18. It reported -0.41 against a true balance change of -0.59.
+ *
+ * Nothing in our database noticed. **Myfxbook did, within minutes of being connected** — the
+ * balance disagreed with our sum. That is precisely what independent verification is for, and it
+ * is the argument for this constant being generous rather than clever.
+ *
+ * The broker's history is older than our ability to record it, and it can contain deals we did not
+ * cause at all (a manual trade placed in cTrader). Our own tables are not a lower bound on it.
  */
-const WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+const COLD_START_LOOKBACK_MS = 365 * 24 * 60 * 60 * 1000;
 
-/** How far back to look on a cold start, with no watermark and no order to anchor to. */
-const COLD_START_LOOKBACK_MS = 30 * 24 * 60 * 60 * 1000;
+/**
+ * Maximum span of history one run will process.
+ *
+ * A 365-day cold start is far too much for a single cron tick, so a run takes a bite and advances
+ * the watermark. The next tick resumes from there and it converges within a couple of hours,
+ * unattended. Bounded work per run matters more than finishing in one pass — an unbounded catch-up
+ * on a 5-minute cron is how you get overlapping runs.
+ */
+const MAX_SPAN_PER_RUN_MS = 30 * 24 * 60 * 60 * 1000;
 
 /**
  * Apply the moneyDigits exponent.
@@ -65,28 +88,21 @@ export interface SyncResult {
  * Pull deals since the watermark and record them. Idempotent: deals are keyed on the broker's own
  * dealId, so re-running rewrites the same rows rather than duplicating them.
  */
-export async function syncBrokerDeals(opts: { maxWindows?: number } = {}): Promise<SyncResult> {
-  const maxWindows = opts.maxWindows ?? 6;
+export async function syncBrokerDeals(opts: { maxSpanMs?: number } = {}): Promise<SyncResult> {
+  const maxSpan = opts.maxSpanMs ?? MAX_SPAN_PER_RUN_MS;
   const now = Date.now();
 
-  // Where to resume from, in order of preference:
-  //   1. the watermark from the last successful run
-  //   2. just before the earliest order we ever recorded (no deal of ours can predate it)
-  //   3. a fixed lookback, for a genuinely cold start
+  // Resume from the watermark, or cold-start at a fixed lookback.
+  //
+  // Note what is NOT consulted: our own `ctrader_executions` table. See COLD_START_LOOKBACK_MS —
+  // anchoring to it silently skipped a real closed trade, because the broker's history predates
+  // the table.
   let fromMs: number;
   const wmRows = (await db.execute(sql`SELECT last_synced_to FROM ctrader_deal_sync WHERE id = 1`)) as any[];
   const wm = wmRows[0];
-  if (wm?.last_synced_to) {
-    fromMs = new Date(wm.last_synced_to).getTime();
-  } else {
-    const firstRows = (await db.execute(sql`
-      SELECT min(created_at) AS first_order FROM ctrader_executions WHERE position_id IS NOT NULL
-    `)) as any[];
-    const firstOrder = firstRows[0]?.first_order;
-    fromMs = firstOrder
-      ? new Date(firstOrder).getTime() - 60_000   // a minute of slack around the boundary
-      : now - COLD_START_LOOKBACK_MS;
-  }
+  fromMs = wm?.last_synced_to
+    ? new Date(wm.last_synced_to).getTime()
+    : now - COLD_START_LOOKBACK_MS;
 
   if (fromMs >= now) {
     return {
@@ -96,20 +112,16 @@ export async function syncBrokerDeals(opts: { maxWindows?: number } = {}): Promi
   }
 
   let dealsSeen = 0, dealsStored = 0, closesApplied = 0;
-  let cursor = fromMs;
 
-  for (let w = 0; w < maxWindows && cursor < now; w++) {
-    const windowEnd = Math.min(cursor + WINDOW_MS, now);
-    const deals = await ctraderExecutor.listDeals(cursor, windowEnd);
-    dealsSeen += deals.length;
+  // One call, one socket. listDeals chunks the range internally and handles hasMore paging.
+  const cursor = Math.min(now, fromMs + maxSpan);
+  const deals = await ctraderExecutor.listDeals(fromMs, cursor);
+  dealsSeen += deals.length;
 
-    for (const d of deals) {
-      const r = await storeDeal(d);
-      if (r.stored) dealsStored++;
-      if (r.appliedClose) closesApplied++;
-    }
-
-    cursor = windowEnd;
+  for (const d of deals) {
+    const r = await storeDeal(d);
+    if (r.stored) dealsStored++;
+    if (r.appliedClose) closesApplied++;
   }
 
   await db.execute(sql`
