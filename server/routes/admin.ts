@@ -38,6 +38,15 @@ export function registerAdminRoutes(app: Express) {
       configured: await ctraderExecutor.configured(),
       configuredFromEnvSeed: (ctraderExecutor as any).isConfiguredFromEnv === true,
       resolvedMode: (ctraderExecutor as any).isLiveMode ? 'LIVE' : 'DEMO',
+      // Surfaced because position sizing depends on it and it was previously unobservable.
+      // CTRADER_ACCOUNT_BALANCE defaults to 2500; the demo account actually holds 10000, so an
+      // unset var silently sizes every trade at 0.25% risk while the code and the UI both say 1%.
+      // "I think I set it" is not a verification — this makes the value the system is ACTUALLY
+      // using visible, rather than the value anyone believes is configured.
+      accountBalanceUsed: (ctraderExecutor as any).accountBalance,
+      accountBalanceSource: process.env.CTRADER_ACCOUNT_BALANCE
+        ? 'CTRADER_ACCOUNT_BALANCE'
+        : 'DEFAULT 2500 — env var NOT set',
     };
     // Probe BOTH hosts read-only. APP_AUTH uses only CLIENT_ID/CLIENT_SECRET and never the
     // refresh token, so a failure there is a connectivity/app-registration problem, NOT a token
