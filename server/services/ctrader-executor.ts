@@ -855,6 +855,7 @@ class CTraderExecutor {
       record(exec);
 
       const pos = exec.payload?.position;
+      const positionId = pos?.positionId ?? exec.payload?.order?.positionId ?? null;
 
       // executionType 2 = ACCEPTED, 3 = FILLED. Stored distinctly for the same reason the
       // automatic path does it: acceptance is not evidence of a fill.
@@ -862,12 +863,44 @@ class CTraderExecutor {
         status: exec.payload?.executionType === 3 ? 'filled' : 'accepted',
         executionType: exec.payload?.executionType ?? null,
         orderId: exec.payload?.order?.orderId ?? null,
-        positionId: pos?.positionId ?? exec.payload?.order?.positionId ?? null,
+        positionId,
         fillPrice: pos?.price ?? exec.payload?.deal?.executionPrice ?? null,
       });
 
+      // Reconcile before returning. The acceptance event is NOT a fill and does not carry one:
+      // measured on 2026-09-01 position 286152195 came back from EXECUTION_EVENT with
+      // volume 0 and price 0, while the broker's own position list showed volume 100000 at
+      // 1.15915. Reporting the acceptance figures would have recorded a fill at price ZERO.
+      //
+      // executeSignal already did this; the smoke test did not, so the operator's own test left a
+      // row stuck at 'accepted @ 0' that never advanced. Same evidence standard for both paths.
+      let reconciledOpen: boolean | null = null;
+      let confirmedVolume: number | null = null;
+      let confirmedPrice: number | null = null;
+      try {
+        this.send(socket, PT.RECONCILE_REQ, { ctidTraderAccountId: accountId });
+        const rec = await this.waitFor(emitter, PT.RECONCILE_RES, 20000);
+        record(rec);
+        const open: any[] = rec.payload?.position ?? [];
+        const mine = open.find((x: any) => x.positionId === positionId);
+        reconciledOpen  = !!mine;
+        confirmedVolume = mine?.tradeData?.volume ?? null;
+        confirmedPrice  = mine?.price ?? null;
+        await this.amend(recId, {
+          status: reconciledOpen ? 'filled' : undefined,
+          fillPrice: confirmedPrice,
+          reconciledAt: new Date().toISOString(),
+          reconciledOpen,
+        });
+      } catch (e: any) {
+        console.warn(`[cTrader] smoke test could not reconcile: ${e.message}`);
+      }
+
       return {
         placed: true,
+        brokerConfirmedOpen: reconciledOpen,
+        confirmedVolume,
+        confirmedPrice,
         host: DEMO_HOST,
         accountId,
         accountIsLive: account.isLive === true,
@@ -877,7 +910,7 @@ class CTraderExecutor {
         volumeSource,
         minVolume, stepVolume,
         executionType: exec.payload?.executionType,
-        positionId: pos?.positionId ?? exec.payload?.order?.positionId,
+        positionId,
         entryPrice: pos?.price ?? exec.payload?.deal?.executionPrice,
         transcript,
       };
