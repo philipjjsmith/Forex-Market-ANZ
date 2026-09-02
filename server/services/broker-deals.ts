@@ -25,6 +25,7 @@
 import { db } from '../db';
 import { sql } from 'drizzle-orm';
 import { ctraderExecutor } from './ctrader-executor';
+import { telegramNotifier } from './telegram-notifier';
 
 /**
  * Chunk size for history requests. The tick endpoints cap at one week; match that rather than
@@ -196,9 +197,52 @@ async function storeDeal(d: any): Promise<{ stored: boolean; appliedClose: boole
           realized_pnl       = ${netProfit},
           broker_entry_price = ${cpd?.entryPrice ?? null}
       WHERE position_id = ${d.positionId}
+        -- Only the FIRST time. Without this guard a re-sync — an overlapping window, a reset
+        -- watermark, a manual button press — would re-apply the same close and re-fire the
+        -- Telegram alert, so the operator would get a "position closed" push for a trade that
+        -- closed hours ago. Makes the whole path idempotent, not just the deal insert.
+        AND closed_at IS NULL
       RETURNING id
     `)) as any[];
-    return { stored: true, appliedClose: res.length > 0 };
+    const applied = res.length > 0;
+
+    // Tell the operator on their phone how the trade actually ENDED — the number that matters,
+    // and one that only exists here. The candle model reports pips against an assumed exit; this
+    // is money out of the account, after swap and commission it does not carry at all.
+    //
+    // Only for orders WE placed (applied === true, i.e. the position matched a row we opened), so
+    // a trade placed by hand in cTrader does not generate a bot alert.
+    if (applied) {
+      try {
+        const row = res[0] as any;
+        const win = (netProfit ?? 0) >= 0;
+        await telegramNotifier.sendText(
+          `${win ? '🟢' : '🔴'} <b>POSITION CLOSED — DEMO</b>
+
+`
+          + `Exit: ${d.executionPrice ?? '—'}
+`
+          + `Entry: ${cpd?.entryPrice ?? '—'}
+`
+          + `Gross: ${grossProfit === null ? '—' : grossProfit.toFixed(2)}
+`
+          + `Swap: ${swap === null ? '—' : swap.toFixed(2)}
+`
+          + `Commission: ${closeCommission === null ? '—' : closeCommission.toFixed(2)}
+`
+          + `<b>Net: ${netProfit === null ? '—' : netProfit.toFixed(2)}</b>
+`
+          + `Balance: ${balanceAfter === null ? '—' : balanceAfter.toFixed(2)}
+`
+          + `Position: <code>${d.positionId}</code>`,
+          'paid'
+        );
+      } catch (e: any) {
+        console.warn(`[deals] close alert not sent: ${e?.message ?? e}`);
+      }
+    }
+
+    return { stored: true, appliedClose: applied };
   } catch (e: any) {
     console.error(`[deals] could not apply close for position ${d?.positionId}:`, e?.message ?? e);
     return { stored: true, appliedClose: false };

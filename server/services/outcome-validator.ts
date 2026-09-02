@@ -6,6 +6,7 @@ import { telegramNotifier } from './telegram-notifier';
 import { getMonthWinCount, getMonthLossCount, getMonthNetPips, getCurrentStreak, getSignalNumber } from './signal-stats';
 import { sessionAnalyzer } from './session-analyzer';
 import { reachesExpiry } from './outcome-path';
+import { syncBrokerDeals } from './broker-deals';
 
 /**
  * Outcome Validator Service
@@ -88,6 +89,10 @@ export class OutcomeValidator {
       // Deliberately placed BEFORE the pending-signal fetch: that path returns early when there
       // is nothing pending, which is the ordinary state, so anything after it would rarely run.
       await this.completeResolutionPaths();
+
+      // 0.6 Pull the broker's own deal history, so realised fills and P&L land without anyone
+      // remembering to press a button. Same placement rationale as 0.5.
+      await this.syncBrokerGroundTruth();
 
       // 1. Fetch all PENDING signals
       const pendingSignals = await this.fetchPendingSignals();
@@ -275,6 +280,39 @@ export class OutcomeValidator {
     } catch (e) {
       // Never let this stop outcome validation — it is data enrichment, not a trade decision.
       console.error('⚠️  Resolution-path completion failed:', e);
+    }
+  }
+
+  /**
+   * Fold the broker's own record of fills and closes into our database.
+   *
+   * Every win/loss figure this system reports is MODELLED from candles. This is the only thing
+   * that can falsify the model: what actually filled, at what price, and what the position really
+   * earned after swap and commission — costs the model does not carry at all. Measured on the
+   * first real round trip (position 286152195): gross -0.31 with commission -0.10, so a THIRD of
+   * the loss was cost the model would never have seen.
+   *
+   * Run here rather than on its own schedule for the same reason path completion is: this cron
+   * already fires every 5 minutes, so nothing new has to be registered, and a manual button is a
+   * button somebody has to remember to press.
+   *
+   * Cheap when idle — the sync is watermarked, so an interval with no new deals is one short
+   * request. Skipped inside kill zones so it never competes with signal generation, and every
+   * failure is swallowed: this is bookkeeping and must never disturb outcome validation.
+   */
+  private async syncBrokerGroundTruth(): Promise<void> {
+    try {
+      if (sessionAnalyzer.isInKillZone()) return;
+
+      // maxWindows 2: a week per window, so a cold start still catches up over a few cycles
+      // instead of opening a dozen sockets in one pass.
+      const r = await syncBrokerDeals({ maxWindows: 2 });
+      if (r.dealsSeen > 0 || r.closesApplied > 0) {
+        console.log(`🧾 Broker deals: ${r.dealsSeen} seen, ${r.dealsStored} stored, ${r.closesApplied} close(s) applied`);
+      }
+    } catch (e: any) {
+      // Includes the ordinary case of cTrader not being configured at all.
+      console.error('⚠️  Broker deal sync failed:', e?.message ?? e);
     }
   }
 

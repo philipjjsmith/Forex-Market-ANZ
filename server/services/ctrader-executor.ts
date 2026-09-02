@@ -16,6 +16,7 @@
 import WebSocket from 'ws';
 import { db } from '../db';
 import { exchangeRateAPI } from './exchangerate-api';
+import { telegramNotifier } from './telegram-notifier';
 import { sql } from 'drizzle-orm';
 import { EventEmitter } from 'events';
 
@@ -662,6 +663,46 @@ class CTraderExecutor {
         + `${signal.type} ${signal.symbol} | ${lots} lots | executionType=${execType} `
         + `| positionId=${positionId ?? 'none'} | SL: ${signal.stop.toFixed(5)} | TP: ${signal.targets[0].toFixed(5)}`
       );
+
+      // Tell the operator on their PHONE that a trade actually went on.
+      //
+      // Signal alerts already go to Telegram, but a signal is not a trade: it fires whether or not
+      // the executor was armed, configured, or allowed. Until now the only evidence an ORDER had
+      // been placed was a Render log line and a database row, neither of which reaches anyone who
+      // is not at a computer.
+      //
+      // Says DEMO explicitly and always. The day this runs against a funded account, an alert
+      // that merely said "EXECUTED" would read identically, and that ambiguity is not acceptable
+      // on a message about real money.
+      try {
+        const state = reconciledOpen ? 'OPEN AT BROKER ✅'
+          : filled ? 'FILLED ✅'
+          : 'ACCEPTED (not confirmed filled) 📨';
+        await telegramNotifier.sendText(
+          `🤖 <b>AUTO-EXECUTED — ${this.isLiveMode ? '⚠️ LIVE' : 'DEMO'}</b>
+`
+          + `${state}
+
+`
+          + `<b>${signal.symbol} ${signal.type}</b>
+`
+          + `Size: ${lots} lots
+`
+          + `Entry: ${fillPrice ? Number(fillPrice).toFixed(5) : 'pending fill'}
+`
+          + `Stop: ${signal.stop.toFixed(5)}
+`
+          + `Target: ${signal.targets[0].toFixed(5)}
+`
+          + `Confidence: ${signal.confidence} (${signal.tier})
+`
+          + `Position: <code>${positionId ?? 'none'}</code>`,
+          'paid'
+        );
+      } catch (e: any) {
+        // A notification failure must never affect a trade that has already been placed.
+        console.warn(`[cTrader] execution alert not sent: ${e?.message ?? e}`);
+      }
 
     } catch (err: any) {
       // Never crash signal generation — log and continue
