@@ -6,6 +6,7 @@ import { twelveDataAPI } from '../services/twelve-data';
 import { exchangeRateAPI } from '../services/exchangerate-api';
 import { ctraderExecutor, CTRADER_HOSTS } from '../services/ctrader-executor';
 import { syncBrokerDeals } from '../services/broker-deals';
+import { telegramNotifier } from '../services/telegram-notifier';
 import { requireAuth, requireAdmin } from '../auth-middleware';
 import { propFirmService } from '../services/prop-firm-config';
 import { MAX_EFFECTIVE_EXPOSURE } from '../services/correlation-guard';
@@ -48,6 +49,9 @@ export function registerAdminRoutes(app: Express) {
       accountBalanceSource: process.env.CTRADER_ACCOUNT_BALANCE
         ? 'CTRADER_ACCOUNT_BALANCE'
         : 'DEFAULT 2500 — env var NOT set',
+      // Whether execution alerts can actually REACH a phone. Reported here because an armed
+      // executor the operator cannot hear from is only half a system.
+      telegram: telegramNotifier.configState,
     };
     // Probe BOTH hosts read-only. APP_AUTH uses only CLIENT_ID/CLIENT_SECRET and never the
     // refresh token, so a failure there is a connectivity/app-registration problem, NOT a token
@@ -104,6 +108,36 @@ export function registerAdminRoutes(app: Express) {
       res.json(await ctraderExecutor.smokeTestDemoOrder(confirm, symbol));
     } catch (err: any) {
       res.status(400).json({ placed: false, error: err?.message ?? 'smoke test failed' });
+    }
+  });
+
+  /**
+   * POST /api/admin/telegram-test — send one real message to the paid channel.
+   *
+   * Config state proves the variables are SET; only an actual send proves the bot is still in the
+   * channel, still an admin there, and that the token has not been revoked. Those fail
+   * independently of configuration and all three fail silently, because every notification path is
+   * deliberately wrapped so it can never disturb a trade.
+   *
+   * POST so no prefetch or monitor URL can spam the channel.
+   */
+  app.post("/api/admin/telegram-test", requireAuth, requireAdmin, async (_req, res) => {
+    try {
+      if (!telegramNotifier.isEnabled) {
+        return res.status(400).json({ sent: false, reason: 'Telegram is not configured', state: telegramNotifier.configState });
+      }
+      await telegramNotifier.sendText(
+        `🔔 <b>ArgoFX test alert</b>
+
+`
+        + `If you can read this on your phone, execution and close alerts will reach you.
+`
+        + `Sent ${new Date().toISOString()}`,
+        'paid'
+      );
+      res.json({ sent: true, channel: 'paid', state: telegramNotifier.configState });
+    } catch (err: any) {
+      res.status(400).json({ sent: false, error: err?.message ?? 'send failed', state: telegramNotifier.configState });
     }
   });
 

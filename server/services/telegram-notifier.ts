@@ -113,6 +113,28 @@ class TelegramNotifier {
     return !!(this.botToken && (this.chatIdPaid || this.chatIdFree));
   }
 
+  /**
+   * Config state for the admin panel. Reports PRESENCE, never values — a chat id is not a secret
+   * but a bot token is, and a diagnostic that leaks the thing it is diagnosing is a bad trade.
+   *
+   * Exists because "I will get a Telegram when it trades" was an ASSUMPTION. The constructor logs
+   * its state once at boot, to a Render free-tier console that does not survive a restart, so
+   * nobody could actually check. An unconfigured notifier fails silently and by design — every
+   * send is wrapped so a notification can never disturb a trade — which is correct behaviour and
+   * also means silence is indistinguishable from success.
+   */
+  get configState() {
+    return {
+      enabled: this.isEnabled,
+      botToken: this.botToken ? 'set' : 'MISSING',
+      paidChannel: this.chatIdPaid ? 'set' : 'MISSING',
+      freeChannel: this.chatIdFree ? 'set' : 'MISSING',
+      routing: (process.env.TELEGRAM_CHAT_ID_PAID && process.env.TELEGRAM_CHAT_ID_FREE)
+        ? 'two-channel (paid + free)'
+        : this.chatIdPaid ? 'single channel via legacy TELEGRAM_CHAT_ID' : 'none',
+    };
+  }
+
   // ─── MarkdownV2 escape helper ──────────────────────────────────────────────
   // Apply to ALL dynamic text that sits outside a `code`, *bold*, or _italic_ span.
   // Prices always go inside `code` backtick spans — no escaping needed inside those.

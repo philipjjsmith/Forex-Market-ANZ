@@ -308,6 +308,31 @@ export default function Admin() {
     }
   };
 
+  /** Send one real Telegram message, to prove execution alerts reach the operator's phone. */
+  const [tgTest, setTgTest] = useState<any>(null);
+  const [tgLoading, setTgLoading] = useState(false);
+
+  const sendTelegramTest = async () => {
+    setTgLoading(true);
+    setTgTest(null);
+    try {
+      const token = getToken();
+      const res = await fetch(API_ENDPOINTS.ADMIN_TELEGRAM_TEST, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` }),
+        },
+        credentials: 'include',
+      });
+      setTgTest(await res.json());
+    } catch (err: any) {
+      setTgTest({ sent: false, error: err?.message ?? 'request failed' });
+    } finally {
+      setTgLoading(false);
+    }
+  };
+
   /**
    * Broker ground truth. `sync` pulls cTrader's own deal history (read-only at the broker, writes
    * to our DB); otherwise it just reads back what we already hold, alongside the modelled figures.
@@ -890,7 +915,10 @@ export default function Admin() {
               Broker ground truth. Every win/loss figure elsewhere is <strong>modelled</strong> from
               candles; this is what actually filled and closed, including swap and commission.
             </p>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
+              <Button variant="outline" onClick={sendTelegramTest} disabled={tgLoading} data-testid="button-telegram-test">
+                {tgLoading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Sending…</> : <>Send test alert to phone</>}
+              </Button>
               <Button variant="outline" onClick={() => callBrokerDeals(true)} disabled={dealsLoading} data-testid="button-deals-sync">
                 {dealsLoading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Working…</> : <>Sync broker deals</>}
               </Button>
@@ -898,6 +926,11 @@ export default function Admin() {
                 Broker vs modelled
               </Button>
             </div>
+            {tgTest && (
+              <pre className="mt-3 text-xs text-slate-200 bg-slate-900/80 rounded p-3 overflow-x-auto max-h-60">
+                {JSON.stringify(tgTest, null, 2)}
+              </pre>
+            )}
             {brokerDeals && (
               <pre className="mt-3 text-xs text-slate-200 bg-slate-900/80 rounded p-3 overflow-x-auto max-h-80">
                 {JSON.stringify(brokerDeals, null, 2)}
