@@ -7,6 +7,7 @@ import { exchangeRateAPI } from '../services/exchangerate-api';
 import { ctraderExecutor, CTRADER_HOSTS } from '../services/ctrader-executor';
 import { syncBrokerDeals } from '../services/broker-deals';
 import { telegramNotifier } from '../services/telegram-notifier';
+import { buildPerformanceReport } from '../services/performance-report';
 import { requireAuth, requireAdmin } from '../auth-middleware';
 import { propFirmService } from '../services/prop-firm-config';
 import { MAX_EFFECTIVE_EXPOSURE } from '../services/correlation-guard';
@@ -108,6 +109,35 @@ export function registerAdminRoutes(app: Express) {
       res.json(await ctraderExecutor.smokeTestDemoOrder(confirm, symbol));
     } catch (err: any) {
       res.status(400).json({ placed: false, error: err?.message ?? 'smoke test failed' });
+    }
+  });
+
+  /**
+   * GET  /api/admin/performance-report — PREVIEW only. Composes, posts nothing.
+   * POST /api/admin/performance-report — publishes it to the channel.
+   *
+   * Split deliberately. Publishing to a subscriber channel is not something that should be one
+   * click away from a page you opened to read a number, and a performance claim is the single
+   * most consequential thing this system can say in public. Preview first, publish on purpose.
+   */
+  app.get("/api/admin/performance-report", requireAuth, requireAdmin, async (_req, res) => {
+    try {
+      res.json(await buildPerformanceReport());
+    } catch (err: any) {
+      res.status(400).json({ error: err?.message ?? 'failed' });
+    }
+  });
+
+  app.post("/api/admin/performance-report", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      if (req.body?.confirm !== 'PUBLISH_PERFORMANCE') {
+        return res.status(400).json({ published: false, error: 'Refused: confirmation string absent.' });
+      }
+      const report = await buildPerformanceReport();
+      const result = await telegramNotifier.sendText(report.message, 'both', 'HTML');
+      res.status(result.ok ? 200 : 400).json({ published: result.ok, errors: result.errors, report });
+    } catch (err: any) {
+      res.status(400).json({ published: false, error: err?.message ?? 'failed' });
     }
   });
 
