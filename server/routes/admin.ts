@@ -155,10 +155,13 @@ export function registerAdminRoutes(app: Express) {
    * (15 calls) against a shared 800/day budget that live signal generation depends on, so this
    * runs on demand and outside kill zones.
    */
-  app.get("/api/admin/price-crosscheck", requireAuth, requireAdmin, async (req, res) => {
+  // POST, not GET. It has real side effects — ~15 Twelve Data calls against a shared 800/day
+  // budget and a ~2 minute runtime — and a GET is retried freely by browsers and proxies, each
+  // retry re-spending the whole budget.
+  app.post("/api/admin/price-crosscheck", requireAuth, requireAdmin, async (req, res) => {
     try {
-      const bars = Math.min(200, Math.max(10, parseInt(String(req.query.bars ?? '60'), 10) || 60));
-      res.json(await runPriceCrosscheck(bars));
+      const bars = Math.min(200, Math.max(10, parseInt(String(req.body?.bars ?? '60'), 10) || 60));
+      res.json(await runPriceCrosscheck(bars, { force: req.body?.force === true }));
     } catch (err: any) {
       res.status(400).json({ error: err?.message ?? 'crosscheck failed' });
     }

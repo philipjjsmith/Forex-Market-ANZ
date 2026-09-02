@@ -322,6 +322,8 @@ export default function Admin() {
     try {
       const token = getToken();
       const res = await fetch(API_ENDPOINTS.ADMIN_PRICE_CROSSCHECK, {
+        method: 'POST',
+        body: JSON.stringify({ bars: 60 }),
         headers: {
           'Content-Type': 'application/json',
           ...(token && { 'Authorization': `Bearer ${token}` }),

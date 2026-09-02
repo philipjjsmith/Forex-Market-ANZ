@@ -134,7 +134,7 @@ export interface ExecuteSignalParams {
   positionSizePercent?: number;
 }
 
-class CTraderExecutor {
+export class CTraderExecutor {
   // Symbol IDs cached after first lookup (broker-specific, stable)
   private symbolIds = new Map<string, number>();
 
