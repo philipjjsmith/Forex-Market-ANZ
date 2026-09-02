@@ -235,7 +235,7 @@ async function storeDeal(d: any): Promise<{ stored: boolean; appliedClose: boole
           + `Balance: ${balanceAfter === null ? '—' : balanceAfter.toFixed(2)}
 `
           + `Position: <code>${d.positionId}</code>`,
-          'paid'
+          'paid', 'HTML'
         );
       } catch (e: any) {
         console.warn(`[deals] close alert not sent: ${e?.message ?? e}`);

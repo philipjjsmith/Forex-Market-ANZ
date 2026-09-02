@@ -126,16 +126,26 @@ export function registerAdminRoutes(app: Express) {
       if (!telegramNotifier.isEnabled) {
         return res.status(400).json({ sent: false, reason: 'Telegram is not configured', state: telegramNotifier.configState });
       }
-      await telegramNotifier.sendText(
+      // HTML, not MarkdownV2: this text contains periods, and MarkdownV2 400s on an unescaped
+      // one. That is exactly why the first version of this test reported success on a rejected
+      // message.
+      const result = await telegramNotifier.sendText(
         `🔔 <b>ArgoFX test alert</b>
 
 `
         + `If you can read this on your phone, execution and close alerts will reach you.
 `
         + `Sent ${new Date().toISOString()}`,
-        'paid'
+        'paid', 'HTML'
       );
-      res.json({ sent: true, channel: 'paid', state: telegramNotifier.configState });
+      // Report what Telegram actually said. `sent` used to be hardcoded true.
+      res.status(result.ok ? 200 : 400).json({
+        sent: result.ok, channel: 'paid', attempted: result.attempted,
+        errors: result.errors, state: telegramNotifier.configState,
+        // Which chat it actually went to, by NAME. The whole point: 'sent' plus a chat id
+        // still cannot tell you whether it landed where you are looking.
+        chats: await telegramNotifier.describeChats(),
+      });
     } catch (err: any) {
       res.status(400).json({ sent: false, error: err?.message ?? 'send failed', state: telegramNotifier.configState });
     }

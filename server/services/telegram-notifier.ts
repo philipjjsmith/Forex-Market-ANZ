@@ -135,6 +135,55 @@ class TelegramNotifier {
     };
   }
 
+  /**
+   * Ask Telegram what the configured chats actually ARE.
+   *
+   * "It says sent but I see nothing" has two very different causes: the message was rejected, or
+   * it went somewhere the operator is not looking. Config state cannot tell them apart — a chat id
+   * is just a number, and a wrong number is indistinguishable from a right one until you ask
+   * Telegram to name it.
+   *
+   * Returns the chat TITLE and id. Neither is a credential; the bot token is, and it is never
+   * returned. `getChat` also fails in exactly the informative ways that matter: bot removed from
+   * the group, chat deleted, or token revoked.
+   */
+  async describeChats(): Promise<any> {
+    if (!this.botToken) return { error: 'no bot token' };
+
+    const describe = async (label: string, chatId?: string) => {
+      if (!chatId) return { label, configured: false };
+      try {
+        const r = await fetch(`https://api.telegram.org/bot${this.botToken}/getChat?chat_id=${encodeURIComponent(chatId)}`);
+        const j: any = await r.json();
+        if (!j?.ok) return { label, chatId, ok: false, error: j?.description ?? `HTTP ${r.status}` };
+        return {
+          label, chatId, ok: true,
+          title: j.result?.title ?? j.result?.username ?? '(no title)',
+          type: j.result?.type,
+        };
+      } catch (e: any) {
+        return { label, chatId, ok: false, error: e?.message ?? String(e) };
+      }
+    };
+
+    // Identify the bot too — "which bot is even posting?" is the other half of the question.
+    let bot: any = null;
+    try {
+      const r = await fetch(`https://api.telegram.org/bot${this.botToken}/getMe`);
+      const j: any = await r.json();
+      bot = j?.ok ? { username: j.result?.username, name: j.result?.first_name } : { error: j?.description };
+    } catch (e: any) {
+      bot = { error: e?.message ?? String(e) };
+    }
+
+    const paid = await describe('paid', this.chatIdPaid);
+    const free = this.chatIdFree && this.chatIdFree !== this.chatIdPaid
+      ? await describe('free', this.chatIdFree)
+      : { label: 'free', sameAsPaid: true };
+
+    return { bot, paid, free };
+  }
+
   // ─── MarkdownV2 escape helper ──────────────────────────────────────────────
   // Apply to ALL dynamic text that sits outside a `code`, *bold*, or _italic_ span.
   // Prices always go inside `code` backtick spans — no escaping needed inside those.
@@ -328,7 +377,7 @@ class TelegramNotifier {
     ].join('\n');
 
     // Weekly summary goes to BOTH channels
-    const sends: Promise<void>[] = [];
+    const sends: Promise<{ ok: boolean; error?: string }>[] = [];
     if (this.chatIdPaid) {
       sends.push(this.sendToChannel(message, this.chatIdPaid));
     }
@@ -390,7 +439,7 @@ class TelegramNotifier {
     const message = lines.join('\n');
 
     // Daily summary goes to BOTH channels
-    const sends: Promise<void>[] = [];
+    const sends: Promise<{ ok: boolean; error?: string }>[] = [];
     if (this.chatIdPaid) {
       sends.push(this.sendToChannel(message, this.chatIdPaid));
     }
@@ -402,24 +451,52 @@ class TelegramNotifier {
 
   // ─── sendText (ad-hoc / debug messages) ───────────────────────────────────
 
-  async sendText(message: string, channel: 'paid' | 'free' | 'both' = 'paid'): Promise<void> {
-    if (!this.isEnabled) return;
+  /**
+   * Ad-hoc send. RETURNS THE RESULT — it used to return void.
+   *
+   * That mattered on 2026-09-02: the admin test button reported `sent: true` for a message
+   * Telegram had REJECTED, because sendToChannel logged the failure and resolved anyway. The
+   * operator saw nothing on their phone while the system said the send succeeded. Every
+   * notification path here is deliberately non-fatal so a failed alert can never disturb a trade —
+   * correct, and exactly why a caller that wants to VERIFY delivery has to be told the truth.
+   *
+   * `parseMode` defaults to MarkdownV2 for the existing callers, whose text is escaped for it.
+   * Pass 'HTML' for anything using <b>/<code>: MarkdownV2 requires escaping `.`, `-`, `(`, `)`
+   * and more, so an unescaped period is a 400.
+   */
+  async sendText(
+    message: string,
+    channel: 'paid' | 'free' | 'both' = 'paid',
+    parseMode: 'MarkdownV2' | 'HTML' = 'MarkdownV2',
+  ): Promise<{ ok: boolean; attempted: number; errors: string[] }> {
+    if (!this.isEnabled) return { ok: false, attempted: 0, errors: ['Telegram is not configured'] };
+
+    const results: { ok: boolean; error?: string }[] = [];
     if ((channel === 'paid' || channel === 'both') && this.chatIdPaid) {
-      await this.sendToChannel(message, this.chatIdPaid);
+      results.push(await this.sendToChannel(message, this.chatIdPaid, parseMode));
     }
     if (
       (channel === 'free' || channel === 'both') &&
       this.chatIdFree &&
       this.chatIdFree !== this.chatIdPaid
     ) {
-      await this.sendToChannel(message, this.chatIdFree);
+      results.push(await this.sendToChannel(message, this.chatIdFree, parseMode));
     }
+    return {
+      ok: results.length > 0 && results.every(r => r.ok),
+      attempted: results.length,
+      errors: results.filter(r => !r.ok).map(r => r.error ?? 'unknown'),
+    };
   }
 
   // ─── Core sender ───────────────────────────────────────────────────────────
 
-  private async sendToChannel(text: string, chatId: string): Promise<void> {
-    if (!this.botToken) return;
+  private async sendToChannel(
+    text: string,
+    chatId: string,
+    parseMode: 'MarkdownV2' | 'HTML' = 'MarkdownV2',
+  ): Promise<{ ok: boolean; error?: string }> {
+    if (!this.botToken) return { ok: false, error: 'no bot token' };
     try {
       const url = `https://api.telegram.org/bot${this.botToken}/sendMessage`;
       const response = await fetch(url, {
@@ -428,19 +505,29 @@ class TelegramNotifier {
         body: JSON.stringify({
           chat_id:    chatId,
           text,
-          parse_mode: 'MarkdownV2',
+          parse_mode: parseMode,
         }),
       });
 
-      if (!response.ok) {
-        const body = await response.text();
-        console.error(`[ArgoFX Telegram] Send failed (${response.status}): ${body}`);
-      } else {
-        console.log(`[ArgoFX Telegram] Message sent ✅`);
+      // Telegram reports application failures in the BODY, not only the status. Check both:
+      // a malformed entity, a bot removed from the group, or a chat id that no longer exists all
+      // come back as ok:false with a description that names the actual problem.
+      const body = await response.text();
+      let payload: any = {};
+      try { payload = JSON.parse(body); } catch { /* non-JSON: fall through to the status check */ }
+
+      if (!response.ok || payload?.ok === false) {
+        const why = payload?.description ?? body.slice(0, 300);
+        console.error(`[ArgoFX Telegram] Send failed (${response.status}) to ${chatId}: ${why}`);
+        return { ok: false, error: `${response.status}: ${why}` };
       }
-    } catch (err) {
-      // Never let a Telegram failure affect signal generation or outcome recording
+      console.log(`[ArgoFX Telegram] Message sent ✅ to ${chatId}`);
+      return { ok: true };
+    } catch (err: any) {
+      // Never let a Telegram failure affect signal generation or outcome recording — but DO
+      // report it, so a caller that exists to verify delivery is not told it succeeded.
       console.error('[ArgoFX Telegram] Network error:', err);
+      return { ok: false, error: `network: ${err?.message ?? err}` };
     }
   }
 }

@@ -697,7 +697,7 @@ class CTraderExecutor {
           + `Confidence: ${signal.confidence} (${signal.tier})
 `
           + `Position: <code>${positionId ?? 'none'}</code>`,
-          'paid'
+          'paid', 'HTML'   // these use <b>/<code>; MarkdownV2 would 400 on the periods alone
         );
       } catch (e: any) {
         // A notification failure must never affect a trade that has already been placed.
