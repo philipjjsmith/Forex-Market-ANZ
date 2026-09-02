@@ -64,6 +64,9 @@ const PT = {
   /** Deal history. Verified against help.ctrader.com/open-api/model-messages on 2026-09-02. */
   DEAL_LIST_REQ:     2133,
   DEAL_LIST_RES:     2134,
+  /** Historical candles. Verified against the same page, 2026-09-02. */
+  GET_TRENDBARS_REQ: 2137,
+  GET_TRENDBARS_RES: 2138,
   SYMBOLS_LIST_REQ:  2114,
   SYMBOLS_LIST_RES:  2115,
   SYMBOL_BY_ID_REQ:  2116,
@@ -789,6 +792,96 @@ class CTraderExecutor {
     await this.saveRefreshToken(token);
     this.accessToken = null;   // force the next call to use the new token
     this.tokenExpiry = 0;
+  }
+
+  /**
+   * cTrader trendbar periods. Verified against help.ctrader.com/open-api/model-messages 2026-09-02
+   * — NOT guessed. An unhandled or wrong payload type is what produced this executor's silent
+   * 20-second timeout, so every constant here was read from the spec.
+   */
+  static readonly TRENDBAR_PERIOD = { M5: 5, M15: 7, M30: 8, H1: 9, H4: 10, D1: 12, W1: 13 } as const;
+
+  /**
+   * Historical candles from the BROKER's own feed. READ-ONLY — places nothing.
+   *
+   * Why this exists: signals are computed on Twelve Data prices and executed at cTrader prices.
+   * That gap has never been measured, and it is a standing, unquantified source of error — the
+   * two real trades on 2026-09-02 showed 0.4 and 1.1 pips of adverse slippage against the signal
+   * entry, and nothing distinguishes "spread" from "our candles disagree with the broker's".
+   *
+   * This does NOT replace Twelve Data in production. Pre-registration Amendment 2 requires
+   * production to stay on Twelve Data so the signal_provenance reproduction evidence stays
+   * uncontaminated. This is a parallel measurement, nothing more.
+   *
+   * TWO ENCODING TRAPS, both from the spec rather than assumption:
+   *   1. Prices are scaled by 100,000 and must be divided back, then rounded to symbol digits.
+   *      Same family as the moneyDigits trap that would have overstated P&L 10^8x.
+   *   2. A trendbar carries `low` plus DELTAS, not OHLC:
+   *        open = low + deltaOpen, close = low + deltaClose, high = low + deltaHigh
+   *      Reading `low` as the price, or treating deltas as absolute, silently yields plausible
+   *      but wrong candles.
+   *
+   * Rate limit is 5 historical requests/second per connection (REQUEST_FREQUENCY_EXCEEDED on
+   * breach, surfaced as ProtoOAErrorRes 2142). One request per timeframe is far inside that.
+   */
+  async listTrendbars(
+    symbolName: string,
+    period: number,
+    fromMs: number,
+    toMs: number,
+  ): Promise<{ timestamp: string; open: number; high: number; low: number; close: number; volume: number }[]> {
+    if (!(await this.configured())) throw new Error('cTrader credentials are not configured.');
+    if (this.isLiveMode) throw new Error('REFUSED: live mode is active. This only ever reads demo.');
+
+    const accessToken = await this.getAccessToken();
+    const { socket, emitter } = await this.openConnection(DEMO_HOST);
+    try {
+      this.send(socket, PT.APP_AUTH_REQ, { clientId: this.clientId!, clientSecret: this.clientSecret! });
+      await this.waitFor(emitter, PT.APP_AUTH_RES);
+
+      this.send(socket, PT.GET_ACCOUNTS_REQ, { accessToken });
+      const accts: any[] = (await this.waitFor(emitter, PT.GET_ACCOUNTS_RES)).payload?.ctidTraderAccount ?? [];
+      const demo = accts.filter((a: any) => a.isLive !== true);
+      if (!demo.length) throw new Error('REFUSED: no demo account on this token.');
+      const accountId = demo[0].ctidTraderAccountId;
+
+      this.send(socket, PT.ACCOUNT_AUTH_REQ, { ctidTraderAccountId: accountId, accessToken });
+      await this.waitFor(emitter, PT.ACCOUNT_AUTH_RES);
+
+      if (this.symbolIds.size === 0) {
+        this.send(socket, PT.SYMBOLS_LIST_REQ, { ctidTraderAccountId: accountId });
+        const symMsg = await this.waitFor(emitter, PT.SYMBOLS_LIST_RES, 30000);
+        for (const sym of (symMsg.payload?.symbol ?? [])) {
+          if (sym.symbolName) this.symbolIds.set(sym.symbolName as string, sym.symbolId as number);
+        }
+      }
+      const bare = symbolName.replace('/', '');
+      const symbolId = this.symbolIds.get(bare) ?? this.symbolIds.get(symbolName);
+      if (!symbolId) throw new Error(`Symbol ${symbolName} not found at the broker.`);
+
+      this.send(socket, PT.GET_TRENDBARS_REQ, {
+        ctidTraderAccountId: accountId, symbolId, period,
+        fromTimestamp: Math.floor(fromMs), toTimestamp: Math.floor(toMs),
+      });
+      const res = await this.waitFor(emitter, PT.GET_TRENDBARS_RES, 30000);
+
+      const digits = symbolName.includes('JPY') ? 3 : 5;
+      const px = (v: number) => Number((v / 100_000).toFixed(digits));
+
+      return (res.payload?.trendbar ?? []).map((b: any) => {
+        const low = Number(b.low);
+        return {
+          timestamp: new Date(Number(b.utcTimestampInMinutes) * 60_000).toISOString(),
+          open:  px(low + Number(b.deltaOpen  ?? 0)),
+          high:  px(low + Number(b.deltaHigh  ?? 0)),
+          low:   px(low),
+          close: px(low + Number(b.deltaClose ?? 0)),
+          volume: Number(b.volume ?? 0),
+        };
+      });
+    } finally {
+      try { socket.close(); } catch { /* already closed */ }
+    }
   }
 
   /**

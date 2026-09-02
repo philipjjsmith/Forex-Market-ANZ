@@ -312,6 +312,30 @@ export default function Admin() {
   const [tgTest, setTgTest] = useState<any>(null);
   const [tgLoading, setTgLoading] = useState(false);
 
+  /** Compare Twelve Data candles against cTrader's own. Read-only, on demand. */
+  const [crosscheck, setCrosscheck] = useState<any>(null);
+  const [ccLoading, setCcLoading] = useState(false);
+
+  const runCrosscheck = async () => {
+    setCcLoading(true);
+    setCrosscheck(null);
+    try {
+      const token = getToken();
+      const res = await fetch(API_ENDPOINTS.ADMIN_PRICE_CROSSCHECK, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` }),
+        },
+        credentials: 'include',
+      });
+      setCrosscheck(await res.json());
+    } catch (err: any) {
+      setCrosscheck({ error: err?.message ?? 'request failed' });
+    } finally {
+      setCcLoading(false);
+    }
+  };
+
   /** Send one of EVERY alert type and report which arrived. Uses the real builders. */
   const sendFormatTest = async () => {
     setTgLoading(true);
@@ -945,6 +969,9 @@ export default function Admin() {
               <Button variant="outline" onClick={sendFormatTest} disabled={tgLoading} data-testid="button-telegram-format-test">
                 Test ALL alert formats
               </Button>
+              <Button variant="outline" onClick={runCrosscheck} disabled={ccLoading} data-testid="button-price-crosscheck">
+                {ccLoading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Comparing…</> : <>Price cross-check</>}
+              </Button>
               <Button variant="outline" onClick={() => callBrokerDeals(true)} disabled={dealsLoading} data-testid="button-deals-sync">
                 {dealsLoading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Working…</> : <>Sync broker deals</>}
               </Button>
@@ -952,6 +979,11 @@ export default function Admin() {
                 Broker vs modelled
               </Button>
             </div>
+            {crosscheck && (
+              <pre className="mt-3 text-xs text-slate-200 bg-slate-900/80 rounded p-3 overflow-x-auto max-h-96">
+                {JSON.stringify(crosscheck, null, 2)}
+              </pre>
+            )}
             {tgTest && (
               <pre className="mt-3 text-xs text-slate-200 bg-slate-900/80 rounded p-3 overflow-x-auto max-h-60">
                 {JSON.stringify(tgTest, null, 2)}

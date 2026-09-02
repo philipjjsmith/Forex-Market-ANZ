@@ -43,6 +43,7 @@ export const API_ENDPOINTS = {
   ADMIN_BROKER_DEALS_SYNC: `${API_BASE_URL}/api/admin/broker-deals/sync`,
   ADMIN_TELEGRAM_TEST: `${API_BASE_URL}/api/admin/telegram-test`,
   ADMIN_TELEGRAM_FORMAT_TEST: `${API_BASE_URL}/api/admin/telegram-format-test`,
+  ADMIN_PRICE_CROSSCHECK: `${API_BASE_URL}/api/admin/price-crosscheck`,
   ADMIN_TRIGGER_GENERATION: `${API_BASE_URL}/api/admin/trigger-generation`,
   ADMIN_GROWTH_STATS: `${API_BASE_URL}/api/admin/growth-stats`,
   ADMIN_GROWTH_STATS_DUAL: `${API_BASE_URL}/api/admin/growth-stats-dual`,

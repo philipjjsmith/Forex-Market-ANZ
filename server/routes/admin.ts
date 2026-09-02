@@ -10,6 +10,7 @@ import { telegramNotifier } from '../services/telegram-notifier';
 import { buildPerformanceReport } from '../services/performance-report';
 import { buildExecutionAlertMessage } from '../services/ctrader-executor';
 import { buildCloseAlertMessage } from '../services/broker-deals';
+import { runPriceCrosscheck } from '../services/price-crosscheck';
 import { requireAuth, requireAdmin } from '../auth-middleware';
 import { propFirmService } from '../services/prop-firm-config';
 import { MAX_EFFECTIVE_EXPOSURE } from '../services/correlation-guard';
@@ -140,6 +141,26 @@ export function registerAdminRoutes(app: Express) {
       res.status(result.ok ? 200 : 400).json({ published: result.ok, errors: result.errors, report });
     } catch (err: any) {
       res.status(400).json({ published: false, error: err?.message ?? 'failed' });
+    }
+  });
+
+  /**
+   * GET /api/admin/price-crosscheck — do the prices we ANALYSE match the prices we TRADE?
+   *
+   * Read-only on both sides. Compares Twelve Data candles against cTrader's own trendbars for
+   * every pair and timeframe, matched on exact timestamp. Changes no decision and touches no
+   * signal; production stays on Twelve Data per pre-registration Amendment 2.
+   *
+   * Deliberately NOT on a cron. The Twelve Data side costs one call per pair per timeframe
+   * (15 calls) against a shared 800/day budget that live signal generation depends on, so this
+   * runs on demand and outside kill zones.
+   */
+  app.get("/api/admin/price-crosscheck", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const bars = Math.min(200, Math.max(10, parseInt(String(req.query.bars ?? '60'), 10) || 60));
+      res.json(await runPriceCrosscheck(bars));
+    } catch (err: any) {
+      res.status(400).json({ error: err?.message ?? 'crosscheck failed' });
     }
   });
 
