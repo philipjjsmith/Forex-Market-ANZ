@@ -7,6 +7,7 @@ import { getMonthWinCount, getMonthLossCount, getMonthNetPips, getCurrentStreak,
 import { sessionAnalyzer } from './session-analyzer';
 import { reachesExpiry } from './outcome-path';
 import { syncBrokerDeals } from './broker-deals';
+import { ctraderExecutor } from './ctrader-executor';
 
 /**
  * Outcome Validator Service
@@ -649,6 +650,24 @@ export class OutcomeValidator {
     `);
 
     console.log(`✅ Signal ${signal.signal_id} → ${outcome} at ${outcomePrice} (${profitLossPips.toFixed(1)} pips)`);
+
+    // EXPIRY LEAVES A LIVE POSITION UNLESS WE CLOSE IT.
+    //
+    // TP1_HIT and STOP_HIT closed themselves at the broker — the level was hit. EXPIRED did not:
+    // the 48-hour expiry is a DATABASE event, so the record said "closed" while real exposure
+    // continued, invisible to the correlation guard (which reads PENDING signals, not broker
+    // positions). Worst on a Friday, where a signal has only 8-14 hours of open market and then
+    // expires over a weekend the stop cannot protect against.
+    //
+    // Targeted by the positionId we recorded at order time, demo-only, and non-throwing.
+    if (outcome === 'EXPIRED') {
+      try {
+        const r = await ctraderExecutor.closePositionForSignal(signal.signal_id);
+        if (r.closed) console.log(`🔒 Closed broker position for expired ${signal.signal_id}`);
+      } catch (e: any) {
+        console.error('⚠️  expiry position close failed (non-fatal):', e?.message ?? e);
+      }
+    }
 
     // Send ArgoFX Telegram outcome notification (non-blocking — never affects outcome save)
     await this.sendOutcomeNotification(signal, outcome, outcomePrice, profitLossPips);

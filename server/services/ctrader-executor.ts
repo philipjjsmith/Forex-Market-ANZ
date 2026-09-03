@@ -1015,6 +1015,57 @@ export class CTraderExecutor {
   }
 
   /**
+   * Close the broker position belonging to an EXPIRED signal.
+   *
+   * WHY THIS EXISTS
+   *
+   * `executeSignal` opens a position with SL and TP attached and then nothing ever closes it
+   * except the broker hitting one of those levels. Our 48-hour expiry is a DATABASE event: the
+   * validator marks the signal EXPIRED and moves on while the position is still live, so the
+   * record says "closed" and real exposure continues — for days or weeks, invisible to the
+   * correlation guard, which reads PENDING signals rather than broker positions.
+   *
+   * It bites hardest on a Friday. A Friday signal has 48 nominal hours but only 8-14 of open
+   * market, expires during the weekend closure, and leaves a position exposed to the Sunday gap —
+   * which a stop does not protect against.
+   *
+   * GUARDS, because this is the only automatic path in the system that can close a position:
+   *   - EXPIRED only. TP1_HIT and STOP_HIT closed themselves at the broker.
+   *   - Targeted by the positionId WE recorded at order time — never "close all".
+   *   - demoPositions() refuses outright when live mode is set.
+   *   - Reconciles first, so a position already gone is a no-op rather than an error.
+   *   - Never throws: outcome recording must not depend on the broker being reachable.
+   */
+  async closePositionForSignal(signalId: string): Promise<{ closed: boolean; reason: string }> {
+    try {
+      if (!ctraderEnabled()) return { closed: false, reason: 'executor disabled' };
+      if (!(await this.configured())) return { closed: false, reason: 'not configured' };
+      if (this.isLiveMode) return { closed: false, reason: 'REFUSED: live mode' };
+
+      const rows = (await db.execute(sql`
+        SELECT position_id FROM ctrader_executions
+        WHERE signal_id = ${signalId} AND position_id IS NOT NULL
+        ORDER BY created_at DESC LIMIT 1
+      `)) as any[];
+      const positionId = rows[0]?.position_id ? Number(rows[0].position_id) : null;
+      if (!positionId) return { closed: false, reason: 'no broker position recorded for this signal' };
+
+      const res = await this.demoPositions({
+        close: true, confirm: 'CLOSE_DEMO_POSITIONS', positionId,
+      });
+      const closed = Array.isArray(res?.closed) && res.closed.some((c: any) => c.result === 'closed');
+      const reason = closed
+        ? `closed position ${positionId} on expiry`
+        : `position ${positionId} was not open at the broker`;
+      console.log(`[cTrader] expiry close: ${reason}`);
+      return { closed, reason };
+    } catch (e: any) {
+      console.error(`[cTrader] expiry close failed for ${signalId}:`, e?.message ?? e);
+      return { closed: false, reason: `error: ${e?.message ?? e}` };
+    }
+  }
+
+  /**
    * List open positions on the DEMO account, and optionally CLOSE them. Never touches live.
    *
    * The executor could open a position but had no way to close one, which is half a trading
