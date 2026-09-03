@@ -17,6 +17,8 @@ import WebSocket from 'ws';
 import { db } from '../db';
 import { exchangeRateAPI } from './exchangerate-api';
 import { telegramNotifier } from './telegram-notifier';
+import { getDailyLossStatus } from './broker-deals';
+import { propFirmService } from './prop-firm-config';
 import { sql } from 'drizzle-orm';
 import { EventEmitter } from 'events';
 
@@ -558,6 +560,46 @@ export class CTraderExecutor {
       await this.record({ ...base, status: 'skipped_unconfigured',
         skipReason: 'credentials missing' });
       return;
+    }
+
+    // DAILY LOSS GUARD.
+    //
+    // `canTrade()` implemented exactly this check and was called in three places, ALL of them GET
+    // display endpoints (/api/prop-firm/can-trade, /api/prop-firm/dashboard). It appeared nowhere
+    // on the path that actually places orders — so `enableDailyLossProtection: true` and
+    // `dailyLossBuffer: 4.0` were configured, enabled, and never enforced.
+    //
+    // What was really protecting the account is maxTradesReached() — the 3/day COUNT cap, which
+    // bounds loss to ~3% at 1% risk only as a side effect. That is protection by accident: when
+    // sizing was 24% too large (found 2026-09-02) the real bound was 3.7% and nothing noticed, and
+    // raising maxTradesPerDay would have removed the bound silently.
+    //
+    // Balance-based, matching The5ers: only CLOSED trades count — floating losses do not breach a
+    // balance-based limit. Measured against the day's OPENING balance, broker day starting
+    // 17:00 New York.
+    //
+    // FAILS CLOSED. If the loss cannot be computed we do not trade: a drawdown guard that lets
+    // orders through when it cannot verify the limit is not a guard. The refusal is recorded, so a
+    // database problem surfaces as refused trades in the data rather than as silence.
+    {
+      const cfg = propFirmService.getConfig();
+      if (cfg.enableDailyLossProtection) {
+        const st = await getDailyLossStatus(this.accountBalance);
+        if (st.lossPercent === null) {
+          console.error(`[cTrader] REFUSING: daily loss undeterminable — ${st.reason}`);
+          await this.record({ ...base, status: 'skipped_daily_loss',
+            skipReason: `daily loss undeterminable (fail-closed): ${st.reason}` });
+          return;
+        }
+        if (st.lossPercent >= cfg.dailyLossBuffer) {
+          console.warn(`[cTrader] REFUSING: daily loss ${st.lossPercent.toFixed(2)}% >= buffer ${cfg.dailyLossBuffer}%`);
+          await this.record({ ...base, status: 'skipped_daily_loss',
+            skipReason: `daily realised loss ${st.lossPercent.toFixed(2)}% >= buffer ${cfg.dailyLossBuffer}% `
+                      + `(realised ${st.realisedToday?.toFixed(2)} on anchor ${st.anchorBalance?.toFixed(2)} since ${st.dayStart})` });
+          return;
+        }
+        console.log(`[cTrader] daily loss check: ${st.lossPercent.toFixed(2)}% of ${st.anchorBalance?.toFixed(2)} (buffer ${cfg.dailyLossBuffer}%) — OK`);
+      }
     }
 
     let recId: string | null = null;

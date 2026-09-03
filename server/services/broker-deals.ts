@@ -172,6 +172,91 @@ export async function syncBrokerDeals(opts: { maxSpanMs?: number } = {}): Promis
   };
 }
 
+/**
+ * Start of the CURRENT broker trading day, as a Date.
+ *
+ * The5ers resets its daily drawdown at 00:00 server time, and this broker's server day boundary is
+ * 17:00 New York — established empirically tonight: cTrader D1 trendbars stamp at 21:00 UTC while
+ * Twelve Data stamps 00:00 UTC, a three-hour offset that is exactly the NY close.
+ *
+ * Computed via `America/New_York` rather than a fixed UTC hour, because 17:00 NY is 21:00 UTC under
+ * EDT and 22:00 under EST. This project already shipped that exact bug once: a hardcoded 21:00 UTC
+ * week boundary was wrong ~5 months a year and mis-flagged 853 genuine bars per pair.
+ */
+export function brokerDayStart(now = new Date()): Date {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York', hour: 'numeric', hour12: false,
+  }).formatToParts(now);
+  const nyHour = Number(parts.find(p => p.type === 'hour')!.value) % 24;
+
+  // Rewind to the most recent 17:00 New York.
+  const d = new Date(now);
+  d.setUTCSeconds(0, 0);
+  d.setUTCMinutes(0);
+  // Step back an hour at a time until NY local hour is 17 and it is in the past.
+  for (let i = 0; i < 48; i++) {
+    const h = Number(new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York', hour: 'numeric', hour12: false,
+    }).formatToParts(d).find(p => p.type === 'hour')!.value) % 24;
+    if (h === 17 && d <= now) return d;
+    d.setUTCHours(d.getUTCHours() - 1);
+  }
+  // Unreachable in practice; fall back to 24h ago rather than returning something wrong.
+  void nyHour;
+  return new Date(now.getTime() - 24 * 60 * 60 * 1000);
+}
+
+export interface DailyLossStatus {
+  /** null when it could not be determined — callers must treat that as "do not trade". */
+  lossPercent: number | null;
+  realisedToday: number | null;
+  anchorBalance: number | null;
+  dayStart: string;
+  reason?: string;
+}
+
+/**
+ * Realised loss so far in the current broker day, as a POSITIVE percentage of the day's opening
+ * balance. Profit returns 0, never a negative "loss".
+ *
+ * BALANCE-BASED, matching The5ers: only CLOSED trades count. Floating unrealised losses do not
+ * breach a balance-based daily limit, and `ctrader_deals` holds exactly the closed set.
+ *
+ * The anchor is the balance after the last close BEFORE the day started — the previous day's
+ * closing balance — falling back to the configured account balance when there is no prior close.
+ */
+export async function getDailyLossStatus(configuredBalance: number): Promise<DailyLossStatus> {
+  const start = brokerDayStart();
+  const iso = start.toISOString();
+  try {
+    const todayRows = (await db.execute(sql`
+      SELECT COALESCE(SUM(net_profit), 0) AS realised
+      FROM ctrader_deals WHERE is_close IS TRUE AND executed_at >= ${iso}
+    `)) as any[];
+    const priorRows = (await db.execute(sql`
+      SELECT balance_after FROM ctrader_deals
+      WHERE is_close IS TRUE AND balance_after IS NOT NULL AND executed_at < ${iso}
+      ORDER BY executed_at DESC LIMIT 1
+    `)) as any[];
+
+    const realised = Number(todayRows[0]?.realised ?? 0);
+    const anchor = priorRows[0]?.balance_after !== undefined && priorRows[0]?.balance_after !== null
+      ? Number(priorRows[0].balance_after)
+      : configuredBalance;
+
+    if (!Number.isFinite(realised) || !Number.isFinite(anchor) || anchor <= 0) {
+      return { lossPercent: null, realisedToday: null, anchorBalance: null, dayStart: iso,
+               reason: 'could not compute a usable anchor balance' };
+    }
+    // Profit is not negative loss.
+    const lossPercent = realised < 0 ? (-realised / anchor) * 100 : 0;
+    return { lossPercent, realisedToday: realised, anchorBalance: anchor, dayStart: iso };
+  } catch (e: any) {
+    return { lossPercent: null, realisedToday: null, anchorBalance: null, dayStart: iso,
+             reason: e?.message ?? String(e) };
+  }
+}
+
 /** Upsert one deal, and if it closes a position, fold the outcome onto the order that opened it. */
 async function storeDeal(d: any): Promise<{ stored: boolean; appliedClose: boolean }> {
   const cpd = d?.closePositionDetail;
