@@ -472,3 +472,105 @@ gross ≈ +0.116 R. Power against that: primary **44%**, pooled **72%**.
 §3 kill criterion, §4 windows, §5 variant cap and both control arms, §6 cost model including the
 §A2.3 refusal to adopt Dukascopy's observed spread, §7 statistics with DSR trial count N ≥ 15,
 §8's per-cell rule, and Amendments 1–3 in full.
+
+
+---
+
+# AMENDMENT 5 — naming §5 variant 3: the ADX-conditioned RSI floor
+
+**Committed 2026-09-03, 19:40 UTC. Nothing about this variant has been measured.** No backtest
+has been run with it, no expectancy, win rate or per-cell figure exists for it, and the ADX
+readings of the observation that motivated it were deliberately *not* inspected before the
+threshold below was fixed. §3, §4, §6, §7 and §8 are unchanged.
+
+## A5.1 What is being named
+
+§5 reserved variant 3 "to be named in writing before it is run." Amendments 3 and 4 both record
+that the slot is unconsumed. **This amendment consumes it.** After this, the §5 cap of three is
+spent and no further variant exists under this pre-registration.
+
+## A5.2 Motivation, disclosed in full
+
+On 2026-09-03 USD/JPY produced an aligned SHORT setup — Daily and 4H both DOWN, active bearish
+FVG, structural confidence 83–86 — on **21 consecutive kill-zone analyses**, and the mandatory
+RSI floor rejected every one. The pair fell ~486 pips over three sessions in a near-straight
+line. A hypothetical short at the 07:00 UTC bar ran 178 pips favourable against 36 adverse.
+
+**This is n = 1, it is a live forward observation, and it is exactly the kind of result §8 exists
+to stop from becoming a parameter change.** It is recorded here as the motivation so that the
+degree of freedom is visible rather than laundered into a "bugfix". The rule below is therefore
+specified now, in advance, and measured afterwards — not tuned until it explains that day.
+
+Note also what the observation is *not* evidence of: the current SHORT band of 22–60 is
+essentially Constance Brown's canonical bear-market RSI range of 20–60. **The band is textbook,
+not defective.** The readings on 2026-09-03 sat *below* even that range, which is extension or
+capitulation, not a normal pullback. Whether such conditions should be traded is a genuine
+strategy question with a defensible answer in both directions.
+
+## A5.3 The rule, specified exactly
+
+For a signal that has already passed every existing gate, including the mandatory ADX ≥ 25:
+
+> **If `adx >= ADX_STRONG`, the RSI bound on the side the trade is taking is released. The
+> opposite bound is retained.**
+>
+> - SHORT: the floor of 22 is released; the ceiling of 60 is **retained**.
+> - LONG: the ceiling of 78 is released; the floor of 40 is **retained**.
+>
+> If `adx < ADX_STRONG`, the existing bands 22–60 and 40–78 apply unchanged.
+
+Retaining the opposite bound matters: releasing both would not be a trend-aware filter, it would
+be deletion of the filter. A SHORT whose RSI is 65 is not a trend continuation regardless of ADX.
+
+Nothing else changes — not the entry logic, not the confidence scoring, not the RSI contribution
+to the score, not the ADX ≥ 25 hard gate.
+
+## A5.4 The one free parameter, and how it was fixed
+
+`ADX_STRONG = 50`.
+
+Fixed on the **standard published ADX bands** (25–50 strong, 50–75 very strong, >75 extremely
+strong), taking the boundary of "very strong trend". It was not selected by testing values.
+
+**It cannot be 25.** ADX ≥ 25 is already a mandatory gate every signal has passed, so releasing
+the floor at 25 would release it on 100% of signals — deletion wearing a filter's clothes. Any
+conditioning threshold must be materially above the gate it is conditioning on, and 50 is the
+nearest principled band boundary above it.
+
+**This value is frozen.** If the variant is run and 50 disappoints, 40 and 60 may not then be
+tried. That would be a three-arm search reported as one, which is the specific failure §7's
+trial count is written to price.
+
+## A5.5 Accounting
+
+DSR trial count rises from **N ≥ 15 to N ≥ 16**. The RSI range was already counted once in §7
+as a parameter chosen by looking at this data; conditioning it is a second look at the same
+parameter and is counted as such.
+
+## A5.6 Pre-declared decision rule
+
+1. Variant 3 is run on the **Primary window only** (2024-08 → 2026-08), once, against the
+   Amendment 3 baseline, with the §6 cost model and §7 statistics unchanged. A4.4(6)'s "no
+   re-run for a better number" binds the secondary and pooled windows; those are not re-run.
+2. **Adoption requires the variant to beat the baseline by ≥ +0.05 R per trade with a 95% CI on
+   the paired difference excluding zero.** A difference smaller than the decision-relevant edge
+   itself is not evidence of an improvement.
+3. **A better point estimate alone changes nothing.** Two arms on the same data will differ; that
+   is what noise does.
+4. **§8 stands.** No per-pair or per-year cell of the variant result may drive any further change.
+   In particular, "it helped on USD/JPY" is not a finding — it is the motivating observation
+   reappearing as its own confirmation.
+5. **No result here licenses live deployment.** A4.4(4) is unchanged: only forward out-of-sample
+   evidence can, and the forward record began 2026-09-01.
+
+## A5.7 Production is unchanged
+
+Live behaviour is **not** modified by this amendment. v3.4.0 continues to run the 22–60 and 40–78
+bands as deployed. The only change shipped alongside this document is observability: the six
+return paths that previously recorded `UNKNOWN` now record why, so that the frequency and context
+of RSI vetoes becomes a measurable quantity instead of an anecdote.
+
+## A5.8 What is unchanged
+
+§3 kill criterion, §4 windows, §6 cost model, §7 statistics, §8's per-cell rule, both control
+arms, and Amendments 1–4 in full.
