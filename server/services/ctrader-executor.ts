@@ -740,6 +740,13 @@ export class CTraderExecutor {
       const fillPrice  = pos?.price ?? exec.payload?.deal?.executionPrice ?? null;
       const filled     = execType === 3;
 
+      // The price the ALERT should quote. Starts as whatever the execution event gave, but the
+      // event reports 0 when executionType is 2 (ACCEPTED) — which is what the real trade on
+      // position 286227046 returned. Reconcile is the only source of the true price, so this is
+      // reassigned below once the broker confirms. Without it the alert says "pending fill" a
+      // moment after the fill was confirmed.
+      let confirmedPrice: number | null = fillPrice;
+
       await this.amend(recId, {
         status: filled ? 'filled' : 'accepted',
         executionType: execType ?? null,
@@ -767,6 +774,8 @@ export class CTraderExecutor {
           fillPrice: mine?.price ?? undefined,
           reconciledAt: new Date().toISOString(), reconciledOpen,
         });
+        // Use the broker-confirmed price in the alert, not the acceptance placeholder.
+        if (mine?.price !== undefined && mine?.price !== null) confirmedPrice = Number(mine.price);
       } catch (e: any) {
         console.warn(`[cTrader] could not reconcile after order: ${e.message}`);
       }
@@ -794,7 +803,7 @@ export class CTraderExecutor {
         const alert = await telegramNotifier.sendText(
           buildExecutionAlertMessage({
             live: this.isLiveMode, state, symbol: signal.symbol, type: signal.type,
-            lots, fillPrice, stop: signal.stop, target: signal.targets[0],
+            lots, fillPrice: confirmedPrice, stop: signal.stop, target: signal.targets[0],
             confidence: signal.confidence, tier: signal.tier, positionId,
           }),
           'paid', 'HTML'   // <b>/<code>; MarkdownV2 would 400 on the periods alone
