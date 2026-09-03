@@ -10,7 +10,7 @@ import { telegramNotifier } from './telegram-notifier';
 import { evaluateCorrelation, MAX_EFFECTIVE_EXPOSURE } from './correlation-guard';
 import { ctraderExecutor } from './ctrader-executor';
 import { getSignalNumber } from './signal-stats';
-import { recordAnalysis, linkProvenanceToSignal } from './provenance';
+import { recordAnalysis, linkProvenanceToSignal, recordTrackOutcome } from './provenance';
 
 /**
  * Automated Signal Generator Service
@@ -1256,6 +1256,28 @@ export class SignalGenerator {
     }
     console.log(`✅ In kill zone: ${sessionAnalyzer.getKillZoneName()}`);
 
+    // Open a run record. The cron is FIRE-AND-FORGET — it replies `success: true` before this
+    // function starts — and the catch below swallows, so a failed run rejects nothing and returns
+    // no error to anyone. Without a row here, "no signals today" is indistinguishable from
+    // "the pipeline died at the first pair".
+    let runId: string | null = null;
+    try {
+      const r = (await db.execute(sql`
+        INSERT INTO generation_runs (in_kill_zone, kill_zone_name)
+        VALUES (true, ${sessionAnalyzer.getKillZoneName()})
+        RETURNING id
+      `)) as any[];
+      runId = r?.[0]?.id ?? null;
+    } catch (e: any) {
+      console.error('⚠️  could not open generation run record:', e?.message ?? e);
+    }
+
+    // Declared out here so the finally block can persist them even when the try throws.
+    let signalsGenerated = 0;
+    let signalsTracked = 0;
+    let symbolsAttempted = 0;
+    let runError: string | null = null;
+
     // 🎯 The5ers: Initialize daily tracker (resets each new trading day)
     propFirmService.initDailyTracker(10000);
 
@@ -1284,8 +1306,7 @@ export class SignalGenerator {
 
       // 2. Generate signals for each pair
       const strategy = new MACrossoverStrategy();
-      let signalsGenerated = 0;
-      let signalsTracked = 0;
+      // (counters are declared above the try so the finally block can record them)
 
       for (const quote of quotes) {
         // RE-CHECK the portfolio-wide cap on EVERY iteration.
@@ -1303,6 +1324,7 @@ export class SignalGenerator {
         }
 
         const { symbol, exchangeRate } = quote;
+        symbolsAttempted++;
 
         // GBP/USD skip REMOVED 2026-08-28. It was disabled for a "19.6% win rate" measured
         // by the old validator, which a full replay proved wrong on 131 of 306 production
@@ -1458,6 +1480,7 @@ export class SignalGenerator {
               // Store 15-min candles for chart visualization (better granularity than 1H)
               await this.trackSignal(signal, symbol, exchangeRate, fifteenMinCandles);
               await linkProvenanceToSignal(analyzedAt, symbol, signal.id);
+              await recordTrackOutcome(analyzedAt, symbol, true);
               signalsTracked++;
               const tierBadge = signal.tier === 'HIGH' ? '🟢 HIGH' : '🟡 MEDIUM';
               console.log(`✅ Tracked ${symbol} signal ${tierBadge} (${signal.confidence}/100 points)`);
@@ -1510,8 +1533,13 @@ export class SignalGenerator {
                 positionSizePercent: signal.positionSizePercent,
               });
               }
-            } catch (error) {
+            } catch (error: any) {
+              // A produced signal that never reaches signal_history is INVISIBLE without this.
+              // On 2026-09-02 two confidence-124 signals vanished here and the only record was a
+              // Render log line that did not survive the next restart. The failure is now written
+              // to signal_provenance, where it can be queried tomorrow.
               console.error(`❌ Failed to track ${symbol} signal:`, error);
+              await recordTrackOutcome(analyzedAt, symbol, false, error?.message ?? String(error));
             }
           }
 
@@ -1525,10 +1553,28 @@ export class SignalGenerator {
 
       console.log(`✅ Signal generation complete: ${signalsGenerated} generated, ${signalsTracked} tracked`);
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ [Signal Generator] Error:', error);
+      runError = error?.message ?? String(error);
     } finally {
       this.isRunning = false;
+      // Close the run record whatever happened. A row left with a NULL finished_at means the
+      // process died before reaching here — which is itself the most useful thing to know.
+      if (runId) {
+        try {
+          await db.execute(sql`
+            UPDATE generation_runs
+            SET finished_at = now(), ok = ${runError === null},
+                symbols_attempted = ${symbolsAttempted},
+                signals_generated = ${signalsGenerated},
+                signals_tracked = ${signalsTracked},
+                error = ${runError}
+            WHERE id = ${runId}
+          `);
+        } catch (e: any) {
+          console.error('⚠️  could not close generation run record:', e?.message ?? e);
+        }
+      }
     }
   }
 

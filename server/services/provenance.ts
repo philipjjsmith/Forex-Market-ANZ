@@ -136,6 +136,36 @@ export async function recordAnalysis(p: AnalysisProvenance): Promise<void> {
 }
 
 /** Attach a signal_id once the signal row has been persisted. */
+/**
+ * Record whether tracking SUCCEEDED or FAILED for a produced signal.
+ *
+ * On 2026-09-02 two confidence-124 signals — the highest ever recorded — were produced and never
+ * reached `signal_history`. Every documented gate was traced and all should have passed, so
+ * `trackSignal` itself threw; its catch logged to Render's console, which does not survive the
+ * free tier's spin-down. The loss was invisible in the data and the cause is unrecoverable.
+ *
+ * `produced = true` with a NULL `signal_id` could mean tracking failed OR merely that linking
+ * failed. This makes the two distinguishable, and it never throws — a bookkeeping failure must not
+ * take down signal generation on top of whatever already went wrong.
+ */
+export async function recordTrackOutcome(
+  analyzedAt: Date,
+  symbol: string,
+  ok: boolean,
+  error?: string,
+): Promise<void> {
+  try {
+    await db.execute(sql`
+      UPDATE signal_provenance
+      SET tracked = ${ok}, track_error = ${ok ? null : (error ?? 'unknown').slice(0, 500)}
+      WHERE symbol = ${symbol} AND analyzed_at = ${analyzedAt.toISOString()}
+    `);
+    if (!ok) console.error(`🚨 SIGNAL LOST — ${symbol} produced but NOT tracked: ${error}`);
+  } catch (err) {
+    console.error(`⚠️  could not record track outcome for ${symbol}:`, err instanceof Error ? err.message : err);
+  }
+}
+
 export async function linkProvenanceToSignal(analyzedAt: Date, symbol: string, signalId: string): Promise<void> {
   try {
     await db.execute(sql`
