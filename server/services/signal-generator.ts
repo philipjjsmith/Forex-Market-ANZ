@@ -660,6 +660,7 @@ export class MACrossoverStrategy {
     // Guard: all MAs must be non-null before determining trend direction.
     // Previously these defaulted to 'DOWN' when null — causing false SHORT signals.
     if (!weeklyFastMA || !weeklySlowMA || !dailyFastMA || !dailySlowMA || !fourHourFastMA || !fourHourSlowMA) {
+      trace?.push(`INSUFFICIENT_HTF_MA weekly=${!!(weeklyFastMA && weeklySlowMA)} daily=${!!(dailyFastMA && dailySlowMA)} fourHour=${!!(fourHourFastMA && fourHourSlowMA)}`);
       return null; // Insufficient data — cannot determine trend direction reliably
     }
 
@@ -679,7 +680,10 @@ export class MACrossoverStrategy {
     const bb = Indicators.bollingerBands(oneHourCloses, 20, 2);
     const adx = Indicators.adx(oneHourCandles, 14);
 
-    if (!oneHourFastMA || !oneHourSlowMA || !atr || !bb) return null;
+    if (!oneHourFastMA || !oneHourSlowMA || !atr || !bb) {
+      trace?.push(`INSUFFICIENT_1H_INDICATORS fastMA=${!!oneHourFastMA} slowMA=${!!oneHourSlowMA} atr=${!!atr} bb=${!!bb}`);
+      return null;
+    }
 
     // 🔍 DIAGNOSTIC: Track trend directions for all timeframes
     if (diagnosticMode) {
@@ -709,7 +713,10 @@ export class MACrossoverStrategy {
     const prevOneHourFastMA = Indicators.ema(oneHourCloses.slice(0, -1), fastPeriod);
     const prevOneHourSlowMA = Indicators.ema(oneHourCloses.slice(0, -1), slowPeriod);
 
-    if (!prevOneHourFastMA || !prevOneHourSlowMA) return null;
+    if (!prevOneHourFastMA || !prevOneHourSlowMA) {
+      trace?.push(`INSUFFICIENT_PREV_1H_MA fastMA=${!!prevOneHourFastMA} slowMA=${!!prevOneHourSlowMA}`);
+      return null;
+    }
 
     const bullishCross = prevOneHourFastMA <= prevOneHourSlowMA && oneHourFastMA > oneHourSlowMA;
     const bearishCross = prevOneHourFastMA >= prevOneHourSlowMA && oneHourFastMA < oneHourSlowMA;
@@ -1097,16 +1104,21 @@ export class MACrossoverStrategy {
 
     // ⚡ PHASE 3D: MANDATORY RSI filters (block overbought/oversold extremes)
     // Industry best practice: RSI must indicate momentum in trade direction
-    if (!rsi) return null; // RSI is required
+    if (!rsi) {
+      trace?.push('RSI_UNAVAILABLE');
+      return null; // RSI is required
+    }
 
     if (signalType === 'LONG') {
       // LONG requires RSI 40-78 (upward momentum, allows trending overbought entries)
       if (rsi < 40 || rsi > 78) {
+        trace?.push(`RSI_BLOCKED_LONG rsi=${rsi.toFixed(2)} band=40-78 D:${dailyTrend} 4H:${fourHourTrend} entry=${entryType} confidence=${confidence}`);
         return null; // Block trade - RSI shows weak momentum or extreme overbought
       }
     } else if (signalType === 'SHORT') {
       // SHORT requires RSI 22-60 (downward momentum, allows trending oversold entries)
       if (rsi < 22 || rsi > 60) {
+        trace?.push(`RSI_BLOCKED_SHORT rsi=${rsi.toFixed(2)} band=22-60 D:${dailyTrend} 4H:${fourHourTrend} entry=${entryType} confidence=${confidence}`);
         return null; // Block trade - RSI shows weak momentum or extreme oversold
       }
     }
