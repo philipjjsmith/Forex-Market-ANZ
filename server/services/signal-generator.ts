@@ -1,7 +1,7 @@
 import { db } from '../db';
 import { sql } from 'drizzle-orm';
 import { exchangeRateAPI } from './exchangerate-api';
-import { twelveDataAPI } from './twelve-data';
+import { twelveDataAPI, isMarketClosed } from './twelve-data';
 import { aiAnalyzer } from './ai-analyzer';
 import { parameterService } from './parameter-service';
 import { propFirmService } from './prop-firm-config';
@@ -243,28 +243,62 @@ export class Indicators {
 
 // Helper function: Check if forex market is open
 // Forex market hours (UTC): Sun 22:00 → Fri 22:00
+/**
+ * Is the forex market open?
+ *
+ * FIXED 2026-09-03. Both copies of this function hardcoded 22:00 UTC as the week boundary, which
+ * is the EST value. The week actually runs Sun 17:00 -> Fri 17:00 NEW YORK, which is 21:00 UTC
+ * under EDT and 22:00 under EST — so for the ~8 months of DST it was an hour wrong in both
+ * directions: it believed the market was still open for an hour after Friday's close, and still
+ * shut for an hour after Sunday's open.
+ *
+ * This is the THIRD instance of one root cause. twelve-data.ts already fixed it after a hardcoded
+ * 21:00 UTC mis-flagged 853 genuine bars per pair; the fix never propagated here. Delegating to
+ * that same `isMarketClosed` rather than hand-rolling a fourth copy is the actual repair — a
+ * duplicated boundary is a boundary that will drift again.
+ */
 function isForexMarketOpen(): boolean {
-  const now = new Date();
-  const day = now.getUTCDay();   // 0=Sun, 1=Mon, ..., 5=Fri, 6=Sat
-  const hour = now.getUTCHours();
-  if (day === 6) return false;                    // Saturday — always closed
-  if (day === 0 && hour < 22) return false;       // Sunday before 10 PM UTC
-  if (day === 5 && hour >= 22) return false;      // Friday after 10 PM UTC
-  return true;
+  return !isMarketClosed(new Date());
 }
 
-// Helper function: Check if within news window (simplified - checks hour of day)
+/**
+ * Is `asOf` inside a major-news window?
+ *
+ * asOf added 2026-08-28: this must be evaluable at a HISTORICAL moment, not only "now", or a
+ * backtest scores every replayed bar against today's clock.
+ *
+ * FIXED 2026-09-03 — the hours were hardcoded in UTC and therefore WRONG FOR EIGHT MONTHS A YEAR.
+ *
+ * The old list was `[13, 14, 19, 20]` UTC with the comment "8:30 AM EST (13:30 UTC)". That is
+ * correct only under EST. Under EDT — mid-March to early November — 8:30 New York is 12:30 UTC,
+ * so the window sat a full hour late: it granted the "no news" bonus during the release and
+ * withheld it afterwards.
+ *
+ * That is not academic. 2026-09-04 is the first Friday of the month, NFP releases 8:30 ET =
+ * **12:30 UTC**, which lands inside the 12:00-14:59 kill zone — and the old code would have added
+ * +3 for "No major news window" at exactly that moment. With 49 of 309 historical signals scoring
+ * EXACTLY 90 (the HIGH threshold that decides whether a trade goes live), a 3-point error at the
+ * margin is a trade taken or missed.
+ *
+ * Same root cause as the twelve-data.ts week boundary, which was already fixed the same way after
+ * a hardcoded 21:00 UTC mis-flagged 853 genuine bars per pair. The rule is: any wall-clock market
+ * time is NEW YORK local, never a fixed UTC hour.
+ *
+ * Expressed in NY hours, preserving the original intent exactly — the release hour and the hour
+ * after: 8:30 releases (NFP, CPI) cover NY 8 and 9; 14:00 FOMC covers NY 14 and 15. Under EST
+ * this reproduces the old [13,14,19,20] UTC list precisely, which is itself evidence the original
+ * was written assuming EST.
+ */
+const NEWS_HOURS_NEW_YORK = [8, 9, 14, 15];
+
 function isWithinNewsWindow(asOf: Date = new Date()): boolean {
-  // asOf added 2026-08-28: this must be evaluable at a HISTORICAL moment, not only "now",
-  // or a backtest scores every replayed bar against today's clock.
-  const hour = asOf.getUTCHours();
+  const nyHour = Number(
+    new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York', hour: 'numeric', hour12: false,
+    }).formatToParts(asOf).find(p => p.type === 'hour')!.value
+  ) % 24;   // Intl renders midnight as "24" under hour12:false
 
-  // Avoid major news times (simplified):
-  // 8:30 AM EST (13:30 UTC) = NFP, CPI releases
-  // 2:00 PM EST (19:00 UTC) = FOMC decisions
-  const newsHours = [13, 14, 19, 20];
-
-  return newsHours.includes(hour);
+  return NEWS_HOURS_NEW_YORK.includes(nyHour);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

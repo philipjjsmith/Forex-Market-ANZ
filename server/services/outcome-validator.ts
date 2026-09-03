@@ -1,7 +1,7 @@
 import { db } from '../db';
 import { sql } from 'drizzle-orm';
 import { API_ENDPOINTS } from '../../client/src/config/api';
-import { twelveDataAPI } from './twelve-data';
+import { twelveDataAPI, isMarketClosed } from './twelve-data';
 import { telegramNotifier } from './telegram-notifier';
 import { getMonthWinCount, getMonthLossCount, getMonthNetPips, getCurrentStreak, getSignalNumber } from './signal-stats';
 import { sessionAnalyzer } from './session-analyzer';
@@ -39,14 +39,22 @@ interface PendingSignal {
 }
 
 // Helper: Check if forex market is open (duplicated from signal-generator for isolation)
+/**
+ * Is the forex market open?
+ *
+ * FIXED 2026-09-03. Both copies of this function hardcoded 22:00 UTC as the week boundary, which
+ * is the EST value. The week actually runs Sun 17:00 -> Fri 17:00 NEW YORK, which is 21:00 UTC
+ * under EDT and 22:00 under EST — so for the ~8 months of DST it was an hour wrong in both
+ * directions: it believed the market was still open for an hour after Friday's close, and still
+ * shut for an hour after Sunday's open.
+ *
+ * This is the THIRD instance of one root cause. twelve-data.ts already fixed it after a hardcoded
+ * 21:00 UTC mis-flagged 853 genuine bars per pair; the fix never propagated here. Delegating to
+ * that same `isMarketClosed` rather than hand-rolling a fourth copy is the actual repair — a
+ * duplicated boundary is a boundary that will drift again.
+ */
 function isForexMarketOpen(): boolean {
-  const now = new Date();
-  const day = now.getUTCDay();
-  const hour = now.getUTCHours();
-  if (day === 6) return false;
-  if (day === 0 && hour < 22) return false;
-  if (day === 5 && hour >= 22) return false;
-  return true;
+  return !isMarketClosed(new Date());
 }
 
 export class OutcomeValidator {
