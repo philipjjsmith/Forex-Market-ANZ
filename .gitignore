@@ -18,3 +18,8 @@ logs/
 # Audit agent scratch files
 _audit_*
 scripts/test-correct-connection.ts
+_p*.mjs
+_dd.ts
+_v*.ts
+_t*.ts
+_a.ts
