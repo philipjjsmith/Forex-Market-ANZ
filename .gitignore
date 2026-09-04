@@ -17,3 +17,4 @@ logs/
 
 # Audit agent scratch files
 _audit_*
+scripts/test-correct-connection.ts

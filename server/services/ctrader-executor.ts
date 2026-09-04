@@ -60,6 +60,11 @@ const PT = {
   ACCOUNT_AUTH_REQ:  2102,
   ACCOUNT_AUTH_RES:  2103,
   NEW_ORDER_REQ:     2106,
+  /**
+   * Amend SL/TP on an OPEN position. Its reply arrives as an EXECUTION_EVENT (2126), NOT a
+   * dedicated *_RES — verified against help.ctrader.com/open-api/messages, 2026-09-04.
+   */
+  AMEND_POSITION_SLTP_REQ: 2110,
   CLOSE_POSITION_REQ: 2111,
   RECONCILE_REQ:     2124,
   RECONCILE_RES:     2125,
@@ -149,6 +154,32 @@ export class CTraderExecutor {
   private get refreshToken(){ return process.env.CTRADER_REFRESH_TOKEN; }
   private get accountBalance() {
     return parseFloat(process.env.CTRADER_ACCOUNT_BALANCE || '2500');
+  }
+
+  /**
+   * The balance to size and guard against.
+   *
+   * CTRADER_ACCOUNT_BALANCE is a STATIC env constant, so every trade after the first was sized
+   * against a number that no longer matched the account: on 2026-09-03 the env said 10000 while
+   * the broker said 10085.34. The drift is silent, it compounds, and it moves the REAL risk
+   * percentage away from the intended one in whichever direction the account has moved.
+   *
+   * The broker's own last closing balance is the truth. The env value survives only as a
+   * cold-start fallback for an account that has never closed a trade.
+   */
+  private async liveBalance(): Promise<number> {
+    try {
+      const rows = (await db.execute(sql`
+        SELECT balance_after FROM ctrader_deals
+        WHERE is_close IS TRUE AND balance_after IS NOT NULL
+        ORDER BY executed_at DESC LIMIT 1
+      `)) as any[];
+      const b = rows[0]?.balance_after;
+      const n = b === null || b === undefined ? NaN : Number(b);
+      return Number.isFinite(n) && n > 0 ? n : this.accountBalance;
+    } catch {
+      return this.accountBalance;   // never let a read failure block a trade
+    }
   }
 
   /**
@@ -413,13 +444,13 @@ export class CTraderExecutor {
     return perLotInQuote;   // USD is the quote currency: already in USD
   }
 
-  private calcVolume(symbol: string, slPips: number, positionSizePercent = 1.0, price = 0): number {
+  private calcVolume(symbol: string, slPips: number, positionSizePercent = 1.0, price = 0, balance?: number): number {
     // Honour the signal's own sizing. This was hardcoded to 1%, so if the HIGH-tier guard were
     // ever relaxed a MEDIUM signal (positionSizePercent = 0, practice only) would have been
     // sized as a full live trade.
     const pct = Number.isFinite(positionSizePercent) ? Math.max(0, positionSizePercent) : 1.0;
     if (pct <= 0) return 0;
-    const riskUsd        = this.accountBalance * (pct / 100);
+    const riskUsd        = (Number.isFinite(balance as number) && (balance as number) > 0 ? (balance as number) : this.accountBalance) * (pct / 100);
     const pipValuePerLot = this.pipValuePerLot(symbol, price);
     const lots = Math.min(10, Math.max(0.01,
       Math.round((riskUsd / (slPips * pipValuePerLot)) * 100) / 100
@@ -584,7 +615,7 @@ export class CTraderExecutor {
     {
       const cfg = propFirmService.getConfig();
       if (cfg.enableDailyLossProtection) {
-        const st = await getDailyLossStatus(this.accountBalance);
+        const st = await getDailyLossStatus(await this.liveBalance());
         if (st.lossPercent === null) {
           console.error(`[cTrader] REFUSING: daily loss undeterminable — ${st.reason}`);
           await this.record({ ...base, status: 'skipped_daily_loss',
@@ -677,7 +708,8 @@ export class CTraderExecutor {
       // Step 6 — Calculate position size (1% risk)
       const pipFactor = signal.symbol.includes('JPY') ? 100 : 10000;
       const slPips    = Math.abs(signal.entry - signal.stop) * pipFactor;
-      let volume      = this.calcVolume(signal.symbol, slPips, signal.positionSizePercent ?? 1.0, signal.entry);
+      const balanceNow = await this.liveBalance();
+      let volume      = this.calcVolume(signal.symbol, slPips, signal.positionSizePercent ?? 1.0, signal.entry, balanceNow);
       if (volume <= 0) {
         console.log(`[cTrader] positionSizePercent=${signal.positionSizePercent} -> zero volume. No order placed.`);
         await this.record({ ...base, status: 'skipped_zero_volume', accountId,
@@ -776,8 +808,100 @@ export class CTraderExecutor {
         });
         // Use the broker-confirmed price in the alert, not the acceptance placeholder.
         if (mine?.price !== undefined && mine?.price !== null) confirmedPrice = Number(mine.price);
+
+        // DID THE BROKER ACTUALLY ATTACH OUR STOP AND TARGET?
+        //
+        // On 2026-09-04 two positions exited at prices matching NEITHER their stop nor their
+        // target: AUD/USD ran 28.4 pips against an 8.6-pip stop (3.3x the intended risk, -3.4%
+        // of the account on one trade) and USD/CHF closed +$268.75 while its signal was recorded
+        // STOP_HIT. Our code has exactly one close path and it fires only on EXPIRED, so we did
+        // not close them — yet the levels we sent were not honoured either.
+        //
+        // Nothing stored could settle whether the levels were ever attached: deal payloads carry
+        // the DEAL, not the POSITION. The reconcile response does carry it, and it is already in
+        // hand here, so from now on every order records what protection the broker says it has.
+        // An unprotected position that believes it has a stop is the worst state this can be in.
+        if (mine) {
+          const brokerSl = mine.stopLoss ?? null;
+          const brokerTp = mine.takeProfit ?? null;
+          if (brokerSl === null && brokerTp === null) {
+            console.error(
+              `[cTrader] 🚨 POSITION ${positionId} HAS NO SL/TP AT THE BROKER. `
+              + `Sent SL ${signal.stop} TP ${signal.targets[0]} — the broker reports neither.`
+            );
+          } else {
+            console.log(`[cTrader] broker confirms protection: SL=${brokerSl} TP=${brokerTp}`);
+          }
+        }
       } catch (e: any) {
         console.warn(`[cTrader] could not reconcile after order: ${e.message}`);
+      }
+
+      // ── RE-ANCHOR SL/TP TO THE ACTUAL FILL, AND MEASURE THE DRIFT ─────────────────────
+      //
+      // The order carries ABSOLUTE stop and target prices derived from `signal.entry` — a cached
+      // 1H close the pre-registration measures as 5-8 pips STALE. The backtest harness instead
+      // treats them as DISTANCES and re-anchors to the fill (`run-backtest.ts:226-233`), so live
+      // and replay have never been trading the same geometry.
+      //
+      // Any drift s between the quoted entry and the real fill is a pure linear cost of
+      // s/stopPips R, paid by winners and losers alike. Measured on current-generation signals:
+      // +1.07 pips = 0.072 R per trade — LARGER than the entire measured deficit of 0.055 R.
+      // Shrinking the stop from ~31 to ~14 pips (v3.2 -> v3.3) more than doubled that cost.
+      //
+      // FAIL-SAFE BY CONSTRUCTION: the absolute levels were already accepted with the order, so
+      // if this amend fails the position keeps exactly the protection it has today. There is no
+      // window in which the trade is unprotected.
+      let slippagePips: number | null = null;
+      if (confirmedPrice && positionId) {
+        const isJpy     = signal.symbol.includes('JPY');
+        const digits    = isJpy ? 3 : 5;
+        const pipFactor = isJpy ? 100 : 10000;
+        const long      = signal.type === 'LONG';
+        const slDist    = Math.abs(signal.entry - signal.stop);
+        const tpDist    = Math.abs(signal.targets[0] - signal.entry);
+        const newStop   = Number((long ? confirmedPrice - slDist : confirmedPrice + slDist).toFixed(digits));
+        const newTp     = Number((long ? confirmedPrice + tpDist : confirmedPrice - tpDist).toFixed(digits));
+
+        // POSITIVE ALWAYS MEANS ADVERSE, on both sides. A signed number that means "worse for us"
+        // whichever way the trade points is the only version that can be averaged across a book
+        // containing both LONGs and SHORTs.
+        slippagePips = Number(
+          ((long ? confirmedPrice - signal.entry : signal.entry - confirmedPrice) * pipFactor).toFixed(2)
+        );
+
+        try {
+          this.send(socket, PT.AMEND_POSITION_SLTP_REQ, {
+            ctidTraderAccountId: accountId, positionId,
+            stopLoss: newStop, takeProfit: newTp,
+          });
+          await this.waitFor(emitter, PT.EXECUTION_EVENT, 10000);
+          console.log(
+            `[cTrader] SL/TP re-anchored to fill ${confirmedPrice}: SL ${signal.stop} -> ${newStop} | `
+            + `TP ${signal.targets[0]} -> ${newTp} | entry slippage ${slippagePips} pips (+ = adverse)`
+          );
+        } catch (e: any) {
+          // The quoted-entry levels stand. Worse than the fix, identical to yesterday.
+          console.warn(`[cTrader] SL/TP re-anchor failed, absolute levels stand: ${e?.message ?? e}`);
+        }
+
+        // RECORD THE DRIFT REGARDLESS of whether the amend landed.
+        //
+        // `entry_slippage` has a schema default of '0.0' and the column comment already admits
+        // "never populated -> grader is inert". 172 of 172 deduped rows read exactly 0.00, so
+        // `execution-quality.ts` has been grading a number nobody writes, and production has
+        // never once measured its own fill quality. It is the ONLY measurement that can move the
+        // cost picture, and the cost picture is the whole question.
+        if (signal.signalId) {
+          try {
+            await db.execute(sql`
+              UPDATE signal_history SET entry_slippage = ${slippagePips}
+              WHERE signal_id = ${signal.signalId}
+            `);
+          } catch (e: any) {
+            console.warn(`[cTrader] could not record entry slippage: ${e?.message ?? e}`);
+          }
+        }
       }
 
       console.log(
