@@ -413,6 +413,38 @@ export class CTraderExecutor {
   }
 
 
+  /**
+   * Ask the broker for ONE position, retrying briefly before giving up.
+   *
+   * A single reconcile races the broker. On 2026-09-04 the AUD/USD order was sent at 07:24:47.263
+   * and the broker's own deal is stamped 07:24:47.595 — reconcile asked for the position list in
+   * that 332 ms window, found nothing, and recorded `fill_price = 0` with `reconciled_open = false`
+   * on a position that was genuinely open. Everything downstream then went blind: no fill price,
+   * no re-anchor, no entry slippage — and it goes blind precisely when the broker is busy, which
+   * is exactly when fills are worst. Three attempts 400 ms apart covers the observed race an order
+   * of magnitude over.
+   *
+   * Ids are compared NUMERICALLY. A string/number mismatch would silently never match, and that
+   * failure looks identical to "the position does not exist".
+   */
+  private async fetchPosition(
+    socket: WebSocket, emitter: EventEmitter, accountId: number,
+    positionId: number | null, attempts = 3, delayMs = 400,
+  ): Promise<{ mine: any; open: any[]; attemptsUsed: number }> {
+    let open: any[] = [];
+    for (let i = 1; i <= attempts; i++) {
+      this.send(socket, PT.RECONCILE_REQ, { ctidTraderAccountId: accountId });
+      const rec = await this.waitFor(emitter, PT.RECONCILE_RES, 20000);
+      open = rec.payload?.position ?? [];
+      const mine = positionId
+        ? open.find((x: any) => Number(x.positionId) === Number(positionId))
+        : undefined;
+      if (mine || !positionId) return { mine, open, attemptsUsed: i };
+      if (i < attempts) await new Promise(r => setTimeout(r, delayMs));
+    }
+    return { mine: undefined, open, attemptsUsed: attempts };
+  }
+
   // ─── Position sizing ──────────────────────────────────────────────────────
 
   /**
@@ -791,10 +823,8 @@ export class CTraderExecutor {
       // here because the socket is already authenticated.
       let reconciledOpen: boolean | null = null;
       try {
-        this.send(socket, PT.RECONCILE_REQ, { ctidTraderAccountId: accountId });
-        const rec = await this.waitFor(emitter, PT.RECONCILE_RES, 20000);
-        const open: any[] = rec.payload?.position ?? [];
-        const mine = positionId ? open.find((x: any) => x.positionId === positionId) : undefined;
+        const { mine, open, attemptsUsed } = await this.fetchPosition(socket, emitter, accountId, positionId);
+        if (attemptsUsed > 1) console.log(`[cTrader] position found on reconcile attempt ${attemptsUsed}`);
         reconciledOpen = positionId ? !!mine : open.length > 0;
         await this.amend(recId, {
           status: reconciledOpen ? 'filled' : undefined,
@@ -875,11 +905,35 @@ export class CTraderExecutor {
             ctidTraderAccountId: accountId, positionId,
             stopLoss: newStop, takeProfit: newTp,
           });
-          await this.waitFor(emitter, PT.EXECUTION_EVENT, 10000);
-          console.log(
-            `[cTrader] SL/TP re-anchored to fill ${confirmedPrice}: SL ${signal.stop} -> ${newStop} | `
-            + `TP ${signal.targets[0]} -> ${newTp} | entry slippage ${slippagePips} pips (+ = adverse)`
-          );
+
+          // VERIFY BY READBACK, NEVER BY "an event arrived".
+          //
+          // The obvious check — await waitFor(EXECUTION_EVENT) — cannot do this job. waitFor
+          // matches on payload type ALONE: no clientMsgId, no executionType. The original order's
+          // own late ORDER_FILLED satisfies it just as well as the amend's reply, so it would
+          // resolve successfully whether or not the SL/TP ever changed. That is a fabricated
+          // success flag on the one operation whose whole purpose is protecting the position.
+          //
+          // Asking the broker what it now holds is unambiguous, and reconcile is already proven.
+          await new Promise(r => setTimeout(r, 500));
+          const { mine: after } = await this.fetchPosition(socket, emitter, accountId, positionId, 2, 400);
+          const halfPip = 0.5 / pipFactor;
+          const matches = (got: any, want: number) =>
+            got !== null && got !== undefined && Math.abs(Number(got) - want) <= halfPip;
+          const amendOk = matches(after?.stopLoss, newStop) && matches(after?.takeProfit, newTp);
+
+          if (amendOk) {
+            console.log(
+              `[cTrader] ✅ SL/TP re-anchored to fill ${confirmedPrice}: SL ${signal.stop} -> ${newStop} | `
+              + `TP ${signal.targets[0]} -> ${newTp} | entry slippage ${slippagePips} pips (+ = adverse)`
+            );
+          } else {
+            console.error(
+              `[cTrader] ⚠️ AMEND NOT CONFIRMED for position ${positionId}. Wanted SL ${newStop} `
+              + `TP ${newTp}; broker reports SL ${after?.stopLoss ?? 'none'} TP ${after?.takeProfit ?? 'none'}. `
+              + `The original quoted-entry levels are what is live.`
+            );
+          }
         } catch (e: any) {
           // The quoted-entry levels stand. Worse than the fix, identical to yesterday.
           console.warn(`[cTrader] SL/TP re-anchor failed, absolute levels stand: ${e?.message ?? e}`);

@@ -6,6 +6,7 @@ import { twelveDataAPI } from '../services/twelve-data';
 import { exchangeRateAPI } from '../services/exchangerate-api';
 import { ctraderExecutor, CTRADER_HOSTS } from '../services/ctrader-executor';
 import { syncBrokerDeals } from '../services/broker-deals';
+import { buildFidelityReport } from '../services/execution-fidelity';
 import { telegramNotifier } from '../services/telegram-notifier';
 import { buildPerformanceReport } from '../services/performance-report';
 import { buildExecutionAlertMessage } from '../services/ctrader-executor';
@@ -318,7 +319,14 @@ export function registerAdminRoutes(app: Express) {
         ORDER BY e.created_at DESC LIMIT 50
       `);
       const [sync] = (await db.execute(sql`SELECT * FROM ctrader_deal_sync WHERE id = 1`)) as any[];
-      res.json({ sync: sync ?? null, orders: closed, deals });
+      // Modelled record vs the broker's own money, per trade. Added 2026-09-05 after a USD/CHF
+      // LONG recorded STOP_HIT at -9.8 pips settled at +$268.75 — a 3.76 R error on one trade,
+      // against a programme whose whole measured edge is -0.055 R. Never throws: a reporting
+      // failure must not take down the page that shows the trades.
+      let fidelity: any = null;
+      try { fidelity = await buildFidelityReport(); }
+      catch (e: any) { fidelity = { error: e?.message ?? 'fidelity report failed' }; }
+      res.json({ sync: sync ?? null, orders: closed, deals, fidelity });
     } catch (err: any) {
       res.status(400).json({ error: err?.message ?? 'failed' });
     }
