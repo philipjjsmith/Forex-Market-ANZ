@@ -1469,6 +1469,25 @@ export class CTraderExecutor {
       );
     }
 
+    // THE REFERENCE PRICE PROBLEM, AND WHY THE STOP HERE IS DELIBERATELY WIDE.
+    //
+    // This needs a price to put absolute SL/TP levels around, and at a Sunday reopen NO historical
+    // source knows one. Frankfurter serves the ECB's daily FIXING — measured 2026-09-05 at 1.1622
+    // for EUR/USD against a true market close of 1.16144, i.e. 7.6 pips stale before the weekend
+    // gap is even considered. An 8-pip stop under that fixing lands 0.4 pips from market: almost
+    // certainly inside the broker's minimum distance, and triggered by the first tick.
+    //
+    // Twelve Data is no better here — at the reopen its newest 1H bar is also Friday's. Only the
+    // broker knows the live price, and asking it would mean a spot subscription this path does not
+    // have.
+    //
+    // So the staleness is absorbed instead of chased: a 25-pip stop survives any plausible weekend
+    // gap and sits comfortably clear of any minimum-distance rule. That is the RIGHT trade for
+    // this test, because the levels only need to be VALID — what is under test is the plumbing
+    // (clientOrderId matching, the ACCEPTED->FILLED chase, reconcile, the re-anchor and its
+    // readback), none of which cares whether the stop is 8 pips or 25. Production is unaffected
+    // and keeps its 1.5xATR stop: real signals take entry from oneHourCloses[last], never from
+    // this fixing.
     const quotes = await exchangeRateAPI.fetchAllQuotes();
     const refPrice = quotes.find(q => q.symbol === symbol)?.exchangeRate;
     if (!refPrice || !Number.isFinite(refPrice)) {
@@ -1477,8 +1496,7 @@ export class CTraderExecutor {
 
     const pipFactor = symbol.includes('JPY') ? 100 : 10000;
     const digits    = symbol.includes('JPY') ? 3 : 5;
-    const MIN_SL_PIPS: Record<string, number> = { 'EUR/USD': 8, 'USD/CHF': 8, 'GBP/USD': 10, 'USD/JPY': 6 };
-    const slPips    = MIN_SL_PIPS[symbol] ?? 8;
+    const slPips    = 25;   // wide on purpose — see above. Same count for JPY; the pip factor differs.
 
     const signalId = `smoke-${Date.now()}`;
     const entry = +refPrice.toFixed(digits);
