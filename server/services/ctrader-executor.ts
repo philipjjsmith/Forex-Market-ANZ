@@ -397,17 +397,42 @@ export class CTraderExecutor {
     socket.send(JSON.stringify({ clientMsgId, payloadType, payload }));
   }
 
-  private waitFor(emitter: EventEmitter, payloadType: number, timeoutMs = 25000): Promise<any> {
+  /**
+   * Wait for a broker message.
+   *
+   * `match` EXISTS BECAUSE PAYLOAD TYPE ALONE IS NOT AN IDENTITY. Several execution events cross
+   * this socket for a single order — ACCEPTED, then FILLED — and more still if anything else on
+   * the account moves. Matching on type alone returns whichever arrived first, so "wait for the
+   * amend's reply" was satisfied by the original order's own late ORDER_FILLED. That made the
+   * amend's success flag meaningless on the one operation that protects the position.
+   *
+   * When `match` is supplied the listener is attached with `.on` rather than `.once`, so a
+   * message that is not ours is IGNORED rather than consuming the wait.
+   */
+  private waitFor(
+    emitter: EventEmitter, payloadType: number, timeoutMs = 25000,
+    match?: (m: any) => boolean,
+  ): Promise<any> {
     return new Promise((resolve, reject) => {
-      const onMsg = (m: any) => { cleanup(); resolve(m); };
+      const onMsg = (m: any) => {
+        if (match) {
+          let ours = false;
+          try { ours = !!match(m); } catch { ours = false; }   // a bad predicate must not wedge the wait
+          if (!ours) return;
+        }
+        cleanup(); resolve(m);
+      };
       const onErr = (e: Error) => { cleanup(); reject(e); };
-      const timer = setTimeout(() => { cleanup(); reject(new Error(`Timeout (${timeoutMs}ms) waiting for payloadType ${payloadType}`)); }, timeoutMs);
+      const timer = setTimeout(() => {
+        cleanup();
+        reject(new Error(`Timeout (${timeoutMs}ms) waiting for payloadType ${payloadType}${match ? ' (filtered)' : ''}`));
+      }, timeoutMs);
       const cleanup = () => {
         clearTimeout(timer);
         emitter.off(`type:${payloadType}`, onMsg);
         emitter.off('protoError', onErr);
       };
-      emitter.once(`type:${payloadType}`, onMsg);
+      emitter.on(`type:${payloadType}`, onMsg);
       emitter.once('protoError', onErr);
     });
   }
@@ -434,7 +459,9 @@ export class CTraderExecutor {
     let open: any[] = [];
     for (let i = 1; i <= attempts; i++) {
       this.send(socket, PT.RECONCILE_REQ, { ctidTraderAccountId: accountId });
-      const rec = await this.waitFor(emitter, PT.RECONCILE_RES, 20000);
+      // 8s, not 20s. Reconcile answers in well under a second; a 20s ceiling x 3 attempts made
+      // the worst case 60s on a call whose whole purpose is to be quick.
+      const rec = await this.waitFor(emitter, PT.RECONCILE_RES, 8000);
       open = rec.payload?.position ?? [];
       const mine = positionId
         ? open.find((x: any) => Number(x.positionId) === Number(positionId))
@@ -763,11 +790,42 @@ export class CTraderExecutor {
           volume = min;
         }
         if (max  && volume > max) volume = max;
+
+        // THE BROKER'S OWN MINIMUM SL/TP DISTANCES, recorded but NOT yet enforced.
+        //
+        // ProtoOASymbol carries slDistance and tpDistance ("minimum allowed distance between
+        // stop loss / take profit and current market price") plus distanceSetIn, which says
+        // whether those are points or a percentage. We have been fetching this object all along
+        // for minVolume/stepVolume and reading none of it.
+        //
+        // It matters for the re-anchor specifically: pinning the stop to exactly slDist from the
+        // FILL moves it CLOSER to market than the quoted-entry stop whenever the fill was
+        // adverse, so an amend can be rejected (TRADING_BAD_STOPS) where the original order was
+        // accepted. Enforcing it needs distanceSetIn's units settled against this broker first,
+        // and guessing that would trade a rare rejection for a systematically wrong stop.
+        // Logging it costs nothing and turns the next fill into the measurement.
+        if (detail?.slDistance !== undefined || detail?.tpDistance !== undefined) {
+          console.log(
+            `[cTrader] broker min distances for ${signal.symbol}: sl=${detail?.slDistance} `
+            + `tp=${detail?.tpDistance} setIn=${detail?.distanceSetIn} `
+            + `| our stop is ${(Math.abs(signal.entry - signal.stop) * pipFactor).toFixed(1)} pips`
+          );
+        }
       } catch (e: any) {
         console.warn(`[cTrader] could not read symbol limits (${e.message}); sending unclamped volume ${volume}.`);
       }
 
       const lots      = volume / LOTS_TO_VOLUME;
+
+      // OUR OWN NAME FOR THIS ORDER.
+      //
+      // Without it we cannot tell our execution events from anything else on the account, and
+      // "wait for an execution event" is the closest we can get to "wait for OUR order". That is
+      // how the amend came to report success on the original order's late ORDER_FILLED. cTrader
+      // echoes clientOrderId back on every event for the order (ProtoOAOrder.clientOrderId), so
+      // this turns a guess into an identity.
+      const clientOrderId = `argofx-${signal.signalId ?? 'manual'}-${Date.now()}`.slice(0, 50);
+      const isOurs = (m: any) => m?.payload?.order?.clientOrderId === clientOrderId;
 
       // Step 7 — Place market order with SL + TP1
       this.send(socket, PT.NEW_ORDER_REQ, {
@@ -778,6 +836,7 @@ export class CTraderExecutor {
         volume,
         stopLoss:   signal.stop,
         takeProfit: signal.targets[0],                   // TP1 at 2:1 R:R
+        clientOrderId,
       });
 
       // Recorded BEFORE the reply, so an order that is sent and then times out still leaves
@@ -789,8 +848,33 @@ export class CTraderExecutor {
         brokerSymbolId: symbolId, requestedVolume: volume, lots,
       });
 
-      // Wait for execution confirmation
-      const exec = await this.waitFor(emitter, PT.EXECUTION_EVENT, 15000);
+      // Wait for execution confirmation — OURS, matched on clientOrderId.
+      let exec = await this.waitFor(emitter, PT.EXECUTION_EVENT, 15000, isOurs);
+
+      // ACCEPTED IS NOT A FILL, AND ACCEPTED CARRIES NO PRICE.
+      //
+      // executionType 2 (ACCEPTED) reports price 0. That is not an error, it is the event
+      // arriving before the fill exists — and it is why 3 of 5 positioned rows recorded
+      // fill_price 0. On 2026-09-04 AUD/USD's order was stamped 07:24:47.263 and its own deal
+      // 07:24:47.595: the FILLED event was 332ms behind the ACCEPTED one and nothing waited for
+      // it, so the true price was thrown away and the re-anchor never ran.
+      //
+      // Waiting for OUR next event is event-driven and exact. It replaces guessing, and it
+      // cannot race — the broker either sends the fill or it does not.
+      if (exec.payload?.executionType === 2) {
+        try {
+          const filled = await this.waitFor(
+            emitter, PT.EXECUTION_EVENT, 8000,
+            (m: any) => isOurs(m) && m?.payload?.executionType === 3,
+          );
+          console.log('[cTrader] ACCEPTED then FILLED — using the fill event for price');
+          exec = filled;
+        } catch {
+          // Genuinely not filled inside the window. The reconcile below is the fallback, and the
+          // recorded status stays 'accepted', which is the honest description.
+          console.warn('[cTrader] order ACCEPTED but no FILLED event within 8s — falling back to reconcile');
+        }
+      }
 
       // executionType 2 = ORDER_ACCEPTED, 3 = ORDER_FILLED.
       //
@@ -1344,6 +1428,88 @@ export class CTraderExecutor {
    * type, and guessing protocol numbers on a trading path is precisely the error class that
    * caused this entire episode. Close it in cTrader.
    */
+  /**
+   * Smoke test THE PRODUCTION PATH, not a parallel imitation of it.
+   *
+   * `smokeTestDemoOrder` proves the broker accepts our order SHAPE, and that was the right test
+   * when the question was "does anything work at all". It is the wrong test now: every change
+   * made on 2026-09-04/05 lives in `executeSignal` — the clientOrderId match, the ACCEPTED ->
+   * FILLED chase, the reconcile retry, the SL/TP re-anchor and its readback verification — and
+   * none of it is reachable from that method. A green smoke test would say nothing about them.
+   *
+   * So this drives `executeSignal` itself with a synthetic HIGH-tier signal built from a live
+   * reference price and production geometry, then closes the position it opened.
+   *
+   * SIZED EXACTLY LIKE A REAL TRADE (1%), deliberately. Sizing it at the broker minimum would
+   * make it a different code path through calcVolume than the one being tested, and the cost of
+   * a full-size round trip on a demo account is one spread plus commission.
+   *
+   * Leaves nothing behind: the position is closed before returning. If that close fails the
+   * response says so loudly rather than reporting success.
+   */
+  async smokeTestViaExecutor(confirm: string, symbol = 'EUR/USD'): Promise<any> {
+    if (confirm !== 'PLACE_DEMO_ORDER') {
+      throw new Error('Refused: confirmation string absent. This places a REAL order.');
+    }
+    if (!(await this.configured())) throw new Error('Refused: cTrader credentials are not configured.');
+    if (this.isLiveMode) throw new Error('REFUSED: live mode is active. This only ever runs on demo.');
+
+    const quotes = await exchangeRateAPI.fetchAllQuotes();
+    const refPrice = quotes.find(q => q.symbol === symbol)?.exchangeRate;
+    if (!refPrice || !Number.isFinite(refPrice)) {
+      throw new Error(`Refused: no reference price for ${symbol}. Sending an order without one would test nothing.`);
+    }
+
+    const pipFactor = symbol.includes('JPY') ? 100 : 10000;
+    const digits    = symbol.includes('JPY') ? 3 : 5;
+    const MIN_SL_PIPS: Record<string, number> = { 'EUR/USD': 8, 'USD/CHF': 8, 'GBP/USD': 10, 'USD/JPY': 6 };
+    const slPips    = MIN_SL_PIPS[symbol] ?? 8;
+
+    const signalId = `smoke-${Date.now()}`;
+    const entry = +refPrice.toFixed(digits);
+    const stop  = +(entry - slPips / pipFactor).toFixed(digits);
+    const tp1   = +(entry + (slPips * 2) / pipFactor).toFixed(digits);
+
+    const startedAt = Date.now();
+    await this.executeSignal({
+      signalId, symbol, type: 'LONG', entry, stop,
+      targets: [tp1, tp1, tp1], confidence: 999, tier: 'HIGH', positionSizePercent: 1.0,
+    });
+    const elapsedMs = Date.now() - startedAt;
+
+    const rows = (await db.execute(sql`
+      SELECT status, execution_type, order_id, position_id, fill_price, lots,
+             signal_entry, signal_stop, signal_tp1, reconciled_open, alert_sent, alert_error, error
+      FROM ctrader_executions WHERE signal_id = ${signalId} LIMIT 1
+    `)) as any[];
+    const row = rows[0] ?? null;
+
+    // Close it. A smoke test that leaves exposure open is not a test, it is a trade.
+    let closed: any = { closed: false, reason: 'no position to close' };
+    if (row?.position_id) {
+      try { closed = await this.closePositionForSignal(signalId); }
+      catch (e: any) { closed = { closed: false, reason: e?.message ?? String(e) }; }
+    }
+
+    return {
+      signalId, symbol, elapsedMs,
+      sent: { entry, stop, tp1, slPips },
+      broker: row,
+      closed,
+      // The four questions this test exists to answer.
+      verdict: {
+        orderFilled:        row?.execution_type === 3 || row?.status === 'filled',
+        fillPriceCaptured:  row?.fill_price != null && Number(row.fill_price) > 0,
+        positionReconciled: row?.reconciled_open === true,
+        alertDelivered:     row?.alert_sent === true,
+        positionClosed:     closed?.closed === true,
+      },
+      note: 'Check the Render logs for "SL/TP re-anchored" (confirmed) vs "AMEND NOT CONFIRMED", '
+          + 'and for the "broker min distances" line — that is what settles whether distanceSetIn '
+          + 'is points or percentage on this account, which relativeStopLoss adoption depends on.',
+    };
+  }
+
   async smokeTestDemoOrder(confirm: string, symbol = 'EUR/USD'): Promise<any> {
     if (confirm !== 'PLACE_DEMO_ORDER') {
       throw new Error('Refused: confirmation string absent. This places a REAL order.');

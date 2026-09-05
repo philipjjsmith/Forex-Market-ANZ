@@ -110,6 +110,12 @@ export function registerAdminRoutes(app: Express) {
     try {
       const confirm = (req.body?.confirm ?? req.query.confirm ?? '') as string;
       const symbol  = (req.body?.symbol  ?? req.query.symbol  ?? 'EUR/USD') as string;
+      // viaExecutor drives the REAL executeSignal path -- clientOrderId matching, the
+      // ACCEPTED->FILLED chase, the reconcile retry, the SL/TP re-anchor and its readback.
+      // The legacy smoke test reaches none of that; it only proves the order SHAPE is accepted.
+      if (req.body?.viaExecutor === true) {
+        return res.json(await ctraderExecutor.smokeTestViaExecutor(confirm, symbol));
+      }
       res.json(await ctraderExecutor.smokeTestDemoOrder(confirm, symbol));
     } catch (err: any) {
       res.status(400).json({ placed: false, error: err?.message ?? 'smoke test failed' });
