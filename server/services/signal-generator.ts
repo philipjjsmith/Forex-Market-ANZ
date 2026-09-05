@@ -1302,6 +1302,24 @@ export class SignalGenerator {
     }
     console.log(`✅ In kill zone: ${sessionAnalyzer.getKillZoneName()}`);
 
+    // 🛡️ PROP FIRM PROTECTION: max trades reached for today (DB query — survives Render restarts).
+    //
+    // MUST be checked BEFORE the run record is opened. It used to sit after, and its bare
+    // `return` skipped the try/finally that closes the row — so a correctly-capped run was left
+    // with finished_at NULL forever. On 2026-09-04 that produced TEN rows which
+    // `check-pipeline.ts` reports as "DIED MID-RUN" when the cap had simply done its job.
+    //
+    // A false "the pipeline crashed" is worse than no row at all: it burns the one signal that is
+    // supposed to mean the process actually died. Nothing is lost by not recording the skip —
+    // `signal_history` already holds the three signals that consumed the cap, so the state is
+    // fully reconstructible. This now sits with the market-closed and kill-zone gates, which
+    // likewise return before a row exists.
+    if (await propFirmService.maxTradesReached()) {
+      console.log(`⚠️ [PropFirm] Max trades per day reached. Skipping signal generation.`);
+      this.isRunning = false;
+      return;
+    }
+
     // Open a run record. The cron is FIRE-AND-FORGET — it replies `success: true` before this
     // function starts — and the catch below swallows, so a failed run rejects nothing and returns
     // no error to anyone. Without a row here, "no signals today" is indistinguishable from
@@ -1331,13 +1349,6 @@ export class SignalGenerator {
     console.log('🤖 [Signal Generator] Starting automated analysis...');
     console.log(`📊 [PropFirm] Active: ${propConfig.name} - ${propConfig.challengeType}`);
     console.log(`📊 [PropFirm] Risk per trade: ${propConfig.highTierRisk}% | Daily limit: ${propConfig.maxDailyLoss}% | Buffer: ${propConfig.dailyLossBuffer}%`);
-
-    // 🛡️ PROP FIRM PROTECTION: Check if max trades reached for today (DB query — survives Render restarts)
-    if (await propFirmService.maxTradesReached()) {
-      console.log(`⚠️ [PropFirm] Max trades per day (${propConfig.maxTradesPerDay}) reached. Skipping signal generation.`);
-      this.isRunning = false;
-      return;
-    }
 
     try {
       // 1. Fetch forex quotes from API
