@@ -18,6 +18,7 @@ import { db } from '../db';
 import { exchangeRateAPI } from './exchangerate-api';
 import { telegramNotifier } from './telegram-notifier';
 import { getDailyLossStatus } from './broker-deals';
+import { isMarketClosed } from './twelve-data';
 import { propFirmService } from './prop-firm-config';
 import { sql } from 'drizzle-orm';
 import { EventEmitter } from 'events';
@@ -1453,6 +1454,20 @@ export class CTraderExecutor {
     }
     if (!(await this.configured())) throw new Error('Refused: cTrader credentials are not configured.');
     if (this.isLiveMode) throw new Error('REFUSED: live mode is active. This only ever runs on demo.');
+
+    // REFUSE WHEN THE MARKET IS SHUT, and say when to come back.
+    //
+    // Without this the broker rejects the order and the result is an ORDER_ERROR_EVENT — legible,
+    // but it looks like a fault in the code being tested rather than "you ran it on a Saturday".
+    // A test whose failure mode is indistinguishable from the bug it is hunting is worse than no
+    // test. Attempted 2026-09-05 19:0x UTC, a Saturday, which is what prompted this guard.
+    if (isMarketClosed(new Date())) {
+      throw new Error(
+        'REFUSED: the forex market is closed, so this would test nothing — the broker would '
+        + 'reject the order and the failure would look like ours. The market reopens Sunday '
+        + '17:00 New York (21:00 UTC). Run it after that.'
+      );
+    }
 
     const quotes = await exchangeRateAPI.fetchAllQuotes();
     const refPrice = quotes.find(q => q.symbol === symbol)?.exchangeRate;

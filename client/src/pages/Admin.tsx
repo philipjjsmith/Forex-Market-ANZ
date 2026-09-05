@@ -284,6 +284,36 @@ export default function Admin() {
   const [smokeArmed, setSmokeArmed] = useState(false);
   const [smoke, setSmoke] = useState<any>(null);
   const [smokeLoading, setSmokeLoading] = useState(false);
+  const [pathArmed, setPathArmed] = useState(false);
+  const [pathResult, setPathResult] = useState<any>(null);
+  const [pathLoading, setPathLoading] = useState(false);
+
+  // Drives the REAL executeSignal path: clientOrderId matching, the ACCEPTED->FILLED chase, the
+  // reconcile retry, the SL/TP re-anchor and its readback verification. The legacy smoke test
+  // below reaches NONE of that -- it only proves the broker accepts our order shape, so it can
+  // go green while every one of those is broken.
+  const runProductionPathTest = async () => {
+    setPathLoading(true);
+    setPathResult(null);
+    try {
+      const token = getToken();
+      const res = await fetch(API_ENDPOINTS.ADMIN_CTRADER_SMOKE_TEST, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` }),
+        },
+        credentials: 'include',
+        body: JSON.stringify({ confirm: 'PLACE_DEMO_ORDER', symbol: 'EUR/USD', viaExecutor: true }),
+      });
+      setPathResult(await res.json());
+    } catch (err: any) {
+      setPathResult({ placed: false, error: err?.message ?? 'request failed' });
+    } finally {
+      setPathLoading(false);
+      setPathArmed(false);
+    }
+  };
 
   const runSmokeTest = async () => {
     setSmokeLoading(true);
@@ -918,8 +948,10 @@ export default function Admin() {
           )}
           <div className="border-t border-slate-600/50 pt-3 mt-3">
             <p className="text-xs text-amber-300/90 mb-2">
-              Places a <strong>real market order</strong> on the DEMO account at the broker's minimum
-              volume. Refuses if live mode is set. Leaves the position open — close it in cTrader.
+              <strong>Legacy shape test.</strong> Places a real market order on the DEMO account at
+              the broker's minimum volume, and leaves the position open — close it in cTrader. It
+              proves the broker accepts our order shape, and reaches none of the execution logic
+              below it.
             </p>
             {!smokeArmed ? (
               <Button variant="outline" onClick={() => setSmokeArmed(true)} disabled={smokeLoading} data-testid="button-smoke-arm">
@@ -938,6 +970,34 @@ export default function Admin() {
             {smoke && (
               <pre className="mt-3 text-xs text-slate-200 bg-slate-900/80 rounded p-3 overflow-x-auto max-h-80">
                 {JSON.stringify(smoke, null, 2)}
+              </pre>
+            )}
+          </div>
+
+          <div className="border-t border-slate-600/50 pt-3 mt-3">
+            <p className="text-xs text-emerald-300/90 mb-2">
+              <strong>Production path test.</strong> Runs the real executeSignal path — order tagged
+              with a clientOrderId, the ACCEPTED→FILLED chase, reconcile, the SL/TP re-anchor and its
+              readback — at full 1% sizing, then <strong>closes the position itself</strong>. Refuses
+              when the market is shut. This is the one that tests the code that actually trades.
+            </p>
+            {!pathArmed ? (
+              <Button variant="outline" onClick={() => setPathArmed(true)} disabled={pathLoading} data-testid="button-path-arm">
+                Arm production path test
+              </Button>
+            ) : (
+              <div className="flex gap-2">
+                <Button variant="destructive" onClick={runProductionPathTest} disabled={pathLoading} data-testid="button-path-fire">
+                  {pathLoading
+                    ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Running…</>
+                    : <>Confirm — run production path</>}
+                </Button>
+                <Button variant="ghost" onClick={() => setPathArmed(false)} disabled={pathLoading}>Cancel</Button>
+              </div>
+            )}
+            {pathResult && (
+              <pre className="mt-3 text-xs text-slate-200 bg-slate-900/80 rounded p-3 overflow-x-auto max-h-80">
+                {JSON.stringify(pathResult, null, 2)}
               </pre>
             )}
           </div>
