@@ -719,6 +719,41 @@ export class OutcomeValidator {
         console.error('[ArgoFX Telegram] Stats query failed — sending notification with zeros:', statsErr);
       }
 
+      // THE BROKER IS THE AUTHORITY ON WHAT A TRADE MADE OR LOST.
+      //
+      // profitLossPips above is a candle-replay figure, gross of every cost. Where the signal
+      // was actually executed, ctrader_executions holds the real entry, the real exit and the
+      // realised cash. Reporting only the modelled number is how a channel announces a loss on
+      // a trade its subscribers won -- which is exactly what would have happened on 2026-09-04.
+      let broker: any = undefined;
+      try {
+        const rows = (await db.execute(sql`
+          SELECT broker_entry_price, exit_price, realized_pnl, signal_entry, signal_stop
+          FROM ctrader_executions
+          WHERE signal_id = ${signal.signal_id} AND exit_price IS NOT NULL
+          ORDER BY closed_at DESC NULLS LAST LIMIT 1
+        `)) as any[];
+        const x = rows[0];
+        if (x) {
+          const inPx  = x.broker_entry_price !== null ? Number(x.broker_entry_price) : null;
+          const outPx = x.exit_price !== null ? Number(x.exit_price) : null;
+          const risk  = x.signal_entry !== null && x.signal_stop !== null
+            ? Math.abs(Number(x.signal_entry) - Number(x.signal_stop)) : null;
+          const long  = signal.type === 'LONG';
+          const raw   = inPx !== null && outPx !== null ? (long ? outPx - inPx : inPx - outPx) : null;
+          broker = {
+            realisedPnl:  x.realized_pnl !== null ? Number(x.realized_pnl) : null,
+            realisedPips: raw !== null ? Number((raw * pipFactor).toFixed(1)) : null,
+            realisedR:    raw !== null && risk ? Number((raw / risk).toFixed(2)) : null,
+            exitPrice:    outPx,
+          };
+        }
+      } catch (e: any) {
+        // Never let this block an outcome notification. Absent broker data degrades the message
+        // to the modelled figures alone, which is what it has always been.
+        console.warn(`[outcome] could not load broker result: ${e?.message ?? e}`);
+      }
+
       await telegramNotifier.sendOutcomeAlert({
         signalNumber,
         symbol:         signal.symbol,
@@ -734,6 +769,7 @@ export class OutcomeValidator {
         monthLosses,
         monthPips,
         currentStreak:  streak,
+        broker,
       });
     } catch (err) {
       // Catch-all — Telegram must never crash outcome processing

@@ -1546,23 +1546,6 @@ export class SignalGenerator {
               // Get sequential signal number for Telegram (Signal #47 etc.)
               let signalNumber = 0;
               try { signalNumber = await getSignalNumber(signal.id); } catch { /* non-critical */ }
-              // Send Telegram notification so the trade can be placed manually on The5ers
-              await telegramNotifier.sendSignalAlert({
-                symbol: signal.symbol,
-                type: signal.type,
-                entry: signal.entry,
-                stop: signal.stop,
-                tp1: signal.targets[0],
-                tp2: signal.targets[1],
-                tp3: signal.targets[2],
-                confidence: signal.confidence,
-                tier: signal.tier,
-                riskReward: signal.riskReward,
-                rationale: signal.rationale,
-                version: signal.version,
-                signalNumber,
-                orderType: signal.orderType,
-              });
               // Auto-execute on The5ers cTrader (HIGH tier only; no-op until CTRADER_ env vars set).
               // An escalated signal is delivered but never auto-traded -- that is the whole point
               // of the approval gate. It stays in the database and in every statistic.
@@ -1590,6 +1573,33 @@ export class SignalGenerator {
                 positionSizePercent: signal.positionSizePercent,
               });
               }
+
+              // THE ALERT GOES OUT AFTER THE ORDER, NOT BEFORE IT.
+              //
+              // This await used to sit above executeSignal, so every Telegram round trip was
+              // spent BEFORE the order reached the broker -- and the notifier fetch had no
+              // timeout at all, so a hanging Telegram delayed a live fill without bound. On a
+              // system where a 1.07-pip entry drift was measured as 0.072 R, an unbounded
+              // network call in front of the fill is not acceptable.
+              //
+              // Subscribers now see the alert a second or two later, which is strictly better:
+              // the price they read is closer to the price we actually got.
+              await telegramNotifier.sendSignalAlert({
+                symbol: signal.symbol,
+                type: signal.type,
+                entry: signal.entry,
+                stop: signal.stop,
+                tp1: signal.targets[0],
+                tp2: signal.targets[1],
+                tp3: signal.targets[2],
+                confidence: signal.confidence,
+                tier: signal.tier,
+                riskReward: signal.riskReward,
+                rationale: signal.rationale,
+                version: signal.version,
+                signalNumber,
+                orderType: signal.orderType,
+              });
             } catch (error: any) {
               // A produced signal that never reaches signal_history is INVISIBLE without this.
               // On 2026-09-02 two confidence-124 signals vanished here and the only record was a

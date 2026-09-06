@@ -35,6 +35,24 @@ export interface OutcomeNotification {
   monthLosses: number;
   monthPips: number;
   currentStreak: number;
+  /**
+   * WHAT THE BROKER ACTUALLY PAID, when this signal was really executed.
+   *
+   * Everything above is MODELLED -- derived by replaying 5-minute candles, gross of spread,
+   * commission and swap. On 2026-09-04 the two diverged catastrophically: USD/CHF was recorded
+   * STOP_HIT at -9.8 pips while the broker settled it at +$268.75 (+2.755 R), and AUD/USD was
+   * recorded -8.6 pips when the real loss was 28.4 pips (-3.30 R).
+   *
+   * Announcing a loss on a trade a subscriber won, and understating a real loss by 3.3x, is
+   * worse than a thin explanation: it is contradicted by the reader's own account statement.
+   * Absent when the signal was not auto-executed (MEDIUM tier, approval hold, executor off).
+   */
+  broker?: {
+    realisedPnl: number | null;
+    realisedR: number | null;
+    realisedPips: number | null;
+    exitPrice: number | null;
+  };
 }
 
 export interface WeeklySummaryData {
@@ -81,6 +99,120 @@ interface SignalNotification {
 const DISCLAIMER =
   '📡 ArgoFX \\| General advice only\\. Not tailored to your circumstances\\.' +
   ' Forex trading carries significant risk of loss\\. Trade at your own risk\\.';
+
+/**
+ * Escape for Telegram HTML parse mode. Three special characters, against MarkdownV2's eighteen.
+ * That ratio is the entire reason the signal alert uses HTML: the reasoning lines are full of
+ * brackets, parentheses, plus and minus signs and decimal points, and one missed MarkdownV2
+ * escape is a 400 that silently drops the whole alert. That is how a full day of alerts was lost
+ * on 2026-09-02.
+ */
+function htmlEsc(value: string | number): string {
+  return String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/**
+ * DEMO LABEL, carried by every signal.
+ *
+ * NFA Interpretive Notice 9025 names the exact abuse of "disguis[ing] hypothetical performance
+ * results by referring to the performance with terms such as 'live' or 'real-time'". Nothing in
+ * this system has ever traded real money. The label lives in the message itself rather than in a
+ * channel description, because a forwarded message does not carry the channel with it.
+ */
+const DEMO_LABEL =
+  '⚠️ <b>DEMO ACCOUNT — SIMULATED.</b> No real money is traded. Simulated results do not' +
+  ' represent actual trading and are prepared with the benefit of hindsight.';
+
+/**
+ * HTML twin of DISCLAIMER.
+ *
+ * "General information published identically to all subscribers, not tailored" is not decoration.
+ * It is the operative language for 17 CFR 4.14(a)(9)(ii), which is forfeited by PROVIDING advice
+ * tailored to a particular client. The exemption is lost by the act, not the intent, so this
+ * sentence has to remain true of every message the system sends.
+ */
+const DISCLAIMER_HTML =
+  '📡 <i>ArgoFX · General information published identically to all subscribers. Not tailored to' +
+  ' your circumstances, account or risk tolerance. Not investment advice. Forex trading carries a' +
+  ' substantial risk of loss. Past performance is not necessarily indicative of future results.</i>';
+
+/**
+ * Build the signal message.
+ *
+ * EXPORTED so it can be rendered and inspected without sending — the same reason
+ * `buildExecutionAlertMessage` is exported, which is how the "Entry: pending fill" defect was
+ * caught before any subscriber saw it. A formatter that can only be tested by publishing to a
+ * live channel does not get tested.
+ */
+export function buildSignalAlertMessage(signal: SignalNotification): string {
+  const pipFactor = signal.symbol.includes('JPY') ? 100 : 10000;
+  const slPips    = Math.abs(signal.entry - signal.stop)  * pipFactor;
+  const tp1Pips   = Math.abs(signal.tp1   - signal.entry) * pipFactor;
+
+  const isHigh    = signal.tier === 'HIGH';
+  const direction = signal.type === 'LONG' ? '🟢 LONG' : '🔴 SHORT';
+  const digits    = signal.symbol.includes('JPY') ? 3 : 5;
+  const px        = (v: number) => v.toFixed(digits);
+
+  // A DISCRETE TIER, NOT A PERCENTAGE.
+  //
+  // This printed `Confidence: {confidence}%` on a 135-POINT scale, so 99 of 312 production signals
+  // advertised a confidence ABOVE 100% -- up to 120%. It sat on the first line after the
+  // direction, the worst possible place for a number that cannot be true.
+  //
+  // The deeper problem is that a percentage is a claim of CALIBRATION, and this project has
+  // already refuted it: corr(confidence, R) = -0.0048 at n=1095. Publishing it as a probability
+  // asserts something our own pre-registered work measured as false. The thresholds below are the
+  // generator's own (signal-generator.ts:1169,1176) so the label cannot drift away from it.
+  const tierName = signal.confidence >= 115 ? 'S-TIER'
+                 : signal.confidence >= 90  ? 'A-TIER'
+                 : 'B-TIER';
+  const tierNote = isHigh ? 'live trade' : 'practice signal — not traded';
+
+  // EVERY LINE OF REASONING, NOT TWO.
+  //
+  // This used to `.slice(0, 2)` and strip the point values. Because the array is built
+  // weekly -> daily -> 4H -> entry -> indicators -> ICT -> session, the first two are ALWAYS the
+  // most generic lines in it. Replayed against a real 108-point USD/CHF signal, the engine
+  // produced 13 lines and the alert sent two -- discarding the fair value gap and its consequent
+  // encroachment level, the order block zone, the OB+FVG overlap, the pullback, and the actual
+  // RSI and ADX readings. That is everything which makes this ICT rather than a moving-average
+  // crossover, and it was the whole of the operator's complaint that the explanation did not
+  // pertain to the strategy.
+  //
+  // The point values STAY. They are what shows a reader this is a scored system, not an opinion.
+  const reasons = signal.rationale
+    .split(' | ')
+    .map(l => l.trim())
+    .filter(l => l.length > 0)
+    // Drop the two trailing bookkeeping lines: the tier is rendered above in its own right, and
+    // the prop-firm line is internal and means nothing to a subscriber.
+    .filter(l => !/^(🟢|🟡)\s*[SAB]-TIER/.test(l) && !/^📊\s/.test(l))
+    .map(l => htmlEsc(l));
+
+  const lines: string[] = [
+    `🚨 <b>SIGNAL${signal.signalNumber ? ' #' + signal.signalNumber : ''} · ${htmlEsc(signal.symbol)}</b>`,
+    ``,
+    `${direction} — <b>${tierName}</b> (${signal.confidence}/135) · <i>${tierNote}</i>`,
+    `R:R <b>${signal.riskReward.toFixed(1)}:1</b> · ${htmlEsc(signal.orderType)}`,
+    ``,
+    `📍 Entry    <code>${px(signal.entry)}</code>`,
+    `🛑 Stop     <code>${px(signal.stop)}</code>  (${slPips.toFixed(1)} pips · 1R)`,
+    `🎯 Target   <code>${px(signal.tp1)}</code>  (+${tp1Pips.toFixed(1)} pips · ${signal.riskReward.toFixed(1)}R)`,
+    ``,
+    // INVALIDATION, stated as its own idea. A stop is where the position closes; invalidation is
+    // what would make the reasoning wrong. Naming it is among the strongest credibility signals a
+    // trade message can carry, and it costs nothing because the level already exists.
+    `⚠️ <b>Invalidation:</b> price through <code>${px(signal.stop)}</code> ends this thesis.`,
+  ];
+
+  if (reasons.length) {
+    lines.push(``, `<b>WHY THIS SETUP</b> — ${signal.confidence} of 135 confluence points`, ...reasons);
+  }
+
+  lines.push(``, DEMO_LABEL, DISCLAIMER_HTML);
+  return lines.join('\n');
+}
 
 // ─── Class ───────────────────────────────────────────────────────────────────
 
@@ -273,50 +405,9 @@ class TelegramNotifier {
    */
   async sendSignalAlert(signal: SignalNotification): Promise<{ ok: boolean; errors: string[] }> {
     if (!this.isEnabled) return { ok: false, errors: ['Telegram is not configured'] };
-
-    const pipFactor = signal.symbol.includes('JPY') ? 100 : 10000;
-    const slPips    = Math.abs(signal.entry - signal.stop)   * pipFactor;
-    const tp1Pips   = Math.abs(signal.tp1   - signal.entry)  * pipFactor;
-    // tp2/tp3 are deliberately NOT shown. See the block comment on the alert body below.
-
-    const isHigh    = signal.tier === 'HIGH';
-    const direction = signal.type === 'LONG' ? '🟢 LONG' : '🔴 SHORT';
-    const tierLabel = isHigh ? 'Live Trade' : 'Practice Signal';
-    const numStr    = signal.signalNumber ? `\\#${signal.signalNumber} — ` : '';
-    const sym       = TelegramNotifier.esc(signal.symbol);
-    const conf      = TelegramNotifier.esc(signal.confidence);
-    const rr        = TelegramNotifier.esc(signal.riskReward.toFixed(1));
-
-    // Condense rationale: take first 2 lines starting with ✅ or 🎯,
-    // strip the point values like "(+25)" and escape the remainder.
-    const rationaleLines = signal.rationale
-      .split(' | ')
-      .filter(l => l.startsWith('✅') || l.startsWith('🎯'))
-      .slice(0, 2)
-      .map(l => TelegramNotifier.esc(l.replace(/\s*\(\+?\-?\d+\)/g, '').trim()))
-      .join('\n');
-
-    const lines: string[] = [
-      `🚨 *Signal ${numStr}${sym}*`,
-      ``,
-      `${direction} — ${tierLabel}`,
-      `Confidence: *${conf}%* \\| R:R *${rr}:1*`,
-      ``,
-      `📋 Order:  *${signal.orderType}*`,
-      `📍 Entry:  \`${signal.entry.toFixed(5)}\``,
-      `🛑 Stop:   \`${signal.stop.toFixed(5)}\`  \\(${TelegramNotifier.esc(slPips.toFixed(1))} pips\\)`,
-      `🎯 TP1:   \`${signal.tp1.toFixed(5)}\`  \\(\\+${TelegramNotifier.esc(tp1Pips.toFixed(1))} pips \\| ${rr}R\\)`,
-    ];
-
-    if (rationaleLines) {
-      lines.push(``, rationaleLines);
-    }
-
-    lines.push(``, DISCLAIMER);
-
-    const chatId = isHigh ? this.chatIdPaid : this.chatIdFree;
+    const chatId = signal.tier === 'HIGH' ? this.chatIdPaid : this.chatIdFree;
     if (!chatId) return { ok: false, errors: ['no chat id for this tier'] };
-    const r = await this.sendToChannel(lines.join('\n'), chatId);
+    const r = await this.sendToChannel(buildSignalAlertMessage(signal), chatId, 'HTML');
     return { ok: r.ok, errors: r.ok ? [] : [r.error ?? 'unknown'] };
   }
 
@@ -389,6 +480,28 @@ class TelegramNotifier {
         `📊 *This month:* ${data.monthWins}W \\/ ${data.monthLosses}L`,
         `_Expired signals are not counted in win rate_`,
       );
+    }
+
+    // BROKER-REALISED RESULT, when the trade was actually executed.
+    //
+    // Everything above is the candle model. On 2026-09-04 the two disagreed by 3.76 R on one
+    // trade -- STOP_HIT reported on a position the broker settled at +$268.75 -- and by 3.3x on
+    // another, where a reported -8.6 pips was really -28.4. A subscriber checking their own
+    // account would have caught both. Publishing the modelled figure alone is how a channel ends
+    // up contradicted by its own readers.
+    //
+    // Every literal below goes through esc(). Hand-written MarkdownV2 backslashes are what cost
+    // this project a full day of dropped alerts on 2026-09-02, and a first attempt at this very
+    // block lost a backslash off a regex in the process of writing it.
+    if (data.broker && (data.broker.realisedPnl !== null || data.broker.realisedR !== null)) {
+      const b = data.broker;
+      const E = TelegramNotifier.esc;
+      lines.push(``, `🏦 *${E('Broker-realised (demo)')}*`);
+      if (b.exitPrice !== null)    lines.push(`${E('Exit:')}   \`${b.exitPrice.toFixed(5)}\``);
+      if (b.realisedPips !== null) lines.push(`${E('Result:')} \`${E(b.realisedPips.toFixed(1))} pips\``);
+      if (b.realisedR !== null)    lines.push(`${E('R:')}      *${E(b.realisedR.toFixed(2))}R*`);
+      if (b.realisedPnl !== null)  lines.push(`${E('Net:')}    *${E(b.realisedPnl.toFixed(2))}* ${E('(after commission and swap)')}`);
+      lines.push(`_${E('Figures above are modelled from 5-minute candles and are gross of spread, commission and swap. This block is the money that actually moved.')}_`);
     }
 
     lines.push(``, DISCLAIMER);
@@ -551,6 +664,12 @@ class TelegramNotifier {
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        // HARD TIMEOUT. This fetch had no upper bound, and until 2026-09-06 the signal alert
+        // was awaited BEFORE the broker order was placed -- so a slow or hanging Telegram
+        // delayed a live fill by however long it hung. The ordering is fixed separately; this
+        // makes the notifier structurally incapable of blocking a trade for long even if that
+        // regresses.
+        signal: AbortSignal.timeout(10_000),
         body: JSON.stringify({
           chat_id:    chatId,
           text,
