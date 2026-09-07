@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { db } from "../db";
 import { sql } from 'drizzle-orm';
-import { signalGenerator } from '../services/signal-generator';
+import { signalGenerator, renderSetupChart } from '../services/signal-generator';
 import { twelveDataAPI } from '../services/twelve-data';
 import { exchangeRateAPI } from '../services/exchangerate-api';
 import { ctraderExecutor, CTRADER_HOSTS } from '../services/ctrader-executor';
@@ -197,8 +197,21 @@ export function registerAdminRoutes(app: Express) {
       }
       const results: Record<string, any> = {};
 
-      // 1. SIGNAL alert — MarkdownV2, the real method.
-      results.signalAlert = await telegramNotifier.sendSignalAlert({
+      // 0. THE SETUP CHART.
+      //
+      // THIS IS THE ONE CHECK THAT CAN ONLY FAIL IN PRODUCTION. @napi-rs/canvas ships a prebuilt
+      // native binary per platform as an OPTIONAL dependency, so an install that prunes optional
+      // deps, or an image that is musl rather than glibc, yields a server where every other test
+      // here passes and every chart throws. Nothing else in this suite loads that binary, and no
+      // amount of local testing can substitute — the developer machine is Windows and Render is
+      // Linux. The import is deferred (see signal-chart.ts), so a failure costs charts alone.
+      //
+      // LEVELS ARE ANCHORED TO THE LAST REAL CLOSE, not hardcoded. A fixture pinned to a price the
+      // market left months ago makes the renderer squash every candle into a band against a far-off
+      // entry — the image would be delivered, prove the transport, and demonstrate nothing about
+      // whether a subscriber can actually read a chart on a phone, which is the whole question.
+      let chart: Buffer | null = null;
+      const fixture: any = {
         symbol: 'USD/CHF', type: 'LONG', entry: 0.81333, stop: 0.81238,
         tp1: 0.81523, tp2: 0.81713, tp3: 0.82188, confidence: 108, tier: 'HIGH',
         // rationale is a STRING, not an array — sendSignalAlert calls .split() on it. The first
@@ -207,7 +220,48 @@ export function registerAdminRoutes(app: Express) {
         // wrong assumption surviving into a real signal.
         riskReward: 2, rationale: 'FORMAT TEST - not a real signal',
         version: 'format-test', signalNumber: 0, orderType: 'MARKET',
-      } as any);
+      };
+      try {
+        const t0 = Date.now();
+        // Cached by the same layer the generator uses, so this normally costs no API call.
+        const [oneHour, fourHour] = await Promise.all([
+          twelveDataAPI.fetchHistoricalCandles('USD/CHF', '1h', 1440),
+          twelveDataAPI.fetchHistoricalCandles('USD/CHF', '4h', 360),
+        ]);
+        const last = oneHour[oneHour.length - 1].close;
+        const pip  = 0.0001;
+        fixture.entry = +(last).toFixed(5);
+        fixture.stop  = +(last - 20 * pip).toFixed(5);
+        fixture.tp1   = +(last + 40 * pip).toFixed(5);
+        fixture.tp2   = +(last + 80 * pip).toFixed(5);
+        fixture.tp3   = +(last + 120 * pip).toFixed(5);
+        // Zones placed around that entry so every drawing path is exercised: a fair value gap with
+        // its consequent encroachment, an order block, and a swept level.
+        chart = await renderSetupChart({
+          symbol: 'USD/CHF', type: 'LONG', timestamp: new Date().toISOString(),
+          entry: fixture.entry, stop: fixture.stop,
+          targets: [fixture.tp1, fixture.tp2, fixture.tp3], confidence: 108,
+          indicators: { htfTrend: 'W:UP D:UP 4H:UP | 1H:UP' },
+          ict: {
+            fvg:   { low: last - 4 * pip,  high: last - 1 * pip,  ce: last - 2.5 * pip },
+            ob1H:  { low: last - 12 * pip, high: last - 5 * pip,  midpoint: last - 8.5 * pip },
+            sweep: { level: last - 22 * pip, candlesAgo: 6 },
+          },
+        } as any, oneHour, fourHour, 0);
+        results.chart = { ok: !!chart, bytes: chart?.length ?? 0, ms: Date.now() - t0 };
+      } catch (err: any) {
+        // Reported, not thrown: the remaining formats still need testing even with no chart.
+        results.chart = { ok: false, error: err?.message ?? 'chart render failed' };
+      }
+
+      // 1. SIGNAL alert — the real method, now carrying the chart.
+      //
+      // The banner goes to BOTH the caption and the message. Marking the test only in the
+      // rationale was enough while this was text, because the rationale IS the message; with a
+      // photo attached the picture and its caption would otherwise be indistinguishable from a
+      // tradeable signal to anyone scrolling the channel.
+      results.signalAlert = await telegramNotifier.sendSignalAlert(
+        fixture, chart, { note: '🧪 <b>FORMAT TEST — not a signal, do not trade</b>' });
 
       // 2. OUTCOME alert — MarkdownV2. The one with no delivery history.
       results.outcomeAlert = await telegramNotifier.sendOutcomeAlert({

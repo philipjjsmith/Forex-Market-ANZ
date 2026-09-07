@@ -43,12 +43,12 @@ const CHART_CONTEXT_BARS = 46;
  * EXPORTED for the same reason buildSignalAlertMessage is: a renderer that can only be checked by
  * publishing to a live channel does not get checked.
  */
-export function renderSetupChart(
+export async function renderSetupChart(
   signal: Signal,
   oneHourCandles: Candle[],
   fourHourCandles: Candle[],
   signalNumber: number,
-): Buffer | null {
+): Promise<Buffer | null> {
   try {
     const toChart = (c: Candle): ChartCandle => ({
       t: (c.timestamp instanceof Date ? c.timestamp : new Date(c.timestamp)).toISOString(),
@@ -56,7 +56,7 @@ export function renderSetupChart(
     });
     const ict = signal.ict;
 
-    return renderSignalChart({
+    return await renderSignalChart({
       symbol: signal.symbol,
       type: signal.type,
       entry: signal.entry,
@@ -1717,7 +1717,7 @@ export class SignalGenerator {
               // Rendered here, AFTER the order, for the same reason the alert is. Drawing is
               // ~40ms of CPU against candles already in memory, but it belongs on this side of
               // the fill regardless: nothing cosmetic goes in front of a live order.
-              const chart = renderSetupChart(signal, oneHourCandles, fourHourCandles, signalNumber);
+              const chart = await renderSetupChart(signal, oneHourCandles, fourHourCandles, signalNumber);
 
               const alert = await telegramNotifier.sendSignalAlert({
                 symbol: signal.symbol,

@@ -490,6 +490,16 @@ class TelegramNotifier {
     signal: SignalNotification,
     /** Annotated setup chart. Optional: a signal without one is delivered exactly as before. */
     chart?: Buffer | null,
+    /**
+     * Banner prefixed to BOTH the caption and the message.
+     *
+     * Exists for the admin format test. That test previously marked itself only by writing
+     * "FORMAT TEST" into the rationale — which appears in the message body and NOT in the photo
+     * caption, so once a chart was attached the picture and its caption were indistinguishable
+     * from a tradeable signal. A subscriber scrolling past reads the image, not the twelfth line
+     * of the message under it.
+     */
+    opts: { note?: string } = {},
   ): Promise<{ ok: boolean; errors: string[] }> {
     if (!this.isEnabled) return { ok: false, errors: ['Telegram is not configured'] };
     const chatId = signal.tier === 'HIGH' ? this.chatIdPaid : this.chatIdFree;
@@ -503,12 +513,15 @@ class TelegramNotifier {
     // subscriber their signal — so it is sent, recorded, and NOT allowed to short-circuit the
     // message below. `ok` therefore tracks the TEXT alone; a chart failure shows up in `errors`
     // where the admin format-test can see it, without the alert reporting itself as undelivered.
+    const banner = opts.note ? `${opts.note}\n` : '';
+
     if (chart) {
-      const p = await this.sendPhotoToChannel(chart, chatId, buildSignalCaption(signal), 'HTML', 'setup.png');
+      const p = await this.sendPhotoToChannel(
+        chart, chatId, banner + buildSignalCaption(signal), 'HTML', 'setup.png');
       if (!p.ok) errors.push(`chart: ${p.error ?? 'unknown'}`);
     }
 
-    const r = await this.sendToChannel(buildSignalAlertMessage(signal), chatId, 'HTML');
+    const r = await this.sendToChannel(banner + buildSignalAlertMessage(signal), chatId, 'HTML');
     if (!r.ok) errors.push(r.error ?? 'unknown');
     return { ok: r.ok, errors };
   }

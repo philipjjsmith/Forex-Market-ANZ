@@ -44,7 +44,17 @@
  * system "would have" entered is hypothetical performance in a costume. Rendering prospectively is
  * the honest case — and the timestamp is what makes that checkable.
  */
-import { createCanvas, type SKRSContext2D } from '@napi-rs/canvas';
+/**
+ * TYPE-ONLY at module scope, on purpose — the binding is loaded on first render instead.
+ *
+ * `npm run build` bundles the server with `--packages=external`, so a static import of this
+ * package stays a real top-level import in dist/index.js and its native binary is resolved at
+ * BOOT. @napi-rs/canvas ships one prebuilt binary per platform as an optional dependency, so an
+ * install that prunes optional deps, or a musl-based image, would take down signal generation,
+ * broker execution and every alert — the whole trading server — because a picture could not be
+ * drawn. Deferring it means a missing binary costs exactly the charts and nothing else.
+ */
+import type { SKRSContext2D } from '@napi-rs/canvas';
 
 export interface ChartCandle {
   /** ISO timestamp of the bar open. */
@@ -199,7 +209,7 @@ function assertFinite(name: string, v: number): number {
   return v;
 }
 
-export function renderSignalChart(input: SignalChartInput): Buffer {
+export async function renderSignalChart(input: SignalChartInput): Promise<Buffer> {
   const { candles } = input;
   if (!Array.isArray(candles) || candles.length < 5) {
     throw new Error(`renderSignalChart needs at least 5 candles, got ${candles?.length ?? 0}`);
@@ -258,6 +268,8 @@ export function renderSignalChart(input: SignalChartInput): Buffer {
   const xOfC = (i: number) => PLOT.x0 + i * stepC + stepC / 2;
   const xOf  = (i: number) => xSplit + i * step + step / 2;
 
+  // Loaded here, not at module scope. See the note on the import.
+  const { createCanvas } = await import('@napi-rs/canvas');
   const canvas = createCanvas(W, H);
   const ctx = canvas.getContext('2d');
 
