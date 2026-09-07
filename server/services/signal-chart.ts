@@ -289,6 +289,8 @@ export async function renderSignalChart(input: SignalChartInput): Promise<Buffer
   const reserved = [input.entry, input.stop, input.target,
     ...(input.sweepLevel !== undefined ? [input.sweepLevel] : [])].map(yOf);
 
+  /** Gridline prices, drawn after the level tags so a DISPLACED tag cannot be printed over. */
+  const gridLabels: { p: number; y: number }[] = [];
   ctx.font = F.axis;
   ctx.textBaseline = 'middle';
   const rawStep = (hi - lo) / 6;
@@ -300,12 +302,23 @@ export async function renderSignalChart(input: SignalChartInput): Promise<Buffer
     ctx.strokeStyle = C.grid; ctx.lineWidth = 2;   // never 1px; it becomes mush under JPEG
     ctx.beginPath(); ctx.moveTo(PLOT.x0, y); ctx.lineTo(PLOT.x1, y); ctx.stroke();
     if (reserved.some(r => Math.abs(r - y) < CHIP_H)) continue;
-    ctx.fillStyle = C.axisText; ctx.textAlign = 'left';
-    ctx.fillText(px(p), PLOT.x1 + 12, y);
+    gridLabels.push({ p, y });
   }
 
   // ── Time axis ─────────────────────────────────────────────────────────────
   ctx.fillStyle = C.axisText; ctx.font = F.axis; ctx.textAlign = 'center';
+  /**
+   * Spans already occupied along the time axis, SHARED between the two panels.
+   *
+   * A tick near a panel edge gets clamped inward to stay on the plot, and clamping is what
+   * causes the collision: on a real delivered chart the context panel's first label was pushed
+   * right into its second and rendered as "26/08 13:0(/09 09:00". Two dates fused into one
+   * unreadable string is worse than one date, so a label that would overlap is DROPPED rather
+   * than drawn — the axis is a reference, and a missing tick still leaves the neighbours
+   * readable. Shared across both panels because the entry panel's first tick sits just past the
+   * divider and can reach back into the context panel's last.
+   */
+  const timeSpans: { a: number; b: number }[] = [];
   const timeTicks = (set: ChartCandle[], xf: (i: number) => number, want: number) => {
     const every = Math.max(1, Math.floor(set.length / want));
     for (let i = 0; i < set.length; i += every) {
@@ -315,7 +328,11 @@ export async function renderSignalChart(input: SignalChartInput): Promise<Buffer
         `${String(d.getUTCMonth() + 1).padStart(2, '0')} ` +
         `${String(d.getUTCHours()).padStart(2, '0')}:00`;
       const half = ctx.measureText(label).width / 2;
-      ctx.fillText(label, Math.min(Math.max(xf(i), PLOT.x0 + half), PLOT.x1 - half), PLOT.y1 + 26);
+      const x = Math.min(Math.max(xf(i), PLOT.x0 + half), PLOT.x1 - half);
+      const a = x - half - 10, b = x + half + 10;          // 10px breathing room each side
+      if (timeSpans.some(sp => a < sp.b && b > sp.a)) continue;
+      timeSpans.push({ a, b });
+      ctx.fillText(label, x, PLOT.y1 + 26);
     }
   };
   if (hasCtx) timeTicks(ctx4, xOfC, 2);
@@ -459,8 +476,9 @@ export async function renderSignalChart(input: SignalChartInput): Promise<Buffer
    * They are already-drawn content in this column, so they claim their rows like anything else.
    */
   const placeY   = avoid([(yEntry + yTgt) / 2, (yEntry + yStop) / 2]);
-  /** Price tags in the right-hand gutter. */
-  const placeTag = avoid([]);
+  /** Price tags in the right-hand gutter. Kept, so the gridline prices can dodge where they LANDED. */
+  const tagRows: number[] = [];
+  const placeTag = avoid(tagRows);
 
   const level = (price: number, colour: string, label: string, dashed: boolean, weight: number) => {
     const y = yOf(price);
@@ -500,8 +518,22 @@ export async function renderSignalChart(input: SignalChartInput): Promise<Buffer
   level(input.stop,   C.bear,  `SL · ${stopPips.toFixed(1)}p`, false, 3);
   if (input.sweepLevel !== undefined) level(input.sweepLevel, C.sweep, 'LIQUIDITY SWEPT', true, 2);
 
-  // Zone labels last, so no level line can be ruled through one.
+  // Zone labels after the level lines, so none can be ruled through one.
   for (const z of zoneChips) chip(ctx, PLOT.x0 + 10, z.y, z.label, z.fill);
+
+  // Gridline prices last of all, skipping any row a level tag actually LANDED on.
+  //
+  // The `reserved` list built before drawing only knew the levels' TRUE positions. A tag nudged
+  // clear of its neighbour can come to rest on a gridline number that was never reserved — which
+  // is exactly what happened on the first chart this system ever delivered, where 0.80750 printed
+  // through underneath the displaced swept-level tag.
+  ctx.font = F.axis; ctx.fillStyle = C.axisText;
+  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  for (const g of gridLabels) {
+    if (tagRows.some(t => Math.abs(t - g.y) < CHIP_H)) continue;
+    ctx.fillText(px(g.p), PLOT.x1 + 12, g.y);
+  }
+  ctx.textBaseline = 'alphabetic';
 
   // Current price, only when meaningfully away from entry — on a limit order that gap IS the story.
   if (Math.abs(lastClose - input.entry) * pf > 0.5) {
