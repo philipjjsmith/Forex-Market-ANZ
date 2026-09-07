@@ -260,8 +260,15 @@ export function registerAdminRoutes(app: Express) {
       // rationale was enough while this was text, because the rationale IS the message; with a
       // photo attached the picture and its caption would otherwise be indistinguishable from a
       // tradeable signal to anyone scrolling the channel.
+      //
+      // EVERY format test goes to the TEST channel, never the paid one — an isolated chat when
+      // TELEGRAM_CHAT_ID_TEST is set, otherwise the free/practice channel. See the note on
+      // chatIdTest: this suite is meant to be re-run before every risky change, and a test run
+      // repeatedly into a paying subscriber's feed either teaches them to skim alerts or gets
+      // traded by someone who read the picture and not the banner.
       results.signalAlert = await telegramNotifier.sendSignalAlert(
-        fixture, chart, { note: '🧪 <b>FORMAT TEST — not a signal, do not trade</b>' });
+        fixture, chart,
+        { note: '🧪 <b>FORMAT TEST — not a signal, do not trade</b>', channel: 'test' });
 
       // 2. OUTCOME alert — MarkdownV2. The one with no delivery history.
       results.outcomeAlert = await telegramNotifier.sendOutcomeAlert({
@@ -269,7 +276,7 @@ export function registerAdminRoutes(app: Express) {
         entryPrice: 0.81459, outcomePrice: 0.81330, profitLossPips: -12.9,
         stopPips: 12.9, durationMs: 43 * 60_000, tier: 'HIGH',
         monthWins: 54, monthLosses: 110, monthPips: -555, currentStreak: -1,
-      } as any);
+      } as any, { note: '🧪 *FORMAT TEST — not a real outcome*', channel: 'test' });
 
       // 3. EXECUTION alert — HTML, built by the same function production uses.
       results.executionAlert = await telegramNotifier.sendText(
@@ -277,7 +284,7 @@ export function registerAdminRoutes(app: Express) {
           live: false, state: 'OPEN AT BROKER ✅', symbol: 'USD/CHF', type: 'LONG',
           lots: 0.86, fillPrice: 0.81337, stop: 0.81238, target: 0.81523,
           confidence: 108, tier: 'HIGH', positionId: 286227046,
-        }), 'paid', 'HTML');
+        }), 'test', 'HTML');
 
       // 4. CLOSE alert — HTML, same builder as the real close path.
       results.closeAlert = await telegramNotifier.sendText(
@@ -285,7 +292,7 @@ export function registerAdminRoutes(app: Express) {
           win: false, exitPrice: 0.81327, entryPrice: 0.81470,
           grossProfit: -137.15, swap: 0, closeCommission: -7.02,
           netProfit: -144.17, balanceAfter: 10085.34, positionId: 286259147,
-        }), 'paid', 'HTML');
+        }), 'test', 'HTML');
 
       const failed = Object.entries(results).filter(([, v]: any) => !v?.ok).map(([k]) => k);
       res.status(failed.length ? 400 : 200).json({

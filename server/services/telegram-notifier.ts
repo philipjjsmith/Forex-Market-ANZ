@@ -303,12 +303,30 @@ class TelegramNotifier {
   private botToken:    string | undefined;
   private chatIdPaid:  string | undefined; // HIGH-tier signals + outcomes
   private chatIdFree:  string | undefined; // MEDIUM-tier signals + outcomes
+  /**
+   * Where FORMAT TESTS go. Optional; falls back to the free channel, never the paid one.
+   *
+   * The format test is built to be run repeatedly — before every risky change, indefinitely.
+   * Anything sent repeatedly into a subscriber channel has one of two outcomes: subscribers learn
+   * to skim past alerts, or somebody trades one. A banner reduces that risk without removing it,
+   * because the thing people actually read is the picture, and a forwarded photo or a lock-screen
+   * preview can carry the image while the warning scrolls off.
+   *
+   * The failure this route's history is really about — TELEGRAM_CHAT_ID_PAID holding the literal
+   * string "FREE" while every HIGH-tier alert died for a day — is a REACHABILITY failure, and it
+   * is already covered without publishing anything: checkChatsReachable() calls getChat on both
+   * channels, and /api/admin/telegram-test sends one plain message. Message FORMATTING does not
+   * vary by chat, so the format test has nothing to gain from a subscriber audience and a paying
+   * one to lose.
+   */
+  private chatIdTest:  string | undefined;
 
   constructor() {
     this.botToken   = process.env.TELEGRAM_BOT_TOKEN;
     const legacy    = process.env.TELEGRAM_CHAT_ID;
     this.chatIdPaid = process.env.TELEGRAM_CHAT_ID_PAID || legacy;
     this.chatIdFree = process.env.TELEGRAM_CHAT_ID_FREE || legacy;
+    this.chatIdTest = process.env.TELEGRAM_CHAT_ID_TEST;
 
     const hasSplit = !!(process.env.TELEGRAM_CHAT_ID_PAID && process.env.TELEGRAM_CHAT_ID_FREE);
 
@@ -329,6 +347,15 @@ class TelegramNotifier {
   }
 
   /**
+   * Where a format test lands: the isolated channel when one is configured, otherwise the FREE
+   * channel. Paid is last and only reachable when nothing else is set at all — which is the
+   * single-channel legacy configuration, where free and paid are the same chat anyway.
+   */
+  private get testTarget(): string | undefined {
+    return this.chatIdTest ?? this.chatIdFree ?? this.chatIdPaid;
+  }
+
+  /**
    * Config state for the admin panel. Reports PRESENCE, never values — a chat id is not a secret
    * but a bot token is, and a diagnostic that leaks the thing it is diagnosing is a bad trade.
    *
@@ -343,6 +370,9 @@ class TelegramNotifier {
       enabled: this.isEnabled,
       botToken: this.botToken ? 'set' : 'MISSING',
       paidChannel: this.chatIdPaid ? 'set' : 'MISSING',
+      testChannel: this.chatIdTest
+        ? 'set'
+        : 'unset — format tests fall back to the free channel (set TELEGRAM_CHAT_ID_TEST to isolate them)',
       freeChannel: this.chatIdFree ? 'set' : 'MISSING',
       routing: (process.env.TELEGRAM_CHAT_ID_PAID && process.env.TELEGRAM_CHAT_ID_FREE)
         ? 'two-channel (paid + free)'
@@ -499,10 +529,14 @@ class TelegramNotifier {
      * from a tradeable signal. A subscriber scrolling past reads the image, not the twelfth line
      * of the message under it.
      */
-    opts: { note?: string } = {},
+    opts: { note?: string; channel?: 'test' } = {},
   ): Promise<{ ok: boolean; errors: string[] }> {
     if (!this.isEnabled) return { ok: false, errors: ['Telegram is not configured'] };
-    const chatId = signal.tier === 'HIGH' ? this.chatIdPaid : this.chatIdFree;
+    // A format test overrides tier routing outright: the fixture is HIGH tier and would otherwise
+    // land in the paid channel, which is the one audience a test must never reach.
+    const chatId = opts.channel === 'test'
+      ? this.testTarget
+      : signal.tier === 'HIGH' ? this.chatIdPaid : this.chatIdFree;
     if (!chatId) return { ok: false, errors: ['no chat id for this tier'] };
 
     const errors: string[] = [];
@@ -528,7 +562,10 @@ class TelegramNotifier {
 
   // ─── Outcome Alert ─────────────────────────────────────────────────────────
 
-  async sendOutcomeAlert(data: OutcomeNotification): Promise<{ ok: boolean; errors: string[] }> {
+  async sendOutcomeAlert(
+    data: OutcomeNotification,
+    opts: { note?: string; channel?: 'test' } = {},
+  ): Promise<{ ok: boolean; errors: string[] }> {
     if (!this.isEnabled) return { ok: false, errors: ['Telegram is not configured'] };
 
     const numStr  = data.signalNumber ? `\\#${data.signalNumber} ` : '';
@@ -621,9 +658,15 @@ class TelegramNotifier {
 
     lines.push(``, DISCLAIMER);
 
-    const chatId = data.tier === 'HIGH' ? this.chatIdPaid : this.chatIdFree;
+    // As in sendSignalAlert: a format test overrides tier routing, so a HIGH-tier fixture cannot
+    // reach the paid channel. Note this message is the one format still on MarkdownV2, so any
+    // banner passed in has to be escaped for it — an unescaped period here is a 400.
+    const chatId = opts.channel === 'test'
+      ? this.testTarget
+      : data.tier === 'HIGH' ? this.chatIdPaid : this.chatIdFree;
     if (!chatId) return { ok: false, errors: ['no chat id for this tier'] };
-    const r = await this.sendToChannel(lines.join('\n'), chatId);
+    const banner = opts.note ? opts.note + '\n' : '';
+    const r = await this.sendToChannel(banner + lines.join('\n'), chatId);
     return { ok: r.ok, errors: r.ok ? [] : [r.error ?? 'unknown'] };
   }
 
@@ -743,10 +786,17 @@ class TelegramNotifier {
    */
   async sendText(
     message: string,
-    channel: 'paid' | 'free' | 'both' = 'paid',
+    channel: 'paid' | 'free' | 'both' | 'test' = 'paid',
     parseMode: 'MarkdownV2' | 'HTML' = 'MarkdownV2',
   ): Promise<{ ok: boolean; attempted: number; errors: string[] }> {
     if (!this.isEnabled) return { ok: false, attempted: 0, errors: ['Telegram is not configured'] };
+
+    if (channel === 'test') {
+      const t = this.testTarget;
+      if (!t) return { ok: false, attempted: 0, errors: ['no chat id for the test channel'] };
+      const r = await this.sendToChannel(message, t, parseMode);
+      return { ok: r.ok, attempted: 1, errors: r.ok ? [] : [r.error ?? 'unknown'] };
+    }
 
     const results: { ok: boolean; error?: string }[] = [];
     if ((channel === 'paid' || channel === 'both') && this.chatIdPaid) {
@@ -784,7 +834,7 @@ class TelegramNotifier {
     photo: Buffer,
     opts: {
       caption?: string;
-      channel?: 'paid' | 'free' | 'both';
+      channel?: 'paid' | 'free' | 'both' | 'test';
       parseMode?: 'MarkdownV2' | 'HTML';
       /** Telegram infers the image type from this. */
       filename?: string;
@@ -811,6 +861,13 @@ class TelegramNotifier {
           errors: [`caption is ${len} visible characters — ${len - TELEGRAM_CAPTION_LIMIT} over Telegram's ${TELEGRAM_CAPTION_LIMIT} cap`],
         };
       }
+    }
+
+    if (channel === 'test') {
+      const t = this.testTarget;
+      if (!t) return { ok: false, attempted: 0, errors: ['no chat id for the test channel'] };
+      const r = await this.sendPhotoToChannel(photo, t, caption, parseMode, filename);
+      return { ok: r.ok, attempted: 1, errors: r.ok ? [] : [r.error ?? 'unknown'] };
     }
 
     const results: { ok: boolean; error?: string }[] = [];
