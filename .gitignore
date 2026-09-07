@@ -23,3 +23,14 @@ _dd.ts
 _v*.ts
 _t*.ts
 _a.ts
+
+# Scratch renders and fixtures from chart work — regenerable, never source of truth.
+#
+# ROOT-ANCHORED with a leading slash, unlike the patterns above. A bare `_*.json` matches at any
+# depth and would have swallowed migrations/meta/_journal.json — Drizzle's migration journal, which
+# IS tracked and IS source of truth. `client/public/_headers` and `scripts/_forensics.ts` are
+# tracked too. Scratch files only ever land at the repo root, so that is the only place to ignore.
+/_*.png
+/_*.jpg
+/_*.jpeg
+/_*.json
