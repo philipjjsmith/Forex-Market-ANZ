@@ -11,6 +11,88 @@ import { evaluateCorrelation, MAX_EFFECTIVE_EXPOSURE } from './correlation-guard
 import { ctraderExecutor } from './ctrader-executor';
 import { getSignalNumber } from './signal-stats';
 import { recordAnalysis, linkProvenanceToSignal, recordTrackOutcome } from './provenance';
+import { renderSignalChart, type ChartCandle } from './signal-chart';
+import { signalTierName } from './telegram-notifier';
+
+/**
+ * How much history each chart panel shows.
+ *
+ * 1280px is Telegram's hard cap, so the pixels are fixed and bars can only be added by making
+ * them thinner. After padding and the 32% forward projection the entry panel is ~565px wide, so
+ * 50 bars sits at an 11px pitch — just inside the 12-18px readable floor signal-chart.ts is built
+ * around, and 140 bars was measured at 5.6px, which is mush. The context panel is ~291px and is
+ * read for SHAPE rather than candle by candle, so 46 bars at a ~6px pitch is deliberate.
+ *
+ * 50 1H bars is ~2 days of entry detail; 46 4H bars is ~7.6 days of context beside it.
+ */
+const CHART_ENTRY_BARS   = 50;
+const CHART_CONTEXT_BARS = 46;
+
+/**
+ * Render the setup chart for a signal, or return null.
+ *
+ * NULL IS A SUPPORTED OUTCOME, NOT A BUG. renderSignalChart validates its inputs and throws
+ * rather than drawing a chart with a level silently missing — an earlier draft accepted a NaN
+ * entry and produced a plausible-looking image with no entry line, which is worse than no image
+ * because the reader takes what is drawn for the whole picture. Catching here turns that into a
+ * text-only alert, which is what subscribers received before charts existed.
+ *
+ * The candles are already in memory at the call site, so this costs zero additional Twelve Data
+ * calls against an 800/day budget.
+ *
+ * EXPORTED for the same reason buildSignalAlertMessage is: a renderer that can only be checked by
+ * publishing to a live channel does not get checked.
+ */
+export function renderSetupChart(
+  signal: Signal,
+  oneHourCandles: Candle[],
+  fourHourCandles: Candle[],
+  signalNumber: number,
+): Buffer | null {
+  try {
+    const toChart = (c: Candle): ChartCandle => ({
+      t: (c.timestamp instanceof Date ? c.timestamp : new Date(c.timestamp)).toISOString(),
+      o: c.open, h: c.high, l: c.low, c: c.close,
+    });
+    const ict = signal.ict;
+
+    return renderSignalChart({
+      symbol: signal.symbol,
+      type: signal.type,
+      entry: signal.entry,
+      stop: signal.stop,
+      // TP1. `checkOutcomeFromCandles` can only ever return TP1_HIT or STOP_HIT, so TP2/TP3 are
+      // not levels this system trades to and drawing them would advertise exits nothing takes.
+      target: signal.targets[0],
+      confidence: signal.confidence,
+      tier: signalTierName(signal.confidence),
+      signalNumber,
+      candles: oneHourCandles.slice(-CHART_ENTRY_BARS).map(toChart),
+      contextCandles: fourHourCandles.slice(-CHART_CONTEXT_BARS).map(toChart),
+      contextTimeframe: '4H',
+      timeframe: '1H',
+      fvg: ict?.fvg
+        ? { low: ict.fvg.low, high: ict.fvg.high, mid: ict.fvg.ce, label: '1H FVG · CE' }
+        : undefined,
+      // The 1H block when there is one: it is the entry-level zone price is actually sitting in,
+      // and the chart has room for a single order block. The 4H zone stands in when there is no
+      // 1H one, and the label always says which, so the picture cannot misstate the timeframe.
+      orderBlock: ict?.ob1H
+        ? { low: ict.ob1H.low, high: ict.ob1H.high, label: '1H ORDER BLOCK' }
+        : ict?.ob4H
+        ? { low: ict.ob4H.low, high: ict.ob4H.high, label: '4H ORDER BLOCK' }
+        : undefined,
+      sweepLevel: ict?.sweep?.level,
+      htfTrend: signal.indicators.htfTrend,
+      // The ANALYSIS instant, not now. The levels were committed to before the outcome was known,
+      // and this timestamp is what makes that checkable by anyone who kept the message.
+      asOf: new Date(signal.timestamp),
+    });
+  } catch (err: any) {
+    console.error(`⚠️  [Chart] ${signal.symbol} chart not rendered, sending text only: ${err?.message ?? err}`);
+    return null;
+  }
+}
 
 /**
  * Automated Signal Generator Service
@@ -62,6 +144,29 @@ interface Signal {
     bbUpper: string;
     bbLower: string;
     htfTrend: string;
+  };
+  /**
+   * THE ICT LEVELS THIS SIGNAL WAS ACTUALLY SCORED ON, in the fired direction.
+   *
+   * The fair value gap, the order blocks and the liquidity sweep are detected, scored, and were
+   * then discarded — the only trace that survived this function was prose inside `rationale`.
+   * That is why nothing downstream could draw the setup, and why the only alternative was
+   * parsing prices back out of an emoji-laden sentence, which would break the first time a
+   * rationale line was reworded.
+   *
+   * Every member is individually optional: a signal can fire on three-timeframe alignment and a
+   * crossover with no ICT confluence at all. Absent entirely on the older code paths that build
+   * a Signal without running these detectors.
+   */
+  ict?: {
+    /** 1H fair value gap. `ce` is the consequent encroachment — the level entry is taken at. */
+    fvg?: { low: number; high: number; ce: number };
+    /** 1H unmitigated order block (+4). `midpoint` is the 50%-body mitigation level. */
+    ob1H?: { low: number; high: number; midpoint: number };
+    /** 4H unmitigated order block (+8) — the higher-timeframe institutional zone. */
+    ob4H?: { low: number; high: number; midpoint: number };
+    /** Liquidity sweep — present only when recent enough to have scored. See the note at the assignment. */
+    sweep?: { level: number; candlesAgo: number };
   };
   rationale: string;
   strategy: string;
@@ -1217,6 +1322,17 @@ export class MACrossoverStrategy {
     const riskPerTrade = Math.abs(currentPrice - stop);
     const riskReward = Math.abs(tp1 - currentPrice) / riskPerTrade;
 
+    // ONLY THE FIRED DIRECTION'S ZONES.
+    //
+    // Both directions were detected above, unconditionally, before either branch was taken —
+    // `bearishFVG` is populated on a LONG signal and vice versa. Attaching both would put a
+    // bearish fair value gap on a long setup, which misrepresents what the strategy saw and
+    // scored. The reader of a chart takes what is drawn for the whole picture.
+    const ictFvg   = signalType === 'LONG' ? bullishFVG   : bearishFVG;
+    const ictOb1H  = signalType === 'LONG' ? bullishOB_1H : bearishOB_1H;
+    const ictOb4H  = signalType === 'LONG' ? bullishOB_4H : bearishOB_4H;
+    const ictSweep = signalType === 'LONG' ? bullishSweep : bearishSweep;
+
     return {
       id: `signal-${asOf.getTime()}-${Math.random().toString(36).substr(2, 9)}`,
       timestamp: asOf.toISOString(),
@@ -1257,6 +1373,20 @@ export class MACrossoverStrategy {
         bbUpper: bb.upper.toFixed(5),
         bbLower: bb.lower.toFixed(5),
         htfTrend: `W:${weeklyTrend} D:${dailyTrend} 4H:${fourHourTrend} | 1H:${oneHourTrend}` // ICT 3-TF aligned, 1H timing
+      },
+      // The levels themselves, not a sentence about them — see the `ict` note on the interface.
+      //
+      // The sweep repeats the SCORER'S OWN `candlesAgo <= 20` gate (both branches above). A sweep
+      // older than that is real and detected, but earned zero of the 8 points, so publishing it
+      // as part of the setup would claim a confluence the confidence number does not contain.
+      // The picture and the score have to be able to be checked against each other.
+      ict: {
+        fvg:   ictFvg   ? { low: ictFvg.low,   high: ictFvg.high,   ce: ictFvg.ce }             : undefined,
+        ob1H:  ictOb1H  ? { low: ictOb1H.low,  high: ictOb1H.high,  midpoint: ictOb1H.midpoint } : undefined,
+        ob4H:  ictOb4H  ? { low: ictOb4H.low,  high: ictOb4H.high,  midpoint: ictOb4H.midpoint } : undefined,
+        sweep: ictSweep && ictSweep.candlesAgo <= 20
+          ? { level: ictSweep.level, candlesAgo: ictSweep.candlesAgo }
+          : undefined,
       },
       rationale: rationale.join(' | '),
       strategy: this.name,
@@ -1584,7 +1714,12 @@ export class SignalGenerator {
               //
               // Subscribers now see the alert a second or two later, which is strictly better:
               // the price they read is closer to the price we actually got.
-              await telegramNotifier.sendSignalAlert({
+              // Rendered here, AFTER the order, for the same reason the alert is. Drawing is
+              // ~40ms of CPU against candles already in memory, but it belongs on this side of
+              // the fill regardless: nothing cosmetic goes in front of a live order.
+              const chart = renderSetupChart(signal, oneHourCandles, fourHourCandles, signalNumber);
+
+              const alert = await telegramNotifier.sendSignalAlert({
                 symbol: signal.symbol,
                 type: signal.type,
                 entry: signal.entry,
@@ -1599,7 +1734,12 @@ export class SignalGenerator {
                 version: signal.version,
                 signalNumber,
                 orderType: signal.orderType,
-              });
+              }, chart);
+              // The notifier is non-fatal by design, which is correct and also means silence is
+              // indistinguishable from success. Say what happened while the run is still logged.
+              if (!alert.ok || alert.errors.length) {
+                console.error(`⚠️  [Telegram] ${signal.symbol} alert issues: ${alert.errors.join('; ')}`);
+              }
             } catch (error: any) {
               // A produced signal that never reaches signal_history is INVISIBLE without this.
               // On 2026-09-02 two confidence-124 signals vanished here and the only record was a
