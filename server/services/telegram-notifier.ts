@@ -96,9 +96,31 @@ interface SignalNotification {
 // ─── Static disclaimer — pre-escaped for MarkdownV2 ─────────────────────────
 // Every dot, pipe, and exclamation must be escaped outside code/bold/italic spans.
 
+/**
+ * THE STATEMENT THAT ATTACHES TO RESULTS.
+ *
+ * Every message using this one REPORTS PERFORMANCE — the outcome alert carries pips, an R
+ * multiple, net P&L and a running month-to-date win/loss record; the summaries carry the same
+ * aggregated. CFTC Reg 4.41(b)(1) requires the prescribed cautionary statement to "be accompanied
+ * by" hypothetical or simulated results, and 4.41(b)(2) requires it prominently disclosed when
+ * the presentation is not oral.
+ *
+ * It previously read "General advice only. Not tailored to your circumstances. Forex trading
+ * carries significant risk of loss." — a generic risk warning with NO simulated-results language
+ * and no demo label at all, attached to the only messages in the system that actually publish a
+ * track record. The signal alert, which reports nothing, carried the heavier text instead. That
+ * was backwards in both directions.
+ *
+ * NOT LEGAL ADVICE — confirm with the commodities attorney already on the compliance checklist.
+ */
 const DISCLAIMER =
-  '📡 ArgoFX \\| General advice only\\. Not tailored to your circumstances\\.' +
-  ' Forex trading carries significant risk of loss\\. Trade at your own risk\\.';
+  '⚠️ *DEMO — SIMULATED\\.* No real money is traded\\. Hypothetical results have inherent' +
+  ' limitations: unlike an actual performance record, simulated results do not represent actual' +
+  ' trading, and because the trades were not executed they may have under\\- or over\\-compensated' +
+  ' for market factors such as lack of liquidity\\. Past performance is not necessarily indicative' +
+  ' of future results\\.\n' +
+  '📡 _General information published identically to all subscribers, not tailored to your' +
+  ' circumstances, account or risk tolerance\\. Not investment advice\\._';
 
 /**
  * Escape for Telegram HTML parse mode. Three special characters, against MarkdownV2's eighteen.
@@ -157,6 +179,33 @@ export function captionLength(caption: string): number {
 const DEMO_LABEL =
   '⚠️ <b>DEMO ACCOUNT — SIMULATED.</b> No real money is traded. Simulated results do not' +
   ' represent actual trading and are prepared with the benefit of hindsight.';
+
+/**
+ * SHORT form, for messages that present NO performance results.
+ *
+ * CFTC Reg 4.41(b)(1) requires the prescribed cautionary statement to "be accompanied by"
+ * HYPOTHETICAL PERFORMANCE RESULTS, and 4.41(b)(2) requires it prominently disclosed when the
+ * presentation is not oral. The obligation attaches to presenting RESULTS — which binds the
+ * outcome, close and summary alerts, because those report pips, an R multiple and a running
+ * win/loss record. A signal alert is a forward-looking setup; it reports nothing, so 4.41(b)
+ * does not attach to it.
+ *
+ * Two things it DOES still need. The demo label, because NFA Interpretive Notice 9025 names
+ * "disguis[ing] hypothetical performance results by referring to the performance with terms such
+ * as 'live' or 'real-time'" and this alert labels HIGH-tier signals a "live trade". And the
+ * "general information, published identically, not tailored" sentence, which is the operative
+ * language of the 17 CFR 4.14(a)(9)(ii) exemption and has to stay true of every message the
+ * system sends, whatever its length.
+ *
+ * Measured: 427 characters of boilerplate become 151, on the message subscribers read most, and
+ * nothing is removed from any message that reports a result — those got STRONGER, see DISCLAIMER.
+ *
+ * NOT LEGAL ADVICE. This follows what the rule attaches to; confirming it belongs with the
+ * commodities attorney already on the compliance checklist.
+ */
+const DEMO_SHORT =
+  '⚠️ <b>DEMO — SIMULATED.</b> No real money is traded. General information published identically' +
+  ' to all subscribers, not tailored to you. Not investment advice.';
 
 /**
  * HTML twin of DISCLAIMER.
@@ -234,27 +283,32 @@ export function buildSignalAlertMessage(signal: SignalNotification): string {
     .filter(l => !/^(🟢|🟡)\s*[SAB]-TIER/.test(l) && !/^📊\s/.test(l))
     .map(l => htmlEsc(l));
 
+  // THE SAME FACTS WERE BEING PUBLISHED THREE TIMES.
+  //
+  // The chart draws the instrument, direction, tier, confidence, entry, stop, target, pips and
+  // R:R. The caption restated all of it, and this message restated it a third time — of the
+  // caption's five content lines, only "full reasoning below" did not reappear verbatim here.
+  //
+  // So this no longer opens with a header, a direction line and a three-line price block. It
+  // carries the one thing neither the picture nor the caption can: WHY. Measured on a real
+  // 108-point signal, 1,151 visible characters become roughly 620.
+  //
+  // The invalidation STAYS. It is a different idea from the stop — the stop is where the position
+  // closes, the invalidation is what would make the reasoning wrong — and naming it is the
+  // strongest credibility signal in the message. It costs nothing; the level already exists.
   const lines: string[] = [
-    `🚨 <b>SIGNAL${signal.signalNumber ? ' #' + signal.signalNumber : ''} · ${htmlEsc(signal.symbol)}</b>`,
-    ``,
-    `${direction} — <b>${tierName}</b> (${signal.confidence}/135) · <i>${tierNote}</i>`,
-    `R:R <b>${signal.riskReward.toFixed(1)}:1</b> · ${htmlEsc(signal.orderType)}`,
-    ``,
-    `📍 Entry    <code>${px(signal.entry)}</code>`,
-    `🛑 Stop     <code>${px(signal.stop)}</code>  (${slPips.toFixed(1)} pips · 1R)`,
-    `🎯 Target   <code>${px(signal.tp1)}</code>  (+${tp1Pips.toFixed(1)} pips · ${signal.riskReward.toFixed(1)}R)`,
-    ``,
-    // INVALIDATION, stated as its own idea. A stop is where the position closes; invalidation is
-    // what would make the reasoning wrong. Naming it is among the strongest credibility signals a
-    // trade message can carry, and it costs nothing because the level already exists.
-    `⚠️ <b>Invalidation:</b> price through <code>${px(signal.stop)}</code> ends this thesis.`,
+    `<b>WHY THIS SETUP</b> — ${htmlEsc(signal.symbol)} ${tierName}` +
+      ` · ${signal.confidence} of 135 confluence points`,
   ];
 
-  if (reasons.length) {
-    lines.push(``, `<b>WHY THIS SETUP</b> — ${signal.confidence} of 135 confluence points`, ...reasons);
-  }
+  if (reasons.length) lines.push(...reasons);
 
-  lines.push(``, DEMO_LABEL, DISCLAIMER_HTML);
+  lines.push(
+    ``,
+    `⚠️ <b>Invalidation:</b> price through <code>${px(signal.stop)}</code> ends this thesis.`,
+    ``,
+    DEMO_SHORT,
+  );
   return lines.join('\n');
 }
 
@@ -287,13 +341,11 @@ export function buildSignalCaption(signal: SignalNotification): string {
   const tierNote  = signal.tier === 'HIGH' ? 'live trade' : 'practice signal — not traded';
 
   return [
-    `🚨 <b>SIGNAL${signal.signalNumber ? ' #' + signal.signalNumber : ''} · ${htmlEsc(signal.symbol)}</b>`,
-    `${direction} — <b>${signalTierName(signal.confidence)}</b> (${signal.confidence}/135) · <i>${tierNote}</i>`,
+    `🚨 <b>SIGNAL${signal.signalNumber ? ' #' + signal.signalNumber : ''} · ${htmlEsc(signal.symbol)}</b>` +
+      ` — ${direction} <b>${signalTierName(signal.confidence)}</b> · <i>${tierNote}</i>`,
     `📍 <code>${px(signal.entry)}</code>  🛑 <code>${px(signal.stop)}</code> (${slPips.toFixed(1)}p)` +
       `  🎯 <code>${px(signal.tp1)}</code> (${tp1Pips.toFixed(1)}p · ${signal.riskReward.toFixed(1)}R)`,
-    ``,
-    `⚠️ <b>DEMO — SIMULATED.</b> No real money is traded. General information, not tailored advice.`,
-    `<i>Full reasoning and disclaimer below ↓</i>`,
+    `⚠️ <i>DEMO — simulated, no real money. Not tailored advice. Why ↓</i>`,
   ].join('\n');
 }
 

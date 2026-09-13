@@ -451,8 +451,32 @@ export function registerAdminRoutes(app: Express) {
         reachability: await telegramNotifier.checkChatsReachable(),
       };
 
+      /**
+       * PROCESS MEMORY — because nothing else can see it.
+       *
+       * Render shows `Limit 512 MB` on the free plan and puts the actual usage graph behind an
+       * Upgrade button, so there was no way to answer "how close are we?" for the instance that
+       * runs the trading system. Measured locally, charting costs ~26 MB once (the Skia library,
+       * loaded on first render) plus a ~4 MB transient per canvas. Whether that matters depends
+       * entirely on the baseline, which nobody could see.
+       *
+       * `skiaLoaded` is the useful flag: RSS before the first chart versus after tells you which
+       * side of the 26 MB step you are reading, so two samples are not silently incomparable.
+       */
+      const mem = process.memoryUsage();
+      const memory = {
+        rssMb: +(mem.rss / 1048576).toFixed(1),
+        heapUsedMb: +(mem.heapUsed / 1048576).toFixed(1),
+        externalMb: +(mem.external / 1048576).toFixed(1),
+        limitMb: 512,
+        pctOfLimit: +((mem.rss / 1048576 / 512) * 100).toFixed(1),
+        uptimeHours: +(process.uptime() / 3600).toFixed(1),
+        skiaLoaded: mem.rss / 1048576 > 90,
+      };
+
       const health = {
         status: 'healthy' as const,
+        memory,
         telegram,
         signalGenerator: {
           isRunning: false, // We'd track this in a real implementation
