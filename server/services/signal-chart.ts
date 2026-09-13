@@ -56,6 +56,18 @@
  */
 import type { SKRSContext2D } from '@napi-rs/canvas';
 
+/**
+ * Has the native canvas binary actually been loaded in this process?
+ *
+ * EXACT, because the alternative was a guess that was wrong. /api/admin/health first inferred this
+ * from RSS crossing 90 MB, calibrated against a 68.5 MB local baseline — but the deployed service
+ * idles at 111.3 MB, so the flag read "loaded" before any chart had ever been drawn. Measured on
+ * Render 2026-09-13: 111.3 MB before the first render, 132.6 MB after, so Skia costs +21.3 MB and
+ * the only honest way to know which side of that step a reading is on is to record it.
+ */
+let canvasLoaded = false;
+export const isCanvasLoaded = () => canvasLoaded;
+
 export interface ChartCandle {
   /** ISO timestamp of the bar open. */
   t: string;
@@ -270,6 +282,7 @@ export async function renderSignalChart(input: SignalChartInput): Promise<Buffer
 
   // Loaded here, not at module scope. See the note on the import.
   const { createCanvas } = await import('@napi-rs/canvas');
+  canvasLoaded = true;
   const canvas = createCanvas(W, H);
   const ctx = canvas.getContext('2d');
 

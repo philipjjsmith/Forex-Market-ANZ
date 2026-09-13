@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { db } from "../db";
 import { sql } from 'drizzle-orm';
 import { signalGenerator, renderSetupChart } from '../services/signal-generator';
+import { isCanvasLoaded } from '../services/signal-chart';
 import { twelveDataAPI } from '../services/twelve-data';
 import { exchangeRateAPI } from '../services/exchangerate-api';
 import { ctraderExecutor, CTRADER_HOSTS } from '../services/ctrader-executor';
@@ -471,7 +472,8 @@ export function registerAdminRoutes(app: Express) {
         limitMb: 512,
         pctOfLimit: +((mem.rss / 1048576 / 512) * 100).toFixed(1),
         uptimeHours: +(process.uptime() / 3600).toFixed(1),
-        skiaLoaded: mem.rss / 1048576 > 90,
+        // Reported by the renderer itself, not inferred from RSS — see isCanvasLoaded().
+        skiaLoaded: isCanvasLoaded(),
       };
 
       const health = {
