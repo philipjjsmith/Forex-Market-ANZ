@@ -13,6 +13,7 @@ import { getSignalNumber } from './signal-stats';
 import { recordAnalysis, linkProvenanceToSignal, recordTrackOutcome } from './provenance';
 import { renderSignalChart, type ChartCandle } from './signal-chart';
 import { signalTierName } from './telegram-notifier';
+import { roundToSymbol } from './symbol-precision';
 
 /**
  * How much history each chart panel shows.
@@ -1338,13 +1339,26 @@ export class MACrossoverStrategy {
       timestamp: asOf.toISOString(),
       type: signalType,
       symbol: symbol, // Now passed as parameter
-      entry: parseFloat(currentPrice.toFixed(5)),
-      currentPrice: parseFloat(currentPrice.toFixed(5)),
-      stop: parseFloat(stop.toFixed(5)),
+      // ROUNDED TO WHAT THE SYMBOL CAN REPRESENT, not to a fixed 5 decimals.
+      //
+      // `toFixed(5)` on a JPY pair produces 153.51051, which is not a price that exists — the
+      // broker allows 3 digits and rejects the order outright. Measured over the week of
+      // 2026-09-07, USD/JPY produced 6 of 13 signals and filled none of them while being the only
+      // pair with a positive record, so this one call decided which half of the strategy was
+      // allowed to trade.
+      //
+      // Rounding here rather than only at the broker boundary is deliberate: these values are
+      // stored in signal_history, published to subscribers, and replayed by the outcome validator.
+      // A level nobody could ever have been filled at should not appear in any of them. The JPY
+      // minimum stop is 6 pips against a 0.1-pip rounding grain, so the distances do not move
+      // meaningfully.
+      entry: roundToSymbol(symbol, currentPrice),
+      currentPrice: roundToSymbol(symbol, currentPrice),
+      stop: roundToSymbol(symbol, stop),
       targets: [
-        parseFloat(tp1.toFixed(5)),
-        parseFloat(tp2.toFixed(5)),
-        parseFloat(tp3.toFixed(5))
+        roundToSymbol(symbol, tp1),
+        roundToSymbol(symbol, tp2),
+        roundToSymbol(symbol, tp3),
       ],
       riskReward: parseFloat(riskReward.toFixed(2)),
       confidence,

@@ -15,6 +15,7 @@
 
 import WebSocket from 'ws';
 import { db } from '../db';
+import { roundToSymbol, symbolDigits, symbolPipFactor } from './symbol-precision';
 import { exchangeRateAPI } from './exchangerate-api';
 import { telegramNotifier } from './telegram-notifier';
 import { getDailyLossStatus } from './broker-deals';
@@ -829,14 +830,34 @@ export class CTraderExecutor {
       const isOurs = (m: any) => m?.payload?.order?.clientOrderId === clientOrderId;
 
       // Step 7 — Place market order with SL + TP1
+      //
+      // LISTEN BEFORE SENDING. This used to send the order, then `await this.record(...)` — a
+      // database round trip — and only then attach the execution listener. Anything the broker
+      // replied inside that window had no listener and was dropped, and the wait below then ran
+      // its full 15s and reported "Timeout waiting for payloadType 2126".
+      //
+      // The replies most likely to lose that race are the fast ones, and the fastest of all is a
+      // server-side validation rejection, which needs no market interaction. That is exactly what
+      // was observed: the same USD/JPY digits defect surfaced twice as "ORDER REJECTED" and twice
+      // as a 15s timeout, depending on whether the reply beat the INSERT. The promise is created
+      // first so `waitFor`'s listeners are attached synchronously before the order goes out.
+      //
+      // The no-op catch only prevents an unhandled-rejection warning if `record()` throws before
+      // the await below; the real error still surfaces there.
+      const execWait = this.waitFor(emitter, PT.EXECUTION_EVENT, 15000, isOurs);
+      execWait.catch(() => { /* handled at the await below */ });
+
+      // ROUNDED TO SYMBOL PRECISION AT THE BOUNDARY. The generator now emits correctly rounded
+      // prices, but this is the last point before the broker sees them and it is cheap: any
+      // caller that reintroduces a 5-decimal JPY price gets a valid order instead of a rejection.
       this.send(socket, PT.NEW_ORDER_REQ, {
         ctidTraderAccountId: accountId,
         symbolId,
         orderType: 1,                                    // MARKET
         tradeSide: signal.type === 'LONG' ? 1 : 2,      // BUY=1, SELL=2
         volume,
-        stopLoss:   signal.stop,
-        takeProfit: signal.targets[0],                   // TP1 at 2:1 R:R
+        stopLoss:   roundToSymbol(signal.symbol, signal.stop),
+        takeProfit: roundToSymbol(signal.symbol, signal.targets[0]),   // TP1 at 2:1 R:R
         clientOrderId,
       });
 
@@ -850,7 +871,7 @@ export class CTraderExecutor {
       });
 
       // Wait for execution confirmation — OURS, matched on clientOrderId.
-      let exec = await this.waitFor(emitter, PT.EXECUTION_EVENT, 15000, isOurs);
+      let exec = await execWait;
 
       // ACCEPTED IS NOT A FILL, AND ACCEPTED CARRIES NO PRICE.
       //
@@ -969,9 +990,8 @@ export class CTraderExecutor {
       // window in which the trade is unprotected.
       let slippagePips: number | null = null;
       if (confirmedPrice && positionId) {
-        const isJpy     = signal.symbol.includes('JPY');
-        const digits    = isJpy ? 3 : 5;
-        const pipFactor = isJpy ? 100 : 10000;
+        const digits    = symbolDigits(signal.symbol);
+        const pipFactor = symbolPipFactor(signal.symbol);
         const long      = signal.type === 'LONG';
         const slDist    = Math.abs(signal.entry - signal.stop);
         const tpDist    = Math.abs(signal.targets[0] - signal.entry);
@@ -1179,7 +1199,7 @@ export class CTraderExecutor {
       });
       const res = await this.waitFor(emitter, PT.GET_TRENDBARS_RES, 30000);
 
-      const digits = symbolName.includes('JPY') ? 3 : 5;
+      const digits = symbolDigits(symbolName);
       const px = (v: number) => Number((v / 100_000).toFixed(digits));
 
       return (res.payload?.trendbar ?? []).map((b: any) => {
@@ -1495,7 +1515,7 @@ export class CTraderExecutor {
     }
 
     const pipFactor = symbol.includes('JPY') ? 100 : 10000;
-    const digits    = symbol.includes('JPY') ? 3 : 5;
+    const digits    = symbolDigits(symbol);
     const slPips    = 25;   // wide on purpose — see above. Same count for JPY; the pip factor differs.
 
     const signalId = `smoke-${Date.now()}`;
@@ -1629,7 +1649,7 @@ export class CTraderExecutor {
       }
 
       // Absolute levels, rounded to the pair's price precision. BUY: stop below, target above.
-      const digits = symbol.includes('JPY') ? 3 : 5;
+      const digits = symbolDigits(symbol);
       const stopLoss   = refPrice ? +(refPrice - slPips / pipFactor).toFixed(digits) : undefined;
       const takeProfit = refPrice ? +(refPrice + (slPips * 2) / pipFactor).toFixed(digits) : undefined;
 
