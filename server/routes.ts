@@ -874,6 +874,91 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
+  /**
+   * GET /api/auth/google  and  /api/auth/google/callback
+   *
+   * THE BUTTON HAS NEVER WORKED, AND IT LIED ABOUT IT.
+   *
+   * `client/src/lib/auth.ts:208` sends the browser to `/api/auth/google`. No route was ever
+   * mounted, so the request fell through to the static-file handler and came back **200 with the
+   * SPA shell**, which then rendered the app's own React Router "404 Page Not Found". A dead
+   * integration is a nuisance; one that impersonates your own error page costs real time — it
+   * burned three rounds of a debugging session on 2026-09-13 before anyone checked the network
+   * tab, and it is why an expired admin session could never be renewed by the obvious route.
+   *
+   * `passport-config.ts` only registers the Google strategy when GOOGLE_CLIENT_ID and
+   * GOOGLE_CLIENT_SECRET are both present. Verified against the deployed service on 2026-09-13:
+   * it has 21 environment variables and **no GOOGLE_* among them**, so the strategy has never
+   * existed in production and `passport.authenticate('google')` would throw "Unknown
+   * authentication strategy". Mounting the real flow here without credentials would replace a
+   * fake 404 with a 500 — louder, still broken.
+   *
+   * So this route's whole job, for now, is to tell the truth: 503, because the service genuinely
+   * is unavailable rather than missing. The OAuth flow itself is deliberately NOT written yet —
+   * it cannot be executed even once until the credentials exist, and unverifiable code does not
+   * belong on an authentication path.
+   *
+   * TO FINISH IT: create an OAuth 2.0 Client ID in Google Cloud Console, set GOOGLE_CLIENT_ID,
+   * GOOGLE_CLIENT_SECRET and GOOGLE_CALLBACK_URL in Render (the default still points at
+   * localhost:5000), then replace this with the real handlers. Note `requireAuth` is Bearer-only,
+   * so the callback has to get a JWT into localStorage as `forex_auth_token` — via a single-use
+   * short-lived code the client exchanges by POST, NOT a token in the redirect URL, which would
+   * leak into browser history, Referer headers and proxy logs.
+   */
+  /**
+   * Absolute login URL when FRONTEND_URL is set, relative otherwise.
+   *
+   * Naively concatenating produced "//login" on an unset FRONTEND_URL — which a browser reads as
+   * a PROTOCOL-RELATIVE URL to a host called "login" — and "https://site//login" on a trailing
+   * slash. The whole point of this page is to give someone a working way out, so the one link on
+   * it has to survive both.
+   */
+  const loginHref = () => {
+    const base = (process.env.FRONTEND_URL || '').trim().replace(/["<>]/g, '').replace(/\/+$/, '');
+    return base ? `${base}/login` : '/login';
+  };
+
+  const googleUnavailable = (req: any, res: any) => {
+    const configured = !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
+    // The distinction matters to whoever is debugging, and to nobody else.
+    console.warn(
+      `[auth] /api/auth/google hit but Google sign-in is unavailable — ` +
+      `credentials ${configured ? 'ARE set, so the OAuth handlers still need mounting' : 'are NOT set (no GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET)'}`
+    );
+
+    // A fetch caller gets JSON; a browser navigation gets something a person can read. The button
+    // is a full page navigation, so HTML is the path that actually runs.
+    if (req.accepts(['html', 'json']) === 'json') {
+      return res.status(503).json({
+        success: false,
+        error: 'Google sign-in is not available on this deployment. Use email and password.',
+        reason: configured ? 'handlers_not_mounted' : 'credentials_not_configured',
+      });
+    }
+
+    res.status(503).type('html').send(`<!doctype html>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Google sign-in unavailable</title>
+<style>
+  body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0f172a;color:#e2e8f0;
+       font:16px/1.6 system-ui,-apple-system,Segoe UI,sans-serif;padding:24px}
+  .card{max-width:30rem;background:#1e293b;border:1px solid #334155;border-radius:12px;padding:28px}
+  h1{margin:0 0 12px;font-size:1.25rem;color:#fff}
+  p{margin:0 0 14px;color:#cbd5e1}
+  a{display:inline-block;margin-top:6px;background:#f97316;color:#fff;text-decoration:none;
+    padding:10px 18px;border-radius:8px;font-weight:600}
+</style>
+<div class="card">
+  <h1>Google sign-in isn't available</h1>
+  <p>This deployment has no Google OAuth credentials configured, so the Google button can't sign you in.</p>
+  <p>Your account still works normally — sign in with your email and password.</p>
+  <a href="${loginHref()}">Back to sign in</a>
+</div>`);
+  };
+
+  app.get("/api/auth/google", googleUnavailable);
+  app.get("/api/auth/google/callback", googleUnavailable);
+
   // Get current user (requires JWT authentication)
   app.get("/api/auth/me", requireAuth, async (req, res) => {
     try {
