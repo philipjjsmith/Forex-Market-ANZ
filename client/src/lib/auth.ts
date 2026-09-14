@@ -31,8 +31,14 @@ export function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
 }
 
-// Set token in localStorage
-function setToken(token: string): void {
+/**
+ * Set token in localStorage.
+ *
+ * EXPORTED so the OAuth callback page can finish a Google sign-in. It was a module-private
+ * `function`, which meant no page outside this file could store a token — the single reason a
+ * callback route could not have worked even once, however correct the server half was.
+ */
+export function setToken(token: string): void {
   localStorage.setItem(TOKEN_KEY, token);
 }
 

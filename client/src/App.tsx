@@ -8,12 +8,15 @@ import Analytics from "@/pages/Analytics";
 import Learn from "@/pages/Learn";
 import Admin from "@/pages/Admin";
 import Login from "@/pages/Login";
+import AuthCallback from "@/pages/AuthCallback";
 import NotFound from "@/pages/not-found";
 
 function Router() {
   return (
     <Switch>
       <Route path="/login" component={Login} />
+      {/* Where Google sign-in returns. Must sit above the catch-all or it renders the 404. */}
+      <Route path="/auth/callback" component={AuthCallback} />
       <Route path="/" component={Dashboard} />
       <Route path="/analytics" component={Analytics} />
       <Route path="/learn" component={Learn} />

@@ -18,6 +18,8 @@ import { getWeekStats, getMonthWinCount, getMonthLossCount, getMonthNetPips, get
 import { backtester } from "./services/backtester";
 import { propFirmService, THE5ERS_BOOTCAMP, THE5ERS_BOOTCAMP_PHASE2, BRIGHTFUNDED_PHASE1 } from "./services/prop-firm-config";
 import { db } from "./db";
+import passport from "./passport-config";
+import { randomBytes } from "crypto";
 import { sql } from "drizzle-orm";
 
 // In-memory dedup guard for weekly summary (reset on restart — acceptable)
@@ -906,6 +908,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
    * leak into browser history, Referer headers and proxy logs.
    */
   /**
+   * Is Google sign-in actually usable on this deployment?
+   *
+   * The SAME condition passport-config.ts uses to decide whether to register the strategy. If it
+   * is false the strategy does not exist, and calling passport.authenticate('google') would throw
+   * "Unknown authentication strategy" — a 500 where a legible 503 belongs.
+   */
+  const googleConfigured = () => !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
+
+  /**
    * Absolute login URL when FRONTEND_URL is set, relative otherwise.
    *
    * Naively concatenating produced "//login" on an unset FRONTEND_URL — which a browser reads as
@@ -919,11 +930,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   };
 
   const googleUnavailable = (req: any, res: any) => {
-    const configured = !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
-    // The distinction matters to whoever is debugging, and to nobody else.
+    // Only reachable when the credentials are absent: the handlers below check googleConfigured()
+    // and call this instead of authenticating. The old 'handlers_not_mounted' reason is gone
+    // because the handlers now exist — keeping it would describe a state that can no longer occur.
     console.warn(
-      `[auth] /api/auth/google hit but Google sign-in is unavailable — ` +
-      `credentials ${configured ? 'ARE set, so the OAuth handlers still need mounting' : 'are NOT set (no GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET)'}`
+      '[auth] /api/auth/google hit but GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET are not set — ' +
+      'the passport strategy was never registered, so sign-in cannot proceed'
     );
 
     // A fetch caller gets JSON; a browser navigation gets something a person can read. The button
@@ -932,7 +944,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(503).json({
         success: false,
         error: 'Google sign-in is not available on this deployment. Use email and password.',
-        reason: configured ? 'handlers_not_mounted' : 'credentials_not_configured',
+        reason: 'credentials_not_configured',
       });
     }
 
@@ -956,8 +968,101 @@ export async function registerRoutes(app: Express): Promise<Server> {
 </div>`);
   };
 
-  app.get("/api/auth/google", googleUnavailable);
-  app.get("/api/auth/google/callback", googleUnavailable);
+  /**
+   * ONE-TIME CODES — how a JWT gets from this server into the browser's localStorage.
+   *
+   * `requireAuth` is Bearer-only (auth-middleware.ts reads req.headers.authorization; there is no
+   * cookie path), so an OAuth callback has to land a token in localStorage under
+   * `forex_auth_token`. The obvious way is to redirect with the token in the URL. Don't: a URL
+   * lands in browser history, in the Referer header of the next request the page makes, and in
+   * every proxy and access log along the way — and this token is a full admin credential for
+   * however long JWT_EXPIRES_IN says.
+   *
+   * So the redirect carries an opaque single-use code instead, and the client trades it for the
+   * token over a POST. The code is worthless by itself: 60 seconds, one use, and useless without
+   * reaching this server.
+   *
+   * In-memory is the right size for this. Render's free tier runs ONE instance, so there is no
+   * second process to share with, and the only loss window is a restart between the redirect and
+   * the exchange — a few seconds, after which the user clicks the button again. A database table
+   * for a value with a 60-second life would be more moving parts, not more reliability.
+   */
+  const googleCodes = new Map<string, { token: string; user: any; expiresAt: number }>();
+  const GOOGLE_CODE_TTL_MS = 60_000;
+
+  const issueGoogleCode = (token: string, user: any): string => {
+    // Evict expired entries on write. The map only grows on successful sign-ins, so there is no
+    // unbounded-growth path worth a timer, but leaving dead tokens in memory is untidy.
+    // Array.from rather than `for...of` over the Map: this project's tsconfig target predates
+    // downlevelIteration, so iterating a Map directly does not compile.
+    const now = Date.now();
+    Array.from(googleCodes.keys()).forEach(k => {
+      const v = googleCodes.get(k);
+      if (v && v.expiresAt <= now) googleCodes.delete(k);
+    });
+
+    const code = randomBytes(32).toString('base64url');
+    googleCodes.set(code, { token, user, expiresAt: now + GOOGLE_CODE_TTL_MS });
+    return code;
+  };
+
+  /** Redirect the browser back to the front end, with a reason the login page can show. */
+  const googleFail = (res: any, why: string) => {
+    console.error(`[auth] Google sign-in failed: ${why}`);
+    res.redirect(`${loginHref()}?error=${encodeURIComponent(why)}`);
+  };
+
+  // ── Step 1: send the user to Google ────────────────────────────────────────
+  app.get("/api/auth/google", (req, res, next) => {
+    if (!googleConfigured()) return googleUnavailable(req, res);
+    // `session: false` because a JWT is being issued — server-side session state would be a
+    // second source of truth for the same fact, and requireAuth would never read it.
+    passport.authenticate('google', { scope: ['profile', 'email'], session: false })(req, res, next);
+  });
+
+  // ── Step 2: Google sends the user back here ────────────────────────────────
+  app.get("/api/auth/google/callback", (req, res, next) => {
+    if (!googleConfigured()) return googleUnavailable(req, res);
+
+    passport.authenticate('google', { session: false }, (err: any, user: any) => {
+      // The user declining consent arrives here as no-error-no-user. It is not a fault, so it must
+      // not look like one — send them back to the login page rather than a 500.
+      if (err)   return googleFail(res, 'google_error');
+      if (!user) return googleFail(res, 'google_denied');
+
+      try {
+        const token = generateToken(user);
+        const code  = issueGoogleCode(token, {
+          id: user.id, username: user.username, email: user.email, role: user.role,
+        });
+        console.log(`[auth] Google sign-in OK for ${user.email} (role ${user.role})`);
+        res.redirect(`${loginHref().replace(/\/login$/, '')}/auth/callback?code=${code}`);
+      } catch (e: any) {
+        googleFail(res, 'token_issue_failed');
+      }
+    })(req, res, next);
+  });
+
+  /**
+   * Step 3: the client trades the code for the real token.
+   *
+   * POST, not GET, so the code never reaches a browser history entry or a server access log the
+   * way a query string would. Single use — deleted on read, whether or not it had expired, so a
+   * replayed code is dead even if the clock is generous.
+   */
+  app.post("/api/auth/google/exchange", (req, res) => {
+    const code = typeof req.body?.code === 'string' ? req.body.code : '';
+    if (!code) return res.status(400).json({ success: false, error: 'Missing code' });
+
+    const entry = googleCodes.get(code);
+    googleCodes.delete(code);
+
+    if (!entry) return res.status(400).json({ success: false, error: 'Invalid or already-used code' });
+    if (entry.expiresAt <= Date.now()) {
+      return res.status(400).json({ success: false, error: 'Sign-in code expired, please try again' });
+    }
+    res.json({ success: true, token: entry.token, user: entry.user });
+  });
 
   // Get current user (requires JWT authentication)
   app.get("/api/auth/me", requireAuth, async (req, res) => {
