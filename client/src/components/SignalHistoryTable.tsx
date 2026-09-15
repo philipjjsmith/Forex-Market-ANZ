@@ -96,7 +96,7 @@ export function SignalHistoryTable({ signals, accountSize, performanceData }: Si
         );
       default:
         return (
-          <Badge variant="outline" className="border-gray-500/50 text-gray-300 bg-gray-500/10">
+          <Badge variant="outline" className="border-input/50 text-foreground-secondary bg-secondary/10">
             {outcome}
           </Badge>
         );
@@ -115,7 +115,7 @@ export function SignalHistoryTable({ signals, accountSize, performanceData }: Si
 
   if (signals.length === 0) {
     return (
-      <div className="text-center py-12 text-gray-400">
+      <div className="text-center py-12 text-muted-foreground">
         <BarChart3 className="w-16 h-16 mx-auto mb-4 opacity-20" />
         <p>No completed signals yet</p>
         <p className="text-sm mt-2">Wait for signals to hit TP1, SL, or expire</p>
@@ -129,10 +129,10 @@ export function SignalHistoryTable({ signals, accountSize, performanceData }: Si
       <div className="flex gap-4">
         <div className="w-48">
           <Select value={symbolFilter} onValueChange={setSymbolFilter}>
-            <SelectTrigger className="bg-slate-800 border-white/20 text-white">
+            <SelectTrigger className="bg-muted border-white/20 text-white">
               <SelectValue placeholder="All Symbols" />
             </SelectTrigger>
-            <SelectContent className="bg-slate-800 border-white/20">
+            <SelectContent className="bg-muted border-white/20">
               <SelectItem value="all" className="text-white">All Symbols</SelectItem>
               {symbols.map((symbol) => (
                 <SelectItem key={symbol} value={symbol} className="text-white">
@@ -145,10 +145,10 @@ export function SignalHistoryTable({ signals, accountSize, performanceData }: Si
 
         <div className="w-48">
           <Select value={outcomeFilter} onValueChange={setOutcomeFilter}>
-            <SelectTrigger className="bg-slate-800 border-white/20 text-white">
+            <SelectTrigger className="bg-muted border-white/20 text-white">
               <SelectValue placeholder="All Outcomes" />
             </SelectTrigger>
-            <SelectContent className="bg-slate-800 border-white/20">
+            <SelectContent className="bg-muted border-white/20">
               <SelectItem value="all" className="text-white">All Outcomes</SelectItem>
               <SelectItem value="TP1_HIT" className="text-white">TP1 Hit (Win)</SelectItem>
               <SelectItem value="STOP_HIT" className="text-white">Stop Hit (Loss)</SelectItem>
@@ -185,7 +185,7 @@ export function SignalHistoryTable({ signals, accountSize, performanceData }: Si
 
               return (
               <TableRow key={signal.signal_id} className="border-white/10 hover:bg-white/5">
-                <TableCell className="text-gray-300 text-sm">
+                <TableCell className="text-foreground-secondary text-sm">
                   {formatDate(signal.outcome_time)}
                 </TableCell>
                 <TableCell className="font-medium text-white">
@@ -238,7 +238,7 @@ export function SignalHistoryTable({ signals, accountSize, performanceData }: Si
                         ? 'text-green-400'
                         : signal.profit_loss_pips < 0
                         ? 'text-red-400'
-                        : 'text-gray-400'
+                        : 'text-muted-foreground'
                     }`}
                   >
                     {signal.profit_loss_pips > 0 ? '+' : ''}
@@ -254,13 +254,13 @@ export function SignalHistoryTable({ signals, accountSize, performanceData }: Si
                           ? 'text-green-400'
                           : actualProfit.profitUSD < 0
                           ? 'text-red-400'
-                          : 'text-gray-400'
+                          : 'text-muted-foreground'
                       }`}
                     >
                       {actualProfit.profitUSD > 0 ? '+' : ''}${actualProfit.profitUSD.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>
                   </div>
-                  <div className="text-xs text-gray-400 text-right mt-1">
+                  <div className="text-xs text-muted-foreground text-right mt-1">
                     {actualProfit.riskPercent.toFixed(1)}% risk
                   </div>
                 </TableCell>
@@ -272,7 +272,7 @@ export function SignalHistoryTable({ signals, accountSize, performanceData }: Si
       </div>
 
       {filteredSignals.length === 0 && (
-        <div className="text-center py-8 text-gray-400">
+        <div className="text-center py-8 text-muted-foreground">
           <p>No signals match your filters</p>
         </div>
       )}

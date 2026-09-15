@@ -148,11 +148,11 @@ export default function EnhancedWinningTradesHero() {
   // Loading state
   if (isLoading) {
     return (
-      <Card className="w-full bg-slate-900 border-slate-700">
+      <Card className="w-full bg-card border-border">
         <CardContent className="flex items-center justify-center py-24">
           <div className="text-center space-y-3">
             <Loader2 className="h-8 w-8 animate-spin text-cyan-400 mx-auto" />
-            <p className="text-slate-300">Loading winning trades...</p>
+            <p className="text-foreground-secondary">Loading winning trades...</p>
           </div>
         </CardContent>
       </Card>
@@ -173,7 +173,7 @@ export default function EnhancedWinningTradesHero() {
   // Empty state
   if (!trades || trades.length === 0) {
     return (
-      <Card className="w-full bg-slate-900 border-slate-700">
+      <Card className="w-full bg-card border-border">
         <CardContent className="py-16 text-center">
           <div className="space-y-4">
             <div className="mx-auto w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center">
@@ -181,7 +181,7 @@ export default function EnhancedWinningTradesHero() {
             </div>
             <div>
               <h3 className="text-xl font-semibold text-white mb-2">No Winning Trades Yet This Week</h3>
-              <p className="text-slate-300 max-w-md mx-auto">
+              <p className="text-foreground-secondary max-w-md mx-auto">
                 Check back soon! Our signal generator runs every 15 minutes to identify high-probability trading opportunities.
               </p>
             </div>
@@ -205,7 +205,7 @@ export default function EnhancedWinningTradesHero() {
             <h2 className="text-2xl font-bold text-white">
               {isDemo ? 'Example Trades (Illustrative)' : 'Winning Trades This Week'}
             </h2>
-            <p className="text-sm text-slate-300">
+            <p className="text-sm text-foreground-secondary">
               {isDemo
                 ? 'Not real results — no winning trades were recorded this week'
                 : `${trades.length} ${trades.length === 1 ? 'win' : 'wins'} • Enhanced analysis`}
@@ -214,7 +214,7 @@ export default function EnhancedWinningTradesHero() {
         </div>
 
         {/* View Mode Toggle */}
-        <div className="flex items-center gap-2 bg-slate-800/50 backdrop-blur-sm rounded-lg p-1 border border-slate-600">
+        <div className="flex items-center gap-2 bg-muted/50 backdrop-blur-sm rounded-lg p-1 border border-input">
           <Button
             variant={viewMode === 'beginner' ? 'default' : 'ghost'}
             size="sm"
@@ -252,7 +252,7 @@ export default function EnhancedWinningTradesHero() {
         onMouseLeave={() => setIsAutoPlaying(true)}
       >
         {/* Featured Trade Card */}
-        <Card className="relative overflow-hidden bg-slate-900 border-slate-700 shadow-2xl">
+        <Card className="relative overflow-hidden bg-card border-border shadow-2xl">
           <CardContent className="p-0">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 p-6">
               {/* Left Column: Chart & Basic Info */}
@@ -268,7 +268,7 @@ export default function EnhancedWinningTradesHero() {
                 )}
 
                 {/* Chart */}
-                <div className="bg-slate-800/50 rounded-lg border border-slate-700 p-4">
+                <div className="bg-muted/50 rounded-lg border border-border p-4">
                   <WinningTradeChart
                     candles={enhancedTrade?.candles || currentTrade.candles || []}
                     entryPrice={currentTrade.entry_price}
@@ -418,7 +418,7 @@ export default function EnhancedWinningTradesHero() {
 
             {/* Detailed Statistics Panel - Professional Mode */}
             {viewMode === 'professional' && enhancedTrade && strategyStats && (
-              <div className="border-t border-slate-700 p-6">
+              <div className="border-t border-border p-6">
                 <StatisticsPanel
                   technicalIndicators={enhancedTrade.indicators}
                   executionMetrics={{
@@ -441,7 +441,7 @@ export default function EnhancedWinningTradesHero() {
 
             {/* Trade Narrative - All Modes */}
             {enhancedTrade && (
-              <div className="border-t border-slate-700 p-6">
+              <div className="border-t border-border p-6">
                 <TradeNarrative
                   symbol={enhancedTrade.symbol}
                   type={enhancedTrade.type}
@@ -459,7 +459,7 @@ export default function EnhancedWinningTradesHero() {
 
             {/* MAE/MFE Chart - Professional Mode */}
             {viewMode === 'professional' && enhancedTrade && enhancedTrade.candles && (
-              <div className="border-t border-slate-700 p-6">
+              <div className="border-t border-border p-6">
                 <MAEMFEChart
                   candles={enhancedTrade.candles}
                   entryPrice={enhancedTrade.entry_price}
@@ -480,7 +480,7 @@ export default function EnhancedWinningTradesHero() {
               variant="outline"
               size="icon"
               onClick={goToPrevious}
-              className="absolute left-4 top-1/2 -translate-y-1/2 bg-slate-900/80 backdrop-blur-sm hover:bg-slate-900 border-slate-700 shadow-lg"
+              className="absolute left-4 top-1/2 -translate-y-1/2 bg-card/80 backdrop-blur-sm hover:bg-card border-border shadow-lg"
             >
               <ChevronLeft className="h-5 w-5" />
             </Button>
@@ -488,7 +488,7 @@ export default function EnhancedWinningTradesHero() {
               variant="outline"
               size="icon"
               onClick={goToNext}
-              className="absolute right-4 top-1/2 -translate-y-1/2 bg-slate-900/80 backdrop-blur-sm hover:bg-slate-900 border-slate-700 shadow-lg"
+              className="absolute right-4 top-1/2 -translate-y-1/2 bg-card/80 backdrop-blur-sm hover:bg-card border-border shadow-lg"
             >
               <ChevronRight className="h-5 w-5" />
             </Button>
@@ -516,7 +516,7 @@ export default function EnhancedWinningTradesHero() {
 
       {/* Session Heat Map - Professional Mode */}
       {viewMode === 'professional' && sessionPerformance && (
-        <Card className="border-slate-700">
+        <Card className="border-border">
           <CardContent className="p-6">
             <SessionHeatMap
               sessions={sessionPerformance.sessions}
@@ -529,9 +529,9 @@ export default function EnhancedWinningTradesHero() {
       {/* Loading Overlay for Details */}
       {isLoadingDetails && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-slate-900 rounded-lg p-6 shadow-xl">
+          <div className="bg-card rounded-lg p-6 shadow-xl">
             <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-3" />
-            <p className="text-slate-300">Loading trade analysis...</p>
+            <p className="text-foreground-secondary">Loading trade analysis...</p>
           </div>
         </div>
       )}

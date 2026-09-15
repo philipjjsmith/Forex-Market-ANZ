@@ -32,6 +32,11 @@ export default {
         // Flat / base colors (regular buttons)
         background: "hsl(var(--background) / <alpha-value>)",
         foreground: "hsl(var(--foreground) / <alpha-value>)",
+        // Tailwind's slate ramp carries four text weights; this system had two.
+        // These are the missing middle steps, pinned to slate-300 and slate-500,
+        // so `text-slate-300` and `text-slate-500` migrate at zero visual delta.
+        "foreground-secondary": "hsl(var(--foreground-secondary) / <alpha-value>)",
+        "subtle-foreground": "hsl(var(--subtle-foreground) / <alpha-value>)",
         border: "hsl(var(--border) / <alpha-value>)",
         input: "hsl(var(--input) / <alpha-value>)",
         card: {

@@ -29,7 +29,7 @@ export default function NotFound() {
           This page doesn't exist
         </h1>
 
-        <p className="text-slate-400 mb-8 leading-relaxed">
+        <p className="text-muted-foreground mb-8 leading-relaxed">
           The link may be out of date, or the address may have a typo in it.
           Everything live is reachable from the dashboard.
         </p>
@@ -43,13 +43,16 @@ export default function NotFound() {
           </Link>
           <Link
             href="/learn"
-            className="px-5 py-2.5 rounded-md border border-slate-600 hover:border-slate-500 text-slate-200 font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-400"
+            className="px-5 py-2.5 rounded-md border border-border hover:border-input text-foreground font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-400"
           >
             Learn the basics
           </Link>
         </div>
 
-        <p className="mt-10 text-xs text-slate-500">
+        {/* The demo/simulated line is compliance text, so it takes --muted-foreground
+            (7.4:1) and not --subtle-foreground, which measures 4.05:1 on this ground -
+            just under AA. The tertiary step is fine for a version string; not for this. */}
+        <p className="mt-10 text-xs text-muted-foreground">
           ArgoFX — demo account, simulated results. No real money is traded.
         </p>
       </div>

@@ -68,12 +68,12 @@ export default function AuthCallback() {
   }, []);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-900 text-slate-200 p-6">
-      <div className="max-w-md w-full bg-slate-800 border border-slate-700 rounded-xl p-7 text-center">
+    <div className="min-h-screen flex items-center justify-center bg-card text-foreground p-6">
+      <div className="max-w-md w-full bg-muted border border-border rounded-xl p-7 text-center">
         {error ? (
           <>
             <h1 className="text-lg font-semibold text-white mb-3">Sign-in didn't complete</h1>
-            <p className="text-slate-300 mb-5">{error}</p>
+            <p className="text-foreground-secondary mb-5">{error}</p>
             <a
               href="/login"
               className="inline-block bg-orange-500 hover:bg-orange-600 text-white font-semibold px-5 py-2.5 rounded-lg no-underline"
@@ -84,7 +84,7 @@ export default function AuthCallback() {
         ) : (
           <>
             <h1 className="text-lg font-semibold text-white mb-3">Finishing sign-in…</h1>
-            <p className="text-slate-400">One moment.</p>
+            <p className="text-muted-foreground">One moment.</p>
           </>
         )}
       </div>

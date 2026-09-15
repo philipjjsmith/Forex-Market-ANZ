@@ -204,7 +204,7 @@ export default function Dashboard() {
               {user && user.role === 'admin' && (
                 <button
                   onClick={() => setLocation('/admin')}
-                  className="flex items-center gap-2 px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg transition-colors"
+                  className="flex items-center gap-2 px-4 py-2 bg-secondary hover:bg-muted rounded-lg transition-colors"
                   title="Admin Dashboard"
                 >
                   <Settings className="w-4 h-4" />
@@ -214,15 +214,15 @@ export default function Dashboard() {
 
               {/* User Info & Logout */}
               {user && (
-                <div className="flex items-center gap-3 px-4 py-2 bg-slate-800 rounded-lg border border-slate-700">
+                <div className="flex items-center gap-3 px-4 py-2 bg-muted rounded-lg border border-border">
                   <User className="w-4 h-4 text-amber-400" />
                   <span className="text-sm font-medium">{user.username}</span>
                   <button
                     onClick={handleLogout}
-                    className="p-2 hover:bg-slate-700 rounded-lg transition-colors"
+                    className="p-2 hover:bg-secondary rounded-lg transition-colors"
                     title="Logout"
                   >
-                    <LogOut className="w-4 h-4 text-slate-400 hover:text-red-400" />
+                    <LogOut className="w-4 h-4 text-muted-foreground hover:text-red-400" />
                   </button>
                 </div>
               )}
@@ -242,7 +242,7 @@ export default function Dashboard() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           <div className="glass-card p-4 rounded-xl hover-lift hover-glow-blue transition-all duration-300">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-slate-400 text-sm">Active Signals</span>
+              <span className="text-muted-foreground text-sm">Active Signals</span>
               <Activity className="w-4 h-4 text-amber-400" />
             </div>
             <div className="text-2xl font-bold" data-testid="text-active-signals">{activeSignals.length}</div>
@@ -250,7 +250,7 @@ export default function Dashboard() {
 
           <div className="glass-card p-4 rounded-xl hover-lift hover-glow-blue transition-all duration-300">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-slate-400 text-sm">LONG Signals</span>
+              <span className="text-muted-foreground text-sm">LONG Signals</span>
               <TrendingUp className="w-4 h-4 text-green-400" />
             </div>
             <div className="text-2xl font-bold text-green-400" data-testid="text-long-signals">
@@ -260,7 +260,7 @@ export default function Dashboard() {
 
           <div className="glass-card p-4 rounded-xl hover-lift hover-glow-blue transition-all duration-300">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-slate-400 text-sm">SHORT Signals</span>
+              <span className="text-muted-foreground text-sm">SHORT Signals</span>
               <TrendingDown className="w-4 h-4 text-red-400" />
             </div>
             <div className="text-2xl font-bold text-red-400" data-testid="text-short-signals">
@@ -270,7 +270,7 @@ export default function Dashboard() {
 
           <div className="glass-card p-4 rounded-xl hover-lift hover-glow-blue transition-all duration-300">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-slate-400 text-sm">Avg Confidence</span>
+              <span className="text-muted-foreground text-sm">Avg Confidence</span>
               <Target className="w-4 h-4 text-purple-400" />
             </div>
             <div className="text-2xl font-bold text-purple-400" data-testid="text-avg-confidence">
@@ -296,7 +296,7 @@ export default function Dashboard() {
                 className={`px-4 py-2 rounded-lg transition-all duration-300 ${
                   selectedPair === pair
                     ? 'bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-lg shadow-amber-500/50'
-                    : 'glass text-slate-300 hover:bg-slate-700/50'
+                    : 'glass text-foreground-secondary hover:bg-secondary/50'
                 }`}
                 data-testid={`button-pair-${pair.replace('/', '-')}`}
               >
@@ -315,11 +315,11 @@ export default function Dashboard() {
         <div className="mb-6 glass-card rounded-xl p-4">
           <div className="flex flex-col lg:flex-row items-start lg:items-center gap-4 lg:gap-6">
             <div className="flex items-center gap-3">
-              <span className="text-sm text-slate-400 font-semibold">Signal Quality:</span>
+              <span className="text-sm text-muted-foreground font-semibold">Signal Quality:</span>
               <select
                 value={confidenceFilter}
                 onChange={(e) => setConfidenceFilter(e.target.value)}
-                className="px-4 py-2 rounded-lg bg-slate-700 text-white border border-slate-600 hover:border-amber-500 focus:border-amber-500 focus:outline-none cursor-pointer transition-all"
+                className="px-4 py-2 rounded-lg bg-secondary text-white border border-input hover:border-amber-500 focus:border-amber-500 focus:outline-none cursor-pointer transition-all"
                 data-testid="select-confidence-filter"
               >
                 <option value="all">📊 All Signals</option>
@@ -328,12 +328,12 @@ export default function Dashboard() {
               </select>
             </div>
 
-            <div className="lg:border-l border-slate-600 lg:pl-6 flex items-center gap-3">
-              <span className="text-sm text-slate-400 font-semibold">Signal Type:</span>
+            <div className="lg:border-l border-input lg:pl-6 flex items-center gap-3">
+              <span className="text-sm text-muted-foreground font-semibold">Signal Type:</span>
               <select
                 value={signalTypeFilter}
                 onChange={(e) => setSignalTypeFilter(e.target.value)}
-                className="px-4 py-2 rounded-lg bg-slate-700 text-white border border-slate-600 hover:border-amber-500 focus:border-amber-500 focus:outline-none cursor-pointer transition-all"
+                className="px-4 py-2 rounded-lg bg-secondary text-white border border-input hover:border-amber-500 focus:border-amber-500 focus:outline-none cursor-pointer transition-all"
                 data-testid="select-signal-type-filter"
               >
                 <option value="all">All Types</option>
@@ -342,11 +342,11 @@ export default function Dashboard() {
               </select>
             </div>
 
-            <div className="lg:border-l border-slate-600 lg:pl-6 flex items-center gap-3">
+            <div className="lg:border-l border-input lg:pl-6 flex items-center gap-3">
               <button
                 onClick={() => setActiveTab('signals')}
                 className={`px-4 py-2 rounded-lg transition-all ${
-                  activeTab === 'signals' ? 'bg-amber-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                  activeTab === 'signals' ? 'bg-amber-600 text-white' : 'bg-secondary text-foreground-secondary hover:bg-secondary'
                 }`}
                 data-testid="button-tab-signals"
               >
@@ -355,7 +355,7 @@ export default function Dashboard() {
               <button
                 onClick={() => setActiveTab('saved')}
                 className={`px-4 py-2 rounded-lg transition-all flex items-center gap-2 ${
-                  activeTab === 'saved' ? 'bg-amber-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                  activeTab === 'saved' ? 'bg-amber-600 text-white' : 'bg-secondary text-foreground-secondary hover:bg-secondary'
                 }`}
                 data-testid="button-tab-saved"
               >
@@ -365,7 +365,7 @@ export default function Dashboard() {
             </div>
 
             <div className="lg:ml-auto flex items-center gap-3">
-              <div className="text-sm text-slate-400">
+              <div className="text-sm text-muted-foreground">
                 Showing <span className="font-bold text-white text-lg">{displaySignals.length}</span> signal{displaySignals.length !== 1 ? 's' : ''}
               </div>
               {(confidenceFilter !== 'all' || signalTypeFilter !== 'all') && (
@@ -374,7 +374,7 @@ export default function Dashboard() {
                     setConfidenceFilter('all');
                     setSignalTypeFilter('all');
                   }}
-                  className="px-3 py-1 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded text-sm transition-all"
+                  className="px-3 py-1 bg-secondary hover:bg-secondary text-foreground-secondary rounded text-sm transition-all"
                   data-testid="button-clear-filters"
                 >
                   Clear Filters
@@ -403,9 +403,9 @@ export default function Dashboard() {
                   analysis={currentData.analysis}
                 />
               ) : (
-                <div className="bg-slate-800 rounded-lg p-8 text-center border border-slate-700">
+                <div className="bg-muted rounded-lg p-8 text-center border border-border">
                   <AlertTriangle className="w-12 h-12 text-yellow-500 mx-auto mb-3" />
-                  <p className="text-slate-400">
+                  <p className="text-muted-foreground">
                     {activeTab === 'saved'
                       ? 'No saved signals yet. Click the star icon on any signal to save it.'
                       : 'No signals generated yet. Our system automatically scans the market every 15 minutes - check back soon!'}
@@ -442,25 +442,25 @@ export default function Dashboard() {
               const slowMA = Indicators.ema(closes, 50);
 
               return (
-                <div className="bg-slate-800 rounded-lg p-5 border border-slate-700">
+                <div className="bg-muted rounded-lg p-5 border border-border">
                   <div className="space-y-4">
                     <div>
                       <div className="flex justify-between mb-2">
-                        <span className="text-sm text-slate-400">Current Price</span>
+                        <span className="text-sm text-muted-foreground">Current Price</span>
                         <span className="font-bold text-lg" data-testid="text-current-price">{currentData.currentPrice.toFixed(5)}</span>
                       </div>
                     </div>
 
-                    <div className="border-t border-slate-700 pt-4">
+                    <div className="border-t border-border pt-4">
                       <div className="flex justify-between mb-2">
-                        <span className="text-sm text-slate-400">RSI (14)</span>
+                        <span className="text-sm text-muted-foreground">RSI (14)</span>
                         <span className={`font-bold ${
                           rsi && rsi > 70 ? 'text-red-400' : rsi && rsi < 30 ? 'text-green-400' : 'text-yellow-400'
                         }`} data-testid="text-rsi">
                           {rsi ? rsi.toFixed(2) : 'N/A'}
                         </span>
                       </div>
-                      <div className="w-full bg-slate-900 rounded-full h-2">
+                      <div className="w-full bg-card rounded-full h-2">
                         <div 
                           className={`h-2 rounded-full ${
                             rsi && rsi > 70 ? 'bg-red-500' : rsi && rsi < 30 ? 'bg-green-500' : 'bg-yellow-500'
@@ -470,29 +470,29 @@ export default function Dashboard() {
                       </div>
                     </div>
 
-                    <div className="border-t border-slate-700 pt-4">
+                    <div className="border-t border-border pt-4">
                       <div className="flex justify-between mb-2">
-                        <span className="text-sm text-slate-400">ADX (14)</span>
+                        <span className="text-sm text-muted-foreground">ADX (14)</span>
                         <span className={`font-bold ${
                           adx && adx.adx > 25 ? 'text-green-400' : 'text-yellow-400'
                         }`} data-testid="text-adx">
                           {adx ? adx.adx.toFixed(2) : 'N/A'}
                         </span>
                       </div>
-                      <p className="text-xs text-slate-500">
+                      <p className="text-xs text-subtle-foreground">
                         {adx && adx.adx > 25 ? 'Strong Trend' : 'Weak Trend'}
                       </p>
                     </div>
 
-                    <div className="border-t border-slate-700 pt-4">
-                      <p className="text-sm text-slate-400 mb-2">Moving Averages</p>
+                    <div className="border-t border-border pt-4">
+                      <p className="text-sm text-muted-foreground mb-2">Moving Averages</p>
                       <div className="space-y-2">
                         <div className="flex justify-between">
-                          <span className="text-xs text-slate-500">EMA 20</span>
+                          <span className="text-xs text-subtle-foreground">EMA 20</span>
                           <span className="text-sm font-mono">{fastMA ? fastMA.toFixed(5) : 'N/A'}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-xs text-slate-500">EMA 50</span>
+                          <span className="text-xs text-subtle-foreground">EMA 50</span>
                           <span className="text-sm font-mono">{slowMA ? slowMA.toFixed(5) : 'N/A'}</span>
                         </div>
                         <div className="flex items-center gap-2 text-xs">
@@ -509,30 +509,30 @@ export default function Dashboard() {
                       </div>
                     </div>
 
-                    <div className="border-t border-slate-700 pt-4">
-                      <p className="text-sm text-slate-400 mb-2">Bollinger Bands</p>
+                    <div className="border-t border-border pt-4">
+                      <p className="text-sm text-muted-foreground mb-2">Bollinger Bands</p>
                       <div className="space-y-2">
                         <div className="flex justify-between">
-                          <span className="text-xs text-slate-500">Upper</span>
+                          <span className="text-xs text-subtle-foreground">Upper</span>
                           <span className="text-sm font-mono">{bb ? bb.upper.toFixed(5) : 'N/A'}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-xs text-slate-500">Middle</span>
+                          <span className="text-xs text-subtle-foreground">Middle</span>
                           <span className="text-sm font-mono">{bb ? bb.middle.toFixed(5) : 'N/A'}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-xs text-slate-500">Lower</span>
+                          <span className="text-xs text-subtle-foreground">Lower</span>
                           <span className="text-sm font-mono">{bb ? bb.lower.toFixed(5) : 'N/A'}</span>
                         </div>
                       </div>
                     </div>
 
-                    <div className="border-t border-slate-700 pt-4">
+                    <div className="border-t border-border pt-4">
                       <div className="flex justify-between">
-                        <span className="text-sm text-slate-400">ATR (14)</span>
+                        <span className="text-sm text-muted-foreground">ATR (14)</span>
                         <span className="text-sm font-mono" data-testid="text-atr">{atr ? atr.toFixed(5) : 'N/A'}</span>
                       </div>
-                      <p className="text-xs text-slate-500 mt-1">Average True Range - Volatility Measure</p>
+                      <p className="text-xs text-subtle-foreground mt-1">Average True Range - Volatility Measure</p>
                     </div>
                   </div>
                 </div>

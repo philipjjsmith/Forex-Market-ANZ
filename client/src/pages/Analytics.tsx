@@ -332,7 +332,7 @@ export default function Analytics() {
                   Account Size
                 </CardTitle>
               </div>
-              <CardDescription className="text-slate-300 text-sm">
+              <CardDescription className="text-foreground-secondary text-sm">
                 Select your trading capital
               </CardDescription>
             </CardHeader>
@@ -341,10 +341,10 @@ export default function Analytics() {
                 value={accountSize.toString()}
                 onValueChange={(value) => setAccountSize(parseInt(value))}
               >
-                <SelectTrigger className="bg-slate-800/80 border-cyan-500/30 text-white h-12 text-lg font-semibold hover:border-cyan-400/50 transition-colors">
+                <SelectTrigger className="bg-muted/80 border-cyan-500/30 text-white h-12 text-lg font-semibold hover:border-cyan-400/50 transition-colors">
                   <SelectValue placeholder="Select account size" />
                 </SelectTrigger>
-                <SelectContent className="bg-slate-800 border-cyan-500/30">
+                <SelectContent className="bg-muted border-cyan-500/30">
                   <SelectItem value="1000" className="text-white hover:bg-cyan-500/20 text-lg">
                     $1,000
                   </SelectItem>
@@ -370,19 +370,19 @@ export default function Analytics() {
               ? 'bg-gradient-to-br from-emerald-900/50 to-green-900/50 border-emerald-500/50'
               : profitData.totalProfit < 0
               ? 'bg-gradient-to-br from-red-900/50 to-rose-900/50 border-red-500/50'
-              : 'bg-gradient-to-br from-slate-800/50 to-slate-900/50 border-slate-600/50'
+              : 'bg-gradient-to-br from-muted/50 to-card/50 border-input/50'
           }`}>
             <CardHeader className="pb-3">
               <div className="flex items-center gap-3 mb-1">
                 <div className={`p-2 rounded-lg ${
-                  profitData.totalProfit > 0 ? 'bg-emerald-500/20' : profitData.totalProfit < 0 ? 'bg-red-500/20' : 'bg-slate-500/20'
+                  profitData.totalProfit > 0 ? 'bg-emerald-500/20' : profitData.totalProfit < 0 ? 'bg-red-500/20' : 'bg-secondary/20'
                 }`}>
                   <DollarSign className={`w-6 h-6 ${
-                    profitData.totalProfit > 0 ? 'text-emerald-400' : profitData.totalProfit < 0 ? 'text-red-400' : 'text-slate-400'
+                    profitData.totalProfit > 0 ? 'text-emerald-400' : profitData.totalProfit < 0 ? 'text-red-400' : 'text-muted-foreground'
                   }`} />
                 </div>
                 <CardDescription className={`text-base font-medium ${
-                  profitData.totalProfit > 0 ? 'text-emerald-200' : profitData.totalProfit < 0 ? 'text-red-200' : 'text-slate-300'
+                  profitData.totalProfit > 0 ? 'text-emerald-200' : profitData.totalProfit < 0 ? 'text-red-200' : 'text-foreground-secondary'
                 }`}>
                   Total Profit/Loss
                 </CardDescription>
@@ -393,19 +393,19 @@ export default function Analytics() {
                 <p className={`text-6xl font-black tracking-tight ${
                   profitData.totalProfit > 0 ? 'text-emerald-400 drop-shadow-[0_0_15px_rgba(52,211,153,0.5)]' :
                   profitData.totalProfit < 0 ? 'text-red-400 drop-shadow-[0_0_15px_rgba(248,113,113,0.5)]' :
-                  'text-slate-400'
+                  'text-muted-foreground'
                 }`}>
                   {profitData.totalProfit >= 0 ? '+' : ''}${Math.abs(profitData.totalProfit).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </p>
               </div>
               <div className={`flex items-center justify-center gap-2 text-sm font-medium ${
-                profitData.totalProfit > 0 ? 'text-emerald-300' : profitData.totalProfit < 0 ? 'text-red-300' : 'text-slate-400'
+                profitData.totalProfit > 0 ? 'text-emerald-300' : profitData.totalProfit < 0 ? 'text-red-300' : 'text-muted-foreground'
               }`}>
                 <span className="flex items-center gap-1">
                   <CheckCircle className="w-4 h-4" />
                   {profitData.winningTrades} wins
                 </span>
-                <span className="text-slate-500">•</span>
+                <span className="text-subtle-foreground">•</span>
                 <span className="flex items-center gap-1">
                   <XCircle className="w-4 h-4" />
                   {profitData.losingTrades} losses
@@ -438,7 +438,7 @@ export default function Analytics() {
                     ? 'bg-emerald-500/20 text-emerald-300'
                     : profitData.totalProfit < 0
                     ? 'bg-red-500/20 text-red-300'
-                    : 'bg-slate-500/20 text-slate-300'
+                    : 'bg-secondary/20 text-foreground-secondary'
                 }`}>
                   {profitData.totalProfit > 0 ? <TrendingUp className="w-4 h-4" /> : profitData.totalProfit < 0 ? <TrendingDown className="w-4 h-4" /> : <Target className="w-4 h-4" />}
                   <span>
@@ -593,10 +593,10 @@ export default function Analytics() {
 
               {/* Days Filter */}
               <Select value={historyDaysFilter.toString()} onValueChange={handleDaysFilterChange}>
-                <SelectTrigger className="w-[180px] bg-slate-800/80 text-white border-white/30">
+                <SelectTrigger className="w-[180px] bg-muted/80 text-white border-white/30">
                   <SelectValue placeholder="Time period" />
                 </SelectTrigger>
-                <SelectContent className="bg-slate-800 text-white border-white/30">
+                <SelectContent className="bg-muted text-white border-white/30">
                   <SelectItem value="0">All Time</SelectItem>
                   <SelectItem value="7">Last 7 days</SelectItem>
                   <SelectItem value="30">Last 30 days</SelectItem>

@@ -106,7 +106,7 @@ export default function Login() {
         {/* Logo & Title */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center gap-3 mb-4">
-            <div className="p-3 bg-amber-600 rounded-lg">
+            <div className="p-3 bg-primary rounded-lg">
               <Activity className="w-10 h-10 text-white" />
             </div>
           </div>
@@ -123,7 +123,7 @@ export default function Login() {
         </div>
 
         {/* Main Card */}
-        <div className="bg-slate-800 rounded-xl p-8 shadow-2xl border border-slate-700">
+        <div className="bg-muted rounded-xl p-8 shadow-2xl border border-border">
           {/* Error/Success Messages */}
           {error && (
             <Alert className="mb-6 bg-red-500/10 border-red-500/50 text-red-300">
@@ -171,10 +171,10 @@ export default function Login() {
               {/* Divider */}
               <div className="relative my-6">
                 <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-slate-600"></div>
+                  <div className="w-full border-t border-input"></div>
                 </div>
                 <div className="relative flex justify-center text-sm">
-                  <span className="px-4 bg-slate-800 text-slate-400">Or continue with email</span>
+                  <span className="px-4 bg-muted text-muted-foreground">Or continue with email</span>
                 </div>
               </div>
             </>
@@ -185,16 +185,16 @@ export default function Login() {
             {/* Username (Register only) */}
             {!isLogin && !showForgotPassword && (
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
+                <label className="block text-sm font-medium text-foreground-secondary mb-2">
                   Username
                 </label>
                 <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                   <Input
                     type="text"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    className="pl-10 bg-slate-700 border-slate-600 text-white placeholder:text-slate-400 focus:border-amber-500"
+                    className="pl-10 bg-secondary border-input text-white placeholder:text-muted-foreground focus:border-amber-500"
                     placeholder="Enter your username"
                     disabled={isLoading}
                   />
@@ -204,16 +204,16 @@ export default function Login() {
 
             {/* Email */}
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
+              <label className="block text-sm font-medium text-foreground-secondary mb-2">
                 Email
               </label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                 <Input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="pl-10 bg-slate-700 border-slate-600 text-white placeholder:text-slate-400 focus:border-amber-500"
+                  className="pl-10 bg-secondary border-input text-white placeholder:text-muted-foreground focus:border-amber-500"
                   placeholder="Enter your email"
                   disabled={isLoading}
                 />
@@ -223,16 +223,16 @@ export default function Login() {
             {/* Password (not for forgot password) */}
             {!showForgotPassword && (
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
+                <label className="block text-sm font-medium text-foreground-secondary mb-2">
                   Password
                 </label>
                 <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                   <Input
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="pl-10 bg-slate-700 border-slate-600 text-white placeholder:text-slate-400 focus:border-amber-500"
+                    className="pl-10 bg-secondary border-input text-white placeholder:text-muted-foreground focus:border-amber-500"
                     placeholder="Enter your password"
                     disabled={isLoading}
                   />
@@ -243,16 +243,16 @@ export default function Login() {
             {/* Confirm Password (Register only) */}
             {!isLogin && !showForgotPassword && (
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
+                <label className="block text-sm font-medium text-foreground-secondary mb-2">
                   Confirm Password
                 </label>
                 <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                   <Input
                     type="password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="pl-10 bg-slate-700 border-slate-600 text-white placeholder:text-slate-400 focus:border-amber-500"
+                    className="pl-10 bg-secondary border-input text-white placeholder:text-muted-foreground focus:border-amber-500"
                     placeholder="Confirm your password"
                     disabled={isLoading}
                   />
@@ -277,7 +277,7 @@ export default function Login() {
             <Button
               type="submit"
               disabled={isLoading}
-              className="w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold py-6 mt-6"
+              className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-6 mt-6"
             >
               {isLoading ? (
                 <Loader2 className="w-5 h-5 animate-spin" />
@@ -300,12 +300,12 @@ export default function Login() {
                   setError('');
                   setSuccessMessage('');
                 }}
-                className="text-sm text-slate-400 hover:text-amber-400"
+                className="text-sm text-muted-foreground hover:text-amber-400"
               >
                 Back to login
               </button>
             ) : (
-              <div className="text-sm text-slate-400">
+              <div className="text-sm text-muted-foreground">
                 {isLogin ? "Don't have an account? " : 'Already have an account? '}
                 <button
                   onClick={() => {
@@ -323,7 +323,7 @@ export default function Login() {
         </div>
 
         {/* Footer */}
-        <p className="text-center text-sm text-slate-500 mt-8">
+        <p className="text-center text-sm text-muted-foreground mt-8">
           By continuing, you agree to our Terms of Service and Privacy Policy
         </p>
       </div>

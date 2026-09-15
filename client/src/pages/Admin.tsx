@@ -766,7 +766,7 @@ export default function Admin() {
       case 'healthy': return 'bg-green-500/20 text-green-400 border-green-500/50';
       case 'warning': return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/50';
       case 'error': return 'bg-red-500/20 text-red-400 border-red-500/50';
-      default: return 'bg-gray-500/20 text-gray-400 border-gray-500/50';
+      default: return 'bg-secondary/20 text-muted-foreground border-input/50';
     }
   };
 
@@ -828,13 +828,13 @@ export default function Admin() {
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex gap-2 border-b border-slate-700">
+        <div className="flex gap-2 border-b border-border">
           <button
             onClick={() => setActiveTab('system')}
             className={`px-6 py-3 font-semibold transition-all ${
               activeTab === 'system'
                 ? 'text-white border-b-2 border-amber-500'
-                : 'text-slate-400 hover:text-slate-200'
+                : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             <div className="flex items-center gap-2">
@@ -847,7 +847,7 @@ export default function Admin() {
             className={`px-6 py-3 font-semibold transition-all ${
               activeTab === 'ai'
                 ? 'text-white border-b-2 border-amber-500'
-                : 'text-slate-400 hover:text-slate-200'
+                : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             <div className="flex items-center gap-2">
@@ -860,7 +860,7 @@ export default function Admin() {
             className={`px-6 py-3 font-semibold transition-all ${
               activeTab === 'growth'
                 ? 'text-white border-b-2 border-green-500'
-                : 'text-slate-400 hover:text-slate-200'
+                : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             <div className="flex items-center gap-2">
@@ -925,13 +925,13 @@ export default function Admin() {
       </div>
 
       {/* cTrader connectivity (read-only; sends no order) */}
-      <Card className="bg-slate-800/80 border-slate-600/50 backdrop-blur-md shadow-xl">
+      <Card className="bg-muted/80 border-input/50 backdrop-blur-md shadow-xl">
         <CardHeader>
           <CardTitle className="text-white flex items-center gap-2">
             <Zap className="h-4 w-4" />
             cTrader Connectivity
           </CardTitle>
-          <CardDescription className="text-slate-400">
+          <CardDescription className="text-muted-foreground">
             Read-only. Authenticates and lists accounts on both hosts — it never places an order.
           </CardDescription>
         </CardHeader>
@@ -942,11 +942,11 @@ export default function Admin() {
               : <><RefreshCw className="w-4 h-4 mr-2" />Run check</>}
           </Button>
           {ctrader && (
-            <pre className="text-xs text-slate-200 bg-slate-900/80 rounded p-3 overflow-x-auto max-h-80">
+            <pre className="text-xs text-foreground bg-card/80 rounded p-3 overflow-x-auto max-h-80">
               {JSON.stringify(ctrader, null, 2)}
             </pre>
           )}
-          <div className="border-t border-slate-600/50 pt-3 mt-3">
+          <div className="border-t border-input/50 pt-3 mt-3">
             <p className="text-xs text-amber-300/90 mb-2">
               <strong>Legacy shape test.</strong> Places a real market order on the DEMO account at
               the broker's minimum volume, and leaves the position open — close it in cTrader. It
@@ -968,13 +968,13 @@ export default function Admin() {
               </div>
             )}
             {smoke && (
-              <pre className="mt-3 text-xs text-slate-200 bg-slate-900/80 rounded p-3 overflow-x-auto max-h-80">
+              <pre className="mt-3 text-xs text-foreground bg-card/80 rounded p-3 overflow-x-auto max-h-80">
                 {JSON.stringify(smoke, null, 2)}
               </pre>
             )}
           </div>
 
-          <div className="border-t border-slate-600/50 pt-3 mt-3">
+          <div className="border-t border-input/50 pt-3 mt-3">
             <p className="text-xs text-emerald-300/90 mb-2">
               <strong>Production path test.</strong> Runs the real executeSignal path — order tagged
               with a clientOrderId, the ACCEPTED→FILLED chase, reconcile, the SL/TP re-anchor and its
@@ -996,14 +996,14 @@ export default function Admin() {
               </div>
             )}
             {pathResult && (
-              <pre className="mt-3 text-xs text-slate-200 bg-slate-900/80 rounded p-3 overflow-x-auto max-h-80">
+              <pre className="mt-3 text-xs text-foreground bg-card/80 rounded p-3 overflow-x-auto max-h-80">
                 {JSON.stringify(pathResult, null, 2)}
               </pre>
             )}
           </div>
 
-          <div className="border-t border-slate-600/50 pt-3 mt-3">
-            <p className="text-xs text-slate-400 mb-2">Open positions on the demo account.</p>
+          <div className="border-t border-input/50 pt-3 mt-3">
+            <p className="text-xs text-muted-foreground mb-2">Open positions on the demo account.</p>
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => callPositions(false)} disabled={posLoading} data-testid="button-positions-list">
                 {posLoading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Working…</> : <>List open positions</>}
@@ -1013,14 +1013,14 @@ export default function Admin() {
               </Button>
             </div>
             {positions && (
-              <pre className="mt-3 text-xs text-slate-200 bg-slate-900/80 rounded p-3 overflow-x-auto max-h-80">
+              <pre className="mt-3 text-xs text-foreground bg-card/80 rounded p-3 overflow-x-auto max-h-80">
                 {JSON.stringify(positions, null, 2)}
               </pre>
             )}
           </div>
 
-          <div className="border-t border-slate-600/50 pt-3 mt-3">
-            <p className="text-xs text-slate-400 mb-2">
+          <div className="border-t border-input/50 pt-3 mt-3">
+            <p className="text-xs text-muted-foreground mb-2">
               Broker ground truth. Every win/loss figure elsewhere is <strong>modelled</strong> from
               candles; this is what actually filled and closed, including swap and commission.
             </p>
@@ -1042,17 +1042,17 @@ export default function Admin() {
               </Button>
             </div>
             {crosscheck && (
-              <pre className="mt-3 text-xs text-slate-200 bg-slate-900/80 rounded p-3 overflow-x-auto max-h-96">
+              <pre className="mt-3 text-xs text-foreground bg-card/80 rounded p-3 overflow-x-auto max-h-96">
                 {JSON.stringify(crosscheck, null, 2)}
               </pre>
             )}
             {tgTest && (
-              <pre className="mt-3 text-xs text-slate-200 bg-slate-900/80 rounded p-3 overflow-x-auto max-h-60">
+              <pre className="mt-3 text-xs text-foreground bg-card/80 rounded p-3 overflow-x-auto max-h-60">
                 {JSON.stringify(tgTest, null, 2)}
               </pre>
             )}
             {brokerDeals && (
-              <pre className="mt-3 text-xs text-slate-200 bg-slate-900/80 rounded p-3 overflow-x-auto max-h-80">
+              <pre className="mt-3 text-xs text-foreground bg-card/80 rounded p-3 overflow-x-auto max-h-80">
                 {JSON.stringify(brokerDeals, null, 2)}
               </pre>
             )}
@@ -1063,7 +1063,7 @@ export default function Admin() {
       {/* System Status */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Overall Health */}
-        <Card className="bg-slate-800/80 border-slate-600/50 backdrop-blur-md shadow-xl">
+        <Card className="bg-muted/80 border-input/50 backdrop-blur-md shadow-xl">
           <CardHeader>
             <CardTitle className="text-white flex items-center gap-2">
               {getStatusIcon(health?.status)}
@@ -1078,7 +1078,7 @@ export default function Admin() {
         </Card>
 
         {/* Signal Generator */}
-        <Card className="bg-slate-800/80 border-slate-600/50 backdrop-blur-md shadow-xl">
+        <Card className="bg-muted/80 border-input/50 backdrop-blur-md shadow-xl">
           <CardHeader>
             <CardTitle className="text-white flex items-center gap-2">
               <TrendingUp className="h-4 w-4" />
@@ -1091,7 +1091,7 @@ export default function Admin() {
                 <Activity className="w-4 h-4 text-amber-400" />
                 <span className="text-amber-200 text-sm">Status:</span>
               </div>
-              <Badge className={health?.signalGenerator.isRunning ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'}>
+              <Badge className={health?.signalGenerator.isRunning ? 'bg-green-500/20 text-green-400' : 'bg-secondary/20 text-muted-foreground'}>
                 {health?.signalGenerator.isRunning ? 'Running' : 'Idle'}
               </Badge>
             </div>
@@ -1122,7 +1122,7 @@ export default function Admin() {
         </Card>
 
         {/* Outcome Validator */}
-        <Card className="bg-slate-800/80 border-slate-600/50 backdrop-blur-md shadow-xl">
+        <Card className="bg-muted/80 border-input/50 backdrop-blur-md shadow-xl">
           <CardHeader>
             <CardTitle className="text-white flex items-center gap-2">
               <RefreshCw className="h-4 w-4" />
@@ -1171,7 +1171,7 @@ export default function Admin() {
       {/* API Usage */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Frankfurter API */}
-        <Card className="bg-slate-800/80 border-slate-600/50 backdrop-blur-md shadow-xl">
+        <Card className="bg-muted/80 border-input/50 backdrop-blur-md shadow-xl">
           <CardHeader>
             <CardTitle className="text-white">Frankfurter API</CardTitle>
             <CardDescription className="text-amber-200">Real-time forex quotes (ECB data)</CardDescription>
@@ -1209,7 +1209,7 @@ export default function Admin() {
         </Card>
 
         {/* Twelve Data API */}
-        <Card className="bg-slate-800/80 border-slate-600/50 backdrop-blur-md shadow-xl">
+        <Card className="bg-muted/80 border-input/50 backdrop-blur-md shadow-xl">
           <CardHeader>
             <CardTitle className="text-white">Twelve Data API</CardTitle>
             <CardDescription className="text-amber-200">Historical candle data</CardDescription>
@@ -1255,7 +1255,7 @@ export default function Admin() {
       </div>
 
       {/* Recent Generation Logs */}
-      <Card className="bg-slate-800/80 border-slate-600/50 backdrop-blur-md shadow-xl">
+      <Card className="bg-muted/80 border-input/50 backdrop-blur-md shadow-xl">
         <CardHeader>
           <CardTitle className="text-white">Recent Generation Logs</CardTitle>
           <CardDescription className="text-amber-200">Last 10 signal generation cycles</CardDescription>
@@ -1270,7 +1270,7 @@ export default function Admin() {
               {logs.map((log) => (
                 <div
                   key={log.id}
-                  className="bg-slate-700/50 border border-slate-600/50 rounded-lg p-4 hover:bg-slate-700/70 transition-all"
+                  className="bg-secondary/50 border border-input/50 rounded-lg p-4 hover:bg-secondary/70 transition-all"
                 >
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-3">
@@ -1421,7 +1421,7 @@ export default function Admin() {
                 </Card>
 
                 {/* Symbol Performance Matrix */}
-                <Card className="bg-slate-800/80 border-slate-600/50 shadow-xl">
+                <Card className="bg-muted/80 border-input/50 shadow-xl">
                   <CardHeader>
                     <CardTitle className="text-white flex items-center gap-2">
                       <Target className="w-5 h-5 text-amber-400" />
@@ -1436,7 +1436,7 @@ export default function Admin() {
                       <div className="overflow-x-auto">
                         <table className="w-full">
                           <thead>
-                            <tr className="border-b border-slate-600">
+                            <tr className="border-b border-input">
                               <th className="text-left p-3 text-amber-200 font-semibold">Symbol</th>
                               <th className="text-center p-3 text-amber-200 font-semibold">Signals</th>
                               <th className="text-center p-3 text-amber-200 font-semibold">Win Rate</th>
@@ -1447,7 +1447,7 @@ export default function Admin() {
                             {aiInsights.symbolInsights.map((symbol) => (
                               <tr
                                 key={symbol.symbol}
-                                className="border-b border-slate-700 hover:bg-slate-700/30 transition-colors"
+                                className="border-b border-border hover:bg-secondary/30 transition-colors"
                               >
                                 <td className="p-3 text-white font-mono font-bold">
                                   {symbol.symbol}
@@ -1472,7 +1472,7 @@ export default function Admin() {
                                       {symbol.winRate.toFixed(1)}%
                                     </span>
                                   ) : (
-                                    <span className="text-slate-500">—</span>
+                                    <span className="text-subtle-foreground">—</span>
                                   )}
                                 </td>
                                 <td className="p-3">
@@ -1487,7 +1487,7 @@ export default function Admin() {
                                       Learning ({Math.round((symbol.totalSignals / 30) * 100)}%)
                                     </span>
                                   ) : (
-                                    <span className="inline-flex items-center gap-1 px-2 py-1 bg-slate-700/50 text-slate-400 rounded text-sm">
+                                    <span className="inline-flex items-center gap-1 px-2 py-1 bg-secondary/50 text-muted-foreground rounded text-sm">
                                       <AlertCircle className="w-4 h-4" />
                                       No Data
                                     </span>
@@ -1499,7 +1499,7 @@ export default function Admin() {
                         </table>
                       </div>
                     ) : (
-                      <div className="text-center py-8 text-slate-400">
+                      <div className="text-center py-8 text-muted-foreground">
                         No symbol data available yet
                       </div>
                     )}
@@ -1507,7 +1507,7 @@ export default function Admin() {
                 </Card>
 
                 {/* AI Recommendations */}
-                <Card className="bg-slate-800/80 border-slate-600/50 shadow-xl">
+                <Card className="bg-muted/80 border-input/50 shadow-xl">
                   <CardHeader>
                     <CardTitle className="text-white flex items-center gap-2">
                       <Brain className="w-5 h-5 text-purple-400" />
@@ -1527,7 +1527,7 @@ export default function Admin() {
                         {recommendations.map((rec) => (
                           <div
                             key={rec.id}
-                            className="bg-slate-900/50 border border-slate-700 rounded-lg p-4"
+                            className="bg-card/50 border border-border rounded-lg p-4"
                           >
                             {/* Header */}
                             <div className="flex items-start justify-between mb-3">
@@ -1543,28 +1543,28 @@ export default function Admin() {
                             </div>
 
                             {/* Parameter Changes */}
-                            <div className="bg-slate-800/50 rounded p-3 mb-3">
+                            <div className="bg-muted/50 rounded p-3 mb-3">
                               <p className="text-amber-200 text-sm font-semibold mb-2">Suggested Changes:</p>
                               <div className="space-y-1 text-sm">
                                 {rec.suggested_changes.fastMA_period && (
-                                  <p className="text-slate-300">
-                                    <span className="text-slate-400">Fast EMA:</span>{' '}
+                                  <p className="text-foreground-secondary">
+                                    <span className="text-muted-foreground">Fast EMA:</span>{' '}
                                     <span className="text-red-400">{rec.suggested_changes.fastMA_period.from}</span>
                                     {' → '}
                                     <span className="text-green-400">{rec.suggested_changes.fastMA_period.to}</span>
                                   </p>
                                 )}
                                 {rec.suggested_changes.slowMA_period && (
-                                  <p className="text-slate-300">
-                                    <span className="text-slate-400">Slow EMA:</span>{' '}
+                                  <p className="text-foreground-secondary">
+                                    <span className="text-muted-foreground">Slow EMA:</span>{' '}
                                     <span className="text-red-400">{rec.suggested_changes.slowMA_period.from}</span>
                                     {' → '}
                                     <span className="text-green-400">{rec.suggested_changes.slowMA_period.to}</span>
                                   </p>
                                 )}
                                 {rec.suggested_changes.atr_multiplier && (
-                                  <p className="text-slate-300">
-                                    <span className="text-slate-400">ATR Multiplier:</span>{' '}
+                                  <p className="text-foreground-secondary">
+                                    <span className="text-muted-foreground">ATR Multiplier:</span>{' '}
                                     <span className="text-red-400">{rec.suggested_changes.atr_multiplier.from}x</span>
                                     {' → '}
                                     <span className="text-green-400">{rec.suggested_changes.atr_multiplier.to}x</span>
@@ -1576,11 +1576,11 @@ export default function Admin() {
                             {/* Reasoning */}
                             <div className="mb-3">
                               <p className="text-amber-200 text-sm font-semibold mb-1">Reasoning:</p>
-                              <p className="text-slate-300 text-sm leading-relaxed">{rec.reasoning}</p>
+                              <p className="text-foreground-secondary text-sm leading-relaxed">{rec.reasoning}</p>
                             </div>
 
                             {/* Metadata */}
-                            <div className="flex items-center gap-4 mb-3 text-xs text-slate-400">
+                            <div className="flex items-center gap-4 mb-3 text-xs text-muted-foreground">
                               <span>Based on {rec.based_on_signals} signals</span>
                               <span>•</span>
                               <span>{new Date(rec.created_at).toLocaleDateString()}</span>
@@ -1611,8 +1611,8 @@ export default function Admin() {
                     ) : (
                       <div className="text-center py-8">
                         <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-3 opacity-50" />
-                        <p className="text-slate-400">No pending recommendations</p>
-                        <p className="text-slate-500 text-sm mt-1">
+                        <p className="text-muted-foreground">No pending recommendations</p>
+                        <p className="text-subtle-foreground text-sm mt-1">
                           The AI will generate recommendations when it finds parameter improvements {'>'} 5%
                         </p>
                       </div>
@@ -1663,13 +1663,13 @@ export default function Admin() {
                 */}
                 {dualGrowthStats.integrity && (
                   <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="rounded-lg border border-slate-700 bg-slate-900/60 p-4">
-                      <div className="text-xs uppercase tracking-wide text-slate-400 mb-2">
+                    <div className="rounded-lg border border-border bg-card/60 p-4">
+                      <div className="text-xs uppercase tracking-wide text-muted-foreground mb-2">
                         Outcome reconciliation
                       </div>
                       <div className="text-2xl font-semibold text-white">
                         {dualGrowthStats.integrity.reconciled}
-                        <span className="text-slate-500 text-base font-normal">
+                        <span className="text-subtle-foreground text-base font-normal">
                           {' / '}{dualGrowthStats.integrity.totalRows} rows
                         </span>
                       </div>
@@ -1677,17 +1677,17 @@ export default function Admin() {
                         className={
                           dualGrowthStats.integrity.disagreementPct >= 20
                             ? 'mt-1 text-sm text-amber-400'
-                            : 'mt-1 text-sm text-slate-300'
+                            : 'mt-1 text-sm text-foreground-secondary'
                         }
                       >
                         {dualGrowthStats.integrity.disagreed} disagreed
                         {' ('}{dualGrowthStats.integrity.disagreementPct}%{')'}
                       </div>
-                      <div className="mt-2 text-xs text-slate-500 leading-snug">
+                      <div className="mt-2 text-xs text-subtle-foreground leading-snug">
                         {dualGrowthStats.integrity.note}
                       </div>
                       {dualGrowthStats.integrity.lastValidatedAt && (
-                        <div className="mt-1 text-xs text-slate-600">
+                        <div className="mt-1 text-xs text-subtle-foreground">
                           last validated{' '}
                           {new Date(dualGrowthStats.integrity.lastValidatedAt).toISOString()
                             .replace('T', ' ').slice(0, 16)} UTC
@@ -1695,19 +1695,19 @@ export default function Admin() {
                       )}
                     </div>
 
-                    <div className="rounded-lg border border-slate-700 bg-slate-900/60 p-4">
-                      <div className="text-xs uppercase tracking-wide text-slate-400 mb-2">
+                    <div className="rounded-lg border border-border bg-card/60 p-4">
+                      <div className="text-xs uppercase tracking-wide text-muted-foreground mb-2">
                         Open (unrealised)
                       </div>
                       <div className="text-2xl font-semibold text-white">
                         {dualGrowthStats.open?.pending ?? 0}
-                        <span className="text-slate-500 text-base font-normal"> pending</span>
+                        <span className="text-subtle-foreground text-base font-normal"> pending</span>
                       </div>
-                      <div className="mt-2 text-xs text-slate-500 leading-snug">
+                      <div className="mt-2 text-xs text-subtle-foreground leading-snug">
                         {dualGrowthStats.open?.note}
                       </div>
                       {dualGrowthStats.open?.oldestPendingAt && (
-                        <div className="mt-1 text-xs text-slate-600">
+                        <div className="mt-1 text-xs text-subtle-foreground">
                           oldest{' '}
                           {new Date(dualGrowthStats.open.oldestPendingAt).toISOString()
                             .replace('T', ' ').slice(0, 16)} UTC
@@ -1715,11 +1715,11 @@ export default function Admin() {
                       )}
                     </div>
 
-                    <div className="rounded-lg border border-slate-700 bg-slate-900/60 p-4">
-                      <div className="text-xs uppercase tracking-wide text-slate-400 mb-2">
+                    <div className="rounded-lg border border-border bg-card/60 p-4">
+                      <div className="text-xs uppercase tracking-wide text-muted-foreground mb-2">
                         Risk limits in force
                       </div>
-                      <div className="text-sm text-slate-300 space-y-0.5">
+                      <div className="text-sm text-foreground-secondary space-y-0.5">
                         <div>
                           max {dualGrowthStats.riskConfig?.maxTradesPerDay} trades/day
                           {' · '}{dualGrowthStats.riskConfig?.riskPerTradePercent}% risk
@@ -1743,7 +1743,7 @@ export default function Admin() {
                           </div>
                         )}
                       </div>
-                      <div className="mt-2 text-xs text-slate-500 leading-snug">
+                      <div className="mt-2 text-xs text-subtle-foreground leading-snug">
                         {dualGrowthStats.riskConfig?.correlationControlNote}
                       </div>
                     </div>
@@ -1767,10 +1767,10 @@ export default function Admin() {
                   <div className="flex gap-3">
                     {/* Data Quality Filter (Professional Soft Delete) */}
                     <Select value={dataQualityFilter} onValueChange={(value) => setDataQualityFilter(value)}>
-                      <SelectTrigger className="w-[240px] bg-slate-800/80 text-white border-white/30">
+                      <SelectTrigger className="w-[240px] bg-muted/80 text-white border-white/30">
                         <SelectValue placeholder="Data quality" />
                       </SelectTrigger>
-                      <SelectContent className="bg-slate-800 text-white border-white/30">
+                      <SelectContent className="bg-muted text-white border-white/30">
                         <SelectItem value="production">Production Only (v3.1.0+) ✅</SelectItem>
                         <SelectItem value="legacy">Legacy Data (pre-Nov 19) ⚠️</SelectItem>
                         <SelectItem value="all">All Data (Production + Legacy)</SelectItem>
@@ -1779,10 +1779,10 @@ export default function Admin() {
 
                     {/* Historical Data Filter (100% Accurate) */}
                     <Select value={historicalFilter} onValueChange={(value) => setHistoricalFilter(value)}>
-                      <SelectTrigger className="w-[240px] bg-slate-800/80 text-white border-white/30">
+                      <SelectTrigger className="w-[240px] bg-muted/80 text-white border-white/30">
                         <SelectValue placeholder="Data filter" />
                       </SelectTrigger>
-                      <SelectContent className="bg-slate-800 text-white border-white/30">
+                      <SelectContent className="bg-muted text-white border-white/30">
                         <SelectItem value="freshstart">Fresh Start (Jan 19+) 🚀</SelectItem>
                         <SelectItem value="nov4forward">Nov 4+ (Old Data) 📊</SelectItem>
                         <SelectItem value="all">All Historical Data ⚠️</SelectItem>
@@ -1791,10 +1791,10 @@ export default function Admin() {
 
                     {/* Time Period */}
                     <Select value={growthDays.toString()} onValueChange={(value) => setGrowthDays(parseInt(value))}>
-                      <SelectTrigger className="w-[180px] bg-slate-800/80 text-white border-white/30">
+                      <SelectTrigger className="w-[180px] bg-muted/80 text-white border-white/30">
                         <SelectValue placeholder="Time period" />
                       </SelectTrigger>
-                      <SelectContent className="bg-slate-800 text-white border-white/30">
+                      <SelectContent className="bg-muted text-white border-white/30">
                         <SelectItem value="0">All Time</SelectItem>
                         <SelectItem value="90">Last 90 days</SelectItem>
                         <SelectItem value="30">Last 30 days</SelectItem>
@@ -1836,7 +1836,7 @@ export default function Admin() {
 
                 {/* DIAGNOSTIC RESULTS */}
                 {showDiagnostic && diagnosticData && (
-                  <Card className="bg-slate-900/90 border-yellow-500/50 mb-6">
+                  <Card className="bg-card/90 border-yellow-500/50 mb-6">
                     <CardHeader>
                       <div className="flex items-center justify-between">
                         <CardTitle className="text-yellow-400">🔍 FXIFY Loss Diagnostic Results</CardTitle>
@@ -1844,7 +1844,7 @@ export default function Admin() {
                           onClick={() => setShowDiagnostic(false)}
                           variant="ghost"
                           size="sm"
-                          className="text-slate-400 hover:text-white"
+                          className="text-muted-foreground hover:text-white"
                         >
                           ✕ Close
                         </Button>
@@ -1853,27 +1853,27 @@ export default function Admin() {
                     <CardContent>
                       <div className="space-y-6">
                         {/* Overall Summary */}
-                        <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
+                        <div className="bg-muted/50 p-4 rounded-lg border border-border">
                           <h3 className="text-white font-bold mb-3">📊 Overall Summary</h3>
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                             <div>
-                              <p className="text-slate-400">Total Signals:</p>
+                              <p className="text-muted-foreground">Total Signals:</p>
                               <p className="text-white font-bold">{diagnosticData.summary.total_signals}</p>
                             </div>
                             <div>
-                              <p className="text-slate-400">Win Rate:</p>
+                              <p className="text-muted-foreground">Win Rate:</p>
                               <p className={`font-bold ${parseFloat(diagnosticData.summary.win_rate) >= 50 ? 'text-green-400' : 'text-red-400'}`}>
                                 {diagnosticData.summary.win_rate}%
                               </p>
                             </div>
                             <div>
-                              <p className="text-slate-400">Total Pips:</p>
+                              <p className="text-muted-foreground">Total Pips:</p>
                               <p className={`font-bold ${parseFloat(diagnosticData.summary.total_pips) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                                 {parseFloat(diagnosticData.summary.total_pips).toFixed(2)}
                               </p>
                             </div>
                             <div>
-                              <p className="text-slate-400">Total Dollars:</p>
+                              <p className="text-muted-foreground">Total Dollars:</p>
                               <p className={`font-bold ${parseFloat(diagnosticData.summary.total_pips) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                                 ${(parseFloat(diagnosticData.summary.total_pips) * 10).toLocaleString()}
                               </p>
@@ -1911,29 +1911,29 @@ export default function Admin() {
 
                         {/* Post-Nov4 Results (Date-Based Phase 2 & 3 Performance) */}
                         {diagnosticData.postNov4 && (
-                          <div className="bg-slate-800/50 border border-slate-700 p-4 rounded-lg">
+                          <div className="bg-muted/50 border border-border p-4 rounded-lg">
                             <h3 className="text-white font-bold mb-3">📊 Post-Nov4 Results (Phase 2 & 3 Performance)</h3>
                             {diagnosticData.postNov4.signals > 0 ? (
                               <div className="space-y-2">
                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                                   <div>
-                                    <p className="text-slate-400">Completed:</p>
+                                    <p className="text-muted-foreground">Completed:</p>
                                     <p className="text-white font-bold">{diagnosticData.postNov4.signals}</p>
                                   </div>
                                   <div>
-                                    <p className="text-slate-400">Win Rate:</p>
+                                    <p className="text-muted-foreground">Win Rate:</p>
                                     <p className={`font-bold ${parseFloat(diagnosticData.postNov4.winRate) >= 40 ? 'text-green-400' : parseFloat(diagnosticData.postNov4.winRate) >= 30 ? 'text-yellow-400' : 'text-red-400'}`}>
                                       {diagnosticData.postNov4.winRate}%
                                     </p>
                                   </div>
                                   <div>
-                                    <p className="text-slate-400">Total Pips:</p>
+                                    <p className="text-muted-foreground">Total Pips:</p>
                                     <p className={`font-bold ${parseFloat(diagnosticData.postNov4.totalPips) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                                       {parseFloat(diagnosticData.postNov4.totalPips).toFixed(2)}
                                     </p>
                                   </div>
                                   <div>
-                                    <p className="text-slate-400">Record:</p>
+                                    <p className="text-muted-foreground">Record:</p>
                                     <p className="text-white font-bold">{diagnosticData.postNov4.wins}W / {diagnosticData.postNov4.losses}L</p>
                                   </div>
                                 </div>
@@ -1978,7 +1978,7 @@ export default function Admin() {
                                 )}
                               </div>
                             ) : (
-                              <p className="text-slate-400 text-sm">
+                              <p className="text-muted-foreground text-sm">
                                 No completed signals since Nov 4. Signals typically take 3-7 days to resolve.
                               </p>
                             )}
@@ -1991,12 +1991,12 @@ export default function Admin() {
                           if (oldVersions.length > 0) {
                             const oldPips = oldVersions.reduce((sum: number, v: any) => sum + parseFloat(v.total_pips), 0);
                             return (
-                              <div className="bg-slate-800/30 border border-slate-600 p-4 rounded-lg">
-                                <h3 className="text-slate-300 font-bold mb-2">📜 Historical Context</h3>
-                                <p className="text-slate-400 text-sm mb-2">
+                              <div className="bg-muted/30 border border-input p-4 rounded-lg">
+                                <h3 className="text-foreground-secondary font-bold mb-2">📜 Historical Context</h3>
+                                <p className="text-muted-foreground text-sm mb-2">
                                   Pre-Phase 2 & 3 versions (&lt; v2.2.0): <span className="text-red-400 font-bold">{oldPips.toFixed(2)} pips</span>
                                 </p>
-                                <p className="text-slate-400 text-sm">
+                                <p className="text-muted-foreground text-sm">
                                   ℹ️ Use "Nov 4+ (Fixed System)" filter in Growth Tracking to see v2.2.0 performance only
                                 </p>
                               </div>
@@ -2010,19 +2010,19 @@ export default function Admin() {
                           <h3 className="text-white font-bold mb-3">🔢 Performance by Strategy Version</h3>
                           <div className="overflow-x-auto">
                             <table className="w-full text-sm">
-                              <thead className="bg-slate-800">
+                              <thead className="bg-muted">
                                 <tr>
-                                  <th className="text-left p-2 text-slate-300">Version</th>
-                                  <th className="text-right p-2 text-slate-300">Signals</th>
-                                  <th className="text-right p-2 text-slate-300">Win Rate</th>
-                                  <th className="text-right p-2 text-slate-300">Total Pips</th>
+                                  <th className="text-left p-2 text-foreground-secondary">Version</th>
+                                  <th className="text-right p-2 text-foreground-secondary">Signals</th>
+                                  <th className="text-right p-2 text-foreground-secondary">Win Rate</th>
+                                  <th className="text-right p-2 text-foreground-secondary">Total Pips</th>
                                 </tr>
                               </thead>
                               <tbody>
                                 {diagnosticData.byVersion.map((v: any, i: number) => (
-                                  <tr key={i} className="border-b border-slate-700">
+                                  <tr key={i} className="border-b border-border">
                                     <td className="p-2 text-white font-mono">{v.strategy_version || 'Unknown'}</td>
-                                    <td className="p-2 text-right text-slate-300">{v.signals}</td>
+                                    <td className="p-2 text-right text-foreground-secondary">{v.signals}</td>
                                     <td className={`p-2 text-right font-bold ${parseFloat(v.win_rate) >= 50 ? 'text-green-400' : 'text-red-400'}`}>
                                       {v.win_rate}%
                                     </td>
@@ -2041,19 +2041,19 @@ export default function Admin() {
                           <h3 className="text-white font-bold mb-3">💱 Performance by Symbol</h3>
                           <div className="overflow-x-auto">
                             <table className="w-full text-sm">
-                              <thead className="bg-slate-800">
+                              <thead className="bg-muted">
                                 <tr>
-                                  <th className="text-left p-2 text-slate-300">Symbol</th>
-                                  <th className="text-right p-2 text-slate-300">Signals</th>
-                                  <th className="text-right p-2 text-slate-300">Win Rate</th>
-                                  <th className="text-right p-2 text-slate-300">Total Pips</th>
+                                  <th className="text-left p-2 text-foreground-secondary">Symbol</th>
+                                  <th className="text-right p-2 text-foreground-secondary">Signals</th>
+                                  <th className="text-right p-2 text-foreground-secondary">Win Rate</th>
+                                  <th className="text-right p-2 text-foreground-secondary">Total Pips</th>
                                 </tr>
                               </thead>
                               <tbody>
                                 {diagnosticData.bySymbol.map((s: any, i: number) => (
-                                  <tr key={i} className="border-b border-slate-700">
+                                  <tr key={i} className="border-b border-border">
                                     <td className="p-2 text-white font-bold">{s.symbol}</td>
-                                    <td className="p-2 text-right text-slate-300">{s.signals}</td>
+                                    <td className="p-2 text-right text-foreground-secondary">{s.signals}</td>
                                     <td className={`p-2 text-right font-bold ${parseFloat(s.win_rate) >= 50 ? 'text-green-400' : 'text-red-400'}`}>
                                       {s.win_rate}%
                                     </td>
@@ -2072,19 +2072,19 @@ export default function Admin() {
                           <h3 className="text-white font-bold mb-3">📅 Monthly Performance</h3>
                           <div className="overflow-x-auto">
                             <table className="w-full text-sm">
-                              <thead className="bg-slate-800">
+                              <thead className="bg-muted">
                                 <tr>
-                                  <th className="text-left p-2 text-slate-300">Month</th>
-                                  <th className="text-right p-2 text-slate-300">Signals</th>
-                                  <th className="text-right p-2 text-slate-300">Win Rate</th>
-                                  <th className="text-right p-2 text-slate-300">Total Pips</th>
+                                  <th className="text-left p-2 text-foreground-secondary">Month</th>
+                                  <th className="text-right p-2 text-foreground-secondary">Signals</th>
+                                  <th className="text-right p-2 text-foreground-secondary">Win Rate</th>
+                                  <th className="text-right p-2 text-foreground-secondary">Total Pips</th>
                                 </tr>
                               </thead>
                               <tbody>
                                 {diagnosticData.monthly.slice(0, 6).map((m: any, i: number) => (
-                                  <tr key={i} className="border-b border-slate-700">
+                                  <tr key={i} className="border-b border-border">
                                     <td className="p-2 text-white">{m.month ? new Date(m.month).toISOString().slice(0, 7) : 'Unknown'}</td>
-                                    <td className="p-2 text-right text-slate-300">{m.signals}</td>
+                                    <td className="p-2 text-right text-foreground-secondary">{m.signals}</td>
                                     <td className={`p-2 text-right font-bold ${parseFloat(m.win_rate) >= 50 ? 'text-green-400' : 'text-red-400'}`}>
                                       {m.win_rate}%
                                     </td>
@@ -2148,32 +2148,32 @@ export default function Admin() {
                             <div className="space-y-6">
                               {/* Key Metrics */}
                               <div className="grid grid-cols-2 gap-4">
-                                <div className="bg-slate-900/50 p-4 rounded-lg">
+                                <div className="bg-card/50 p-4 rounded-lg">
                                   <p className="text-xs text-green-300 mb-1">Total Profit</p>
                                   <p className={`text-3xl font-black ${fxify.totalProfitPips >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                                     {formatDollars(profitCalc.totalDollars)}
                                   </p>
-                                  <p className="text-xs text-slate-400 mt-1">
+                                  <p className="text-xs text-muted-foreground mt-1">
                                     {fxify.totalProfitPips >= 0 ? '+' : ''}{fxify.totalProfitPips.toFixed(1)} pips
                                   </p>
                                 </div>
-                                <div className="bg-slate-900/50 p-4 rounded-lg">
+                                <div className="bg-card/50 p-4 rounded-lg">
                                   <p className="text-xs text-green-300 mb-1">Win Rate</p>
                                   <p className="text-3xl font-black text-white">{fxify.winRate.toFixed(1)}%</p>
-                                  <p className="text-xs text-slate-400 mt-1">
+                                  <p className="text-xs text-muted-foreground mt-1">
                                     {fxify.wins}W / {fxify.losses}L
                                   </p>
                                 </div>
-                                <div className="bg-slate-900/50 p-4 rounded-lg">
+                                <div className="bg-card/50 p-4 rounded-lg">
                                   <p className="text-xs text-green-300 mb-1">Monthly Projection</p>
                                   <p className="text-2xl font-black text-green-400">
                                     {formatDollars(profitCalc.monthlyDollars)}
                                   </p>
-                                  <p className="text-xs text-slate-400 mt-1">
+                                  <p className="text-xs text-muted-foreground mt-1">
                                     Based on {profitCalc.projectedMonthlyTrades} trades/mo
                                   </p>
                                 </div>
-                                <div className="bg-slate-900/50 p-4 rounded-lg">
+                                <div className="bg-card/50 p-4 rounded-lg">
                                   <p className="text-xs text-green-300 mb-1">Profit Factor</p>
                                   <p className={`text-2xl font-black ${
                                     fxify.profitFactor >= 2.5 ? 'text-green-400' :
@@ -2182,7 +2182,7 @@ export default function Admin() {
                                   }`}>
                                     {fxify.profitFactor.toFixed(2)}
                                   </p>
-                                  <p className="text-xs text-slate-400 mt-1">
+                                  <p className="text-xs text-muted-foreground mt-1">
                                     {fxify.profitFactor >= 2.5 ? '⭐ Excellent' :
                                      fxify.profitFactor >= 1.5 ? '✓ Good' :
                                      '✗ Below Target'}
@@ -2214,16 +2214,16 @@ export default function Admin() {
                               {/* Stats Summary */}
                               <div className="flex justify-between text-xs text-green-300">
                                 <div>
-                                  <span className="text-slate-400">Signals:</span> {fxify.totalSignals}
+                                  <span className="text-muted-foreground">Signals:</span> {fxify.totalSignals}
                                 </div>
                                 <div>
-                                  <span className="text-slate-400">Avg Win:</span> +{fxify.avgWinPips.toFixed(1)}p
+                                  <span className="text-muted-foreground">Avg Win:</span> +{fxify.avgWinPips.toFixed(1)}p
                                 </div>
                                 <div>
-                                  <span className="text-slate-400">Avg Loss:</span> -{fxify.avgLossPips.toFixed(1)}p
+                                  <span className="text-muted-foreground">Avg Loss:</span> -{fxify.avgLossPips.toFixed(1)}p
                                 </div>
                                 <div>
-                                  <span className="text-slate-400">Max DD:</span> -{fxify.maxDrawdown.toFixed(1)}p
+                                  <span className="text-muted-foreground">Max DD:</span> -{fxify.maxDrawdown.toFixed(1)}p
                                 </div>
                               </div>
                             </div>
@@ -2233,7 +2233,7 @@ export default function Admin() {
                     </Card>
 
                     {/* FXIFY Symbol Performance */}
-                    <Card className="bg-slate-800/80 border-green-500/30 shadow-xl">
+                    <Card className="bg-muted/80 border-green-500/30 shadow-xl">
                       <CardHeader>
                         <CardTitle className="text-white flex items-center gap-2">
                           <Target className="w-5 h-5 text-green-400" />
@@ -2244,11 +2244,11 @@ export default function Admin() {
                         <div className="overflow-x-auto">
                           <table className="w-full">
                             <thead>
-                              <tr className="border-b border-slate-700">
-                                <th className="text-left py-2 px-3 text-sm font-semibold text-slate-300">Symbol</th>
-                                <th className="text-center py-2 px-3 text-sm font-semibold text-slate-300">Signals</th>
-                                <th className="text-center py-2 px-3 text-sm font-semibold text-slate-300">Win Rate</th>
-                                <th className="text-right py-2 px-3 text-sm font-semibold text-slate-300">Profit (pips)</th>
+                              <tr className="border-b border-border">
+                                <th className="text-left py-2 px-3 text-sm font-semibold text-foreground-secondary">Symbol</th>
+                                <th className="text-center py-2 px-3 text-sm font-semibold text-foreground-secondary">Signals</th>
+                                <th className="text-center py-2 px-3 text-sm font-semibold text-foreground-secondary">Win Rate</th>
+                                <th className="text-right py-2 px-3 text-sm font-semibold text-foreground-secondary">Profit (pips)</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -2256,9 +2256,9 @@ export default function Admin() {
                                 const profitPips = parseFloat(symbol.profit_pips);
                                 const winRate = parseFloat(symbol.win_rate);
                                 return (
-                                  <tr key={idx} className="border-b border-slate-700/50 hover:bg-slate-700/30">
+                                  <tr key={idx} className="border-b border-border/50 hover:bg-secondary/30">
                                     <td className="py-2 px-3 font-semibold text-white">{symbol.symbol}</td>
-                                    <td className="py-2 px-3 text-center text-slate-300">{symbol.total_signals}</td>
+                                    <td className="py-2 px-3 text-center text-foreground-secondary">{symbol.total_signals}</td>
                                     <td className="py-2 px-3 text-center">
                                       <span className={`font-semibold ${
                                         winRate >= 50 ? 'text-green-400' :
@@ -2285,12 +2285,12 @@ export default function Admin() {
 
                   {/* RIGHT SIDE: ALL SIGNALS (SECONDARY) */}
                   <div className="space-y-6">
-                    <Card className="bg-slate-800/60 border-slate-600/50 backdrop-blur-md shadow-xl">
+                    <Card className="bg-muted/60 border-input/50 backdrop-blur-md shadow-xl">
                       <CardHeader>
                         <div>
-                          <Badge className="bg-slate-500/80 text-white mb-2">📊 SYSTEM LEARNING</Badge>
+                          <Badge className="bg-secondary/80 text-white mb-2">📊 SYSTEM LEARNING</Badge>
                           <CardTitle className="text-white text-xl">All Signals (Including Practice)</CardTitle>
-                          <CardDescription className="text-slate-300 mt-1">
+                          <CardDescription className="text-foreground-secondary mt-1">
                             HIGH + MEDIUM tier for AI training • {dualGrowthStats.timeframe}
                           </CardDescription>
                         </div>
@@ -2304,35 +2304,35 @@ export default function Admin() {
                             <div className="space-y-6">
                               {/* Key Metrics */}
                               <div className="grid grid-cols-2 gap-4">
-                                <div className="bg-slate-900/30 p-4 rounded-lg">
-                                  <p className="text-xs text-slate-400 mb-1">Total Profit</p>
+                                <div className="bg-card/30 p-4 rounded-lg">
+                                  <p className="text-xs text-muted-foreground mb-1">Total Profit</p>
                                   <p className={`text-2xl font-bold ${all.totalProfitPips >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                                     {all.totalProfitPips >= 0 ? '+' : ''}{all.totalProfitPips.toFixed(1)} pips
                                   </p>
                                   {comp.profitDiff !== 0 && (
-                                    <p className="text-xs text-slate-500 mt-1">
+                                    <p className="text-xs text-subtle-foreground mt-1">
                                       ({comp.profitDiff >= 0 ? '+' : ''}{comp.profitDiff.toFixed(1)}p FXIFY diff)
                                     </p>
                                   )}
                                 </div>
-                                <div className="bg-slate-900/30 p-4 rounded-lg">
-                                  <p className="text-xs text-slate-400 mb-1">Win Rate</p>
+                                <div className="bg-card/30 p-4 rounded-lg">
+                                  <p className="text-xs text-muted-foreground mb-1">Win Rate</p>
                                   <p className="text-2xl font-bold text-white">{all.winRate.toFixed(1)}%</p>
                                   {comp.winRateDiff !== 0 && (
-                                    <p className="text-xs text-slate-500 mt-1">
+                                    <p className="text-xs text-subtle-foreground mt-1">
                                       ({comp.winRateDiff >= 0 ? '+' : ''}{comp.winRateDiff.toFixed(1)}% FXIFY diff)
                                     </p>
                                   )}
                                 </div>
-                                <div className="bg-slate-900/30 p-4 rounded-lg">
-                                  <p className="text-xs text-slate-400 mb-1">Total Signals</p>
+                                <div className="bg-card/30 p-4 rounded-lg">
+                                  <p className="text-xs text-muted-foreground mb-1">Total Signals</p>
                                   <p className="text-2xl font-bold text-white">{all.totalSignals}</p>
-                                  <p className="text-xs text-slate-500 mt-1">
+                                  <p className="text-xs text-subtle-foreground mt-1">
                                     {all.wins}W / {all.losses}L
                                   </p>
                                 </div>
-                                <div className="bg-slate-900/30 p-4 rounded-lg">
-                                  <p className="text-xs text-slate-400 mb-1">Profit Factor</p>
+                                <div className="bg-card/30 p-4 rounded-lg">
+                                  <p className="text-xs text-muted-foreground mb-1">Profit Factor</p>
                                   <p className="text-2xl font-bold text-white">{all.profitFactor.toFixed(2)}</p>
                                 </div>
                               </div>
@@ -2343,7 +2343,7 @@ export default function Admin() {
                                   <p className="font-semibold text-amber-300 mb-2">
                                     🧠 AI Learning Progress
                                   </p>
-                                  <p className="text-sm text-slate-300">
+                                  <p className="text-sm text-foreground-secondary">
                                     <span className="font-bold text-white">{comp.signalCountDiff}</span> paper trade signals (70-79% confidence) are being used to train the AI. These are NOT sent to FXIFY.
                                   </p>
                                   {comp.winRateDiff > 0 && (
@@ -2355,15 +2355,15 @@ export default function Admin() {
                               )}
 
                               {/* Stats Summary */}
-                              <div className="flex justify-between text-xs text-slate-400">
+                              <div className="flex justify-between text-xs text-muted-foreground">
                                 <div>
-                                  <span className="text-slate-500">Avg Win:</span> +{all.avgWinPips.toFixed(1)}p
+                                  <span className="text-subtle-foreground">Avg Win:</span> +{all.avgWinPips.toFixed(1)}p
                                 </div>
                                 <div>
-                                  <span className="text-slate-500">Avg Loss:</span> -{all.avgLossPips.toFixed(1)}p
+                                  <span className="text-subtle-foreground">Avg Loss:</span> -{all.avgLossPips.toFixed(1)}p
                                 </div>
                                 <div>
-                                  <span className="text-slate-500">Max DD:</span> -{all.maxDrawdown.toFixed(1)}p
+                                  <span className="text-subtle-foreground">Max DD:</span> -{all.maxDrawdown.toFixed(1)}p
                                 </div>
                               </div>
                             </div>
@@ -2373,10 +2373,10 @@ export default function Admin() {
                     </Card>
 
                     {/* All Signals Symbol Performance */}
-                    <Card className="bg-slate-800/60 border-slate-600/50 shadow-xl">
+                    <Card className="bg-muted/60 border-input/50 shadow-xl">
                       <CardHeader>
                         <CardTitle className="text-white flex items-center gap-2">
-                          <BarChart3 className="w-5 h-5 text-slate-400" />
+                          <BarChart3 className="w-5 h-5 text-muted-foreground" />
                           All Signals Symbol Performance
                         </CardTitle>
                       </CardHeader>
@@ -2384,11 +2384,11 @@ export default function Admin() {
                         <div className="overflow-x-auto">
                           <table className="w-full">
                             <thead>
-                              <tr className="border-b border-slate-700">
-                                <th className="text-left py-2 px-3 text-sm font-semibold text-slate-400">Symbol</th>
-                                <th className="text-center py-2 px-3 text-sm font-semibold text-slate-400">Signals</th>
-                                <th className="text-center py-2 px-3 text-sm font-semibold text-slate-400">Win Rate</th>
-                                <th className="text-right py-2 px-3 text-sm font-semibold text-slate-400">Profit (pips)</th>
+                              <tr className="border-b border-border">
+                                <th className="text-left py-2 px-3 text-sm font-semibold text-muted-foreground">Symbol</th>
+                                <th className="text-center py-2 px-3 text-sm font-semibold text-muted-foreground">Signals</th>
+                                <th className="text-center py-2 px-3 text-sm font-semibold text-muted-foreground">Win Rate</th>
+                                <th className="text-right py-2 px-3 text-sm font-semibold text-muted-foreground">Profit (pips)</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -2396,9 +2396,9 @@ export default function Admin() {
                                 const profitPips = parseFloat(symbol.profit_pips);
                                 const winRate = parseFloat(symbol.win_rate);
                                 return (
-                                  <tr key={idx} className="border-b border-slate-700/50 hover:bg-slate-700/20">
-                                    <td className="py-2 px-3 font-semibold text-slate-300">{symbol.symbol}</td>
-                                    <td className="py-2 px-3 text-center text-slate-400">{symbol.total_signals}</td>
+                                  <tr key={idx} className="border-b border-border/50 hover:bg-secondary/20">
+                                    <td className="py-2 px-3 font-semibold text-foreground-secondary">{symbol.symbol}</td>
+                                    <td className="py-2 px-3 text-center text-muted-foreground">{symbol.total_signals}</td>
                                     <td className="py-2 px-3 text-center">
                                       <span className={`font-semibold ${
                                         winRate >= 50 ? 'text-green-400' :
@@ -2425,9 +2425,9 @@ export default function Admin() {
                 </div>
               </>
             ) : (
-              <Card className="bg-slate-800/80 border-slate-600/50 shadow-xl">
+              <Card className="bg-muted/80 border-input/50 shadow-xl">
                 <CardContent className="py-12">
-                  <div className="text-center text-slate-400">
+                  <div className="text-center text-muted-foreground">
                     <Activity className="w-12 h-12 mx-auto mb-4 opacity-50" />
                     <p>No growth data available yet</p>
                     <p className="text-sm mt-2">Signals need to be completed before growth tracking begins</p>

@@ -76,6 +76,7 @@
   --secondary-foreground: 222 30% 12%;
 
   --muted: 217 16% 93%;
+  --foreground-secondary: 217 18% 30%;
   --muted-foreground: 217 12% 42%;
 
   --accent: 217 16% 94%;
@@ -147,6 +148,8 @@
   /* Fallback for older browsers */
   --destructive-border: hsl(var(--destructive));
   --destructive-border: hsl(from hsl(var(--destructive)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+  --subtle-foreground: 217 12% 55%;
+
 }
 
 /* ── DARK — the product default ───────────────────────────────────────────── */
@@ -160,40 +163,41 @@
   --elevate-2: rgba(255, 255, 255, .09);
 
   --background: 222 24% 7%;
-  --foreground: 210 20% 96%;
+  --foreground: 210 40% 96%; /* slate-100 #F1F5F9 */
 
-  --border: 217 16% 20%;
-  --input: 217 16% 26%;
+  --border: 215 25% 27%; /* slate-700 #334155 */
+  --input: 215 19% 35%; /* slate-600 #475569 */
 
-  --card: 217 24% 13%;
-  --card-foreground: 210 20% 96%;
-  --card-border: 217 16% 22%;
+  --card: 222 47% 11%; /* slate-900 #0F172A - this IS the card surface in this codebase */
+  --card-foreground: 210 40% 96%; /* slate-100 */
+  --card-border: 217 33% 17%; /* slate-800 #1E293B */
 
-  --popover: 217 24% 13%;
-  --popover-foreground: 210 20% 96%;
-  --popover-border: 217 16% 22%;
+  --popover: 222 47% 11%; /* slate-900 */
+  --popover-foreground: 210 40% 96%; /* slate-100 */
+  --popover-border: 217 33% 17%; /* slate-800 */
 
-  --sidebar: 217 24% 11%;
-  --sidebar-foreground: 210 20% 96%;
-  --sidebar-border: 217 16% 20%;
+  --sidebar: 222 47% 11%; /* slate-900 */
+  --sidebar-foreground: 210 40% 96%; /* slate-100 */
+  --sidebar-border: 215 25% 27%; /* slate-700 */
   --sidebar-primary: 38 92% 55%;
   --sidebar-primary-foreground: 222 30% 8%;
-  --sidebar-accent: 217 20% 20%;
-  --sidebar-accent-foreground: 210 20% 96%;
+  --sidebar-accent: 217 33% 17%; /* slate-800 */
+  --sidebar-accent-foreground: 210 40% 96%; /* slate-100 */
   --sidebar-ring: 38 92% 55%;
 
   --primary: 38 92% 55%;
   --primary-foreground: 222 30% 8%;
 
-  --secondary: 217 20% 20%;
-  --secondary-foreground: 210 20% 96%;
+  --secondary: 215 25% 27%; /* slate-700 #334155 */
+  --secondary-foreground: 210 40% 96%; /* slate-100 */
 
-  --muted: 217 20% 17%;
+  --muted: 217 33% 17%; /* slate-800 #1E293B - controls and secondary panels */
   /* Deliberately ~slate-400 (#94A3B8): the value 102 hardcoded `text-slate-400`
      call sites already use, so tokenised and literal text agree before Phase 2. */
-  --muted-foreground: 215 18% 64%;
+  --foreground-secondary: 213 27% 84%; /* slate-300 #CBD5E1 */
+  --muted-foreground: 215 20% 65%; /* slate-400 #94A3B8 */
 
-  --accent: 217 20% 22%;
+  --accent: 217 33% 17%; /* slate-800 */
   --accent-foreground: 38 92% 55%;
 
   --destructive: 0 72% 51%;
@@ -249,6 +253,8 @@
   /* Fallback for older browsers */
   --destructive-border: hsl(var(--destructive));
   --destructive-border: hsl(from hsl(var(--destructive)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+  --subtle-foreground: 215 16% 47%; /* slate-500 #64748B */
+
 }
 
 @layer base {
