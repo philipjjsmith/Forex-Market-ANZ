@@ -2,13 +2,12 @@ import { useState, useEffect, useCallback } from 'react';
 import { useLocation } from 'wouter';
 import { Activity, TrendingUp, TrendingDown, Target, BarChart3, AlertTriangle, CheckCircle, XCircle, Star, Zap, LogOut, User, GraduationCap, Settings } from 'lucide-react';
 import { Indicators } from '@/lib/indicators';
-import { MACrossoverStrategy, Signal } from '@/lib/strategy';
+import { Signal } from '@/lib/strategy';
 import { ComprehensiveSignalCard } from '@/components/ComprehensiveSignalCard';
 import { MarketAnalysisCard } from '@/components/MarketAnalysisCard';
 import { StrategyFooter } from '@/components/StrategyFooter';
 import WinningTradesHero from '@/components/WinningTradesHero';
 // Removed: import { useQuotaTracker } from '@/hooks/use-quota-tracker';
-import { generateCandlesFromQuote } from '@/lib/candle-generator';
 import { API_ENDPOINTS } from '@/config/api';
 import { getCurrentUser, logout, getToken, type User as AuthUser } from '@/lib/auth';
 import { useToast } from '@/hooks/use-toast';
@@ -59,92 +58,6 @@ export default function Dashboard() {
       localStorage.setItem('savedSignals', JSON.stringify(newSaved));
       return newSaved;
     });
-  };
-
-  const generateDemoSignal = (pair: string, candles: any[]): Signal => {
-    const currentPrice = candles[candles.length - 1].close;
-    const atr = Indicators.atr(candles, 14) || 0.0015;
-    const type = Math.random() > 0.5 ? 'LONG' : 'SHORT';
-    const stopDistance = atr * 2;
-    
-    const entryPrice = parseFloat(currentPrice.toFixed(5));
-    const priceVariation = (Math.random() - 0.5) * 0.002;
-    const adjustedEntry = parseFloat((currentPrice * (1 + priceVariation)).toFixed(5));
-    
-    let orderType: string;
-    let executionType: string;
-    
-    if (Math.abs(adjustedEntry - currentPrice) < 0.00010) {
-      orderType = 'MARKET';
-      executionType = 'FILL_OR_KILL';
-    } else if (type === 'LONG') {
-      if (adjustedEntry < currentPrice) {
-        orderType = 'BUY_LIMIT';
-        executionType = Math.random() > 0.5 ? 'GTC' : 'DAY';
-      } else {
-        orderType = 'BUY_STOP';
-        executionType = Math.random() > 0.5 ? 'GTC' : 'DAY';
-      }
-    } else {
-      if (adjustedEntry > currentPrice) {
-        orderType = 'SELL_LIMIT';
-        executionType = Math.random() > 0.5 ? 'GTC' : 'DAY';
-      } else {
-        orderType = 'SELL_STOP';
-        executionType = Math.random() > 0.5 ? 'GTC' : 'DAY';
-      }
-    }
-    
-    if (Math.random() > 0.7 && orderType !== 'MARKET') {
-      orderType = type === 'LONG' ? 'BUY_STOP_LIMIT' : 'SELL_STOP_LIMIT';
-    }
-
-    // MT5 Requirements: BUY_STOP_LIMIT limit is BELOW stop, SELL_STOP_LIMIT limit is ABOVE stop
-    const stopLimitPrice = (orderType === 'BUY_STOP_LIMIT' || orderType === 'SELL_STOP_LIMIT')
-      ? parseFloat((adjustedEntry + (type === 'LONG' ? -0.00015 : 0.00015)).toFixed(5))
-      : undefined;
-    
-    return {
-      id: `SIG_${Date.now()}_${Math.random().toString(36).substr(2, 6).toUpperCase()}`,
-      timestamp: new Date().toISOString(),
-      type: type,
-      symbol: pair,
-      entry: adjustedEntry,
-      currentPrice: parseFloat(currentPrice.toFixed(5)),
-      orderType: orderType,
-      executionType: executionType,
-      stop: type === 'LONG' 
-        ? parseFloat((adjustedEntry - stopDistance).toFixed(5))
-        : parseFloat((adjustedEntry + stopDistance).toFixed(5)),
-      stopLimitPrice,
-      targets: type === 'LONG' ? [
-        parseFloat((adjustedEntry + stopDistance * 1.5).toFixed(5)),
-        parseFloat((adjustedEntry + stopDistance * 2.5).toFixed(5)),
-        parseFloat((adjustedEntry + stopDistance * 4).toFixed(5))
-      ] : [
-        parseFloat((adjustedEntry - stopDistance * 1.5).toFixed(5)),
-        parseFloat((adjustedEntry - stopDistance * 2.5).toFixed(5)),
-        parseFloat((adjustedEntry - stopDistance * 4).toFixed(5))
-      ],
-      riskReward: 2.5,
-      confidence: Math.floor(Math.random() * 30) + 55,
-      indicators: {
-        fastMA: currentPrice.toFixed(5),
-        slowMA: (currentPrice * 0.998).toFixed(5),
-        rsi: (Math.random() * 40 + 30).toFixed(2),
-        atr: atr.toFixed(5),
-        adx: (Math.random() * 30 + 20).toFixed(2),
-        bbUpper: (currentPrice * 1.002).toFixed(5),
-        bbLower: (currentPrice * 0.998).toFixed(5),
-        htfTrend: type === 'LONG' ? 'UP' : 'DOWN'
-      },
-      rationale: type === 'LONG' 
-        ? 'Bullish MA crossover detected. RSI in favorable range. Strong trend confirmed by ADX. Higher timeframe trend is bullish. Volatility is moderate.'
-        : 'Bearish MA crossover detected. RSI in favorable range. Strong trend confirmed by ADX. Higher timeframe trend is bearish. Volatility is moderate.',
-      strategy: 'MA Crossover Multi-Timeframe',
-      version: '1.0.0',
-      status: 'active'
-    };
   };
 
   // Check authentication on mount
@@ -262,7 +175,7 @@ export default function Dashboard() {
                 <Activity className="w-8 h-8" />
               </div>
               <div>
-                <h1 className="text-3xl font-bold">Forex Signal Engine</h1>
+                <h1 className="text-3xl font-bold">ArgoFX</h1>
                 <p className="text-amber-200">Multi-Timeframe Analysis Platform</p>
               </div>
             </div>
