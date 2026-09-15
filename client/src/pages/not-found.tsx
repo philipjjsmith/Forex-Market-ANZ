@@ -1,5 +1,6 @@
 import { Link } from "wouter";
 import { Compass } from "lucide-react";
+import { PublicLayout } from "@/components/public-layout";
 
 /**
  * 404.
@@ -15,7 +16,8 @@ import { Compass } from "lucide-react";
  */
 export default function NotFound() {
   return (
-    <div className="min-h-screen flex items-center justify-center p-6">
+    <PublicLayout>
+      <div className="flex min-h-[60vh] items-center justify-center p-6">
       <div className="w-full max-w-md text-center">
         <div className="inline-flex p-3 mb-6 rounded-lg bg-primary/15 border border-primary/30">
           <Compass className="w-8 h-8 text-primary" aria-hidden="true" />
@@ -49,13 +51,8 @@ export default function NotFound() {
           </Link>
         </div>
 
-        {/* The demo/simulated line is compliance text, so it takes --muted-foreground
-            (7.4:1) and not --subtle-foreground, which measures 4.05:1 on this ground -
-            just under AA. The tertiary step is fine for a version string; not for this. */}
-        <p className="mt-10 text-xs text-muted-foreground">
-          ArgoFX — demo account, simulated results. No real money is traded.
-        </p>
+        </div>
       </div>
-    </div>
+    </PublicLayout>
   );
 }

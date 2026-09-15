@@ -572,3 +572,39 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Route-chunk spinner.
+
+   Held invisible for 250ms on purpose: a warm-cache route chunk arrives in a few
+   milliseconds, and a spinner that appears and disappears inside one frame reads
+   as a glitch, not as progress.
+   ═══════════════════════════════════════════════════════════════════════════ */
+@layer components {
+  .route-spinner {
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 9999px;
+    border: 2px solid hsl(var(--border));
+    border-top-color: hsl(var(--primary));
+    opacity: 0;
+    animation: route-spinner-in 250ms linear 250ms forwards;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .route-spinner {
+      animation:
+        route-spinner-in 250ms linear 250ms forwards,
+        route-spinner-spin 700ms linear 250ms infinite;
+    }
+  }
+}
+
+@keyframes route-spinner-in {
+  to { opacity: 1; }
+}
+
+@keyframes route-spinner-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}

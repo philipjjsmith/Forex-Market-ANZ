@@ -1,25 +1,21 @@
-import { useState } from "react";
-import { useLocation } from "wouter";
+import { useState, lazy, Suspense } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { GraduationCap, TrendingUp, TrendingDown, PlayCircle, ArrowLeft } from "lucide-react";
-import ProjectionTradingGame from "@/components/ProjectionTradingGame";
+import { PublicLayout } from "@/components/public-layout";
+import { GraduationCap, TrendingUp, TrendingDown, PlayCircle } from "lucide-react";
+/**
+ * The simulator is the only thing on this page that needs lightweight-charts, and it
+ * renders only after "Start Challenge" is pressed. Statically imported it cost every
+ * visitor to /learn 157 kB (50 kB over the wire) for a chart most of them never open.
+ */
+const ProjectionTradingGame = lazy(() => import("@/components/ProjectionTradingGame"));
 
 export default function Learn() {
   const [showSimulator, setShowSimulator] = useState(false);
-  const [, setLocation] = useLocation();
 
   return (
-    <div className="min-h-screen p-6">
-      <div className="max-w-7xl mx-auto space-y-8">
-        {/* Back Button */}
-        <button
-          onClick={() => setLocation('/')}
-          className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ArrowLeft className="w-5 h-5" />
-          <span className="font-medium">Back to Dashboard</span>
-        </button>
+    <PublicLayout>
+      <div className="mx-auto max-w-6xl space-y-8 px-6 py-12">
 
         {/* Header */}
         <div className="text-center space-y-4">
@@ -118,8 +114,18 @@ export default function Learn() {
         </Card>
 
         {/* Trading Simulator */}
-        {showSimulator && <ProjectionTradingGame />}
+        {showSimulator && (
+          <Suspense
+            fallback={
+              <div className="py-12 text-center text-muted-foreground" role="status">
+                Loading the simulator…
+              </div>
+            }
+          >
+            <ProjectionTradingGame />
+          </Suspense>
+        )}
       </div>
-    </div>
+    </PublicLayout>
   );
 }

@@ -51,8 +51,27 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <!-- Roboto was loaded here and used nowhere: three render-blocking faces bought for nothing.
-         Removed. Inter is the UI face, JetBrains Mono carries every number. -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+         Removed in Phase 0. Inter is the UI face, JetBrains Mono carries every number.
+
+         Loaded NON-BLOCKING: as a preload that promotes itself to a stylesheet once it
+         arrives. A plain <link rel="stylesheet"> to a third-party host blocks first paint
+         on a DNS lookup, a TLS handshake and two round trips to a server we do not
+         control - and this instance is on Render's free tier, where a cold start is
+         already slow enough. `display=swap` means text paints immediately in the fallback
+         stack and swaps when Inter lands, so nothing is invisible while waiting.
+         The <noscript> copy keeps the fonts for scripting-disabled visitors. -->
+    <link
+      rel="preload"
+      as="style"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      onload="this.onload=null;this.rel='stylesheet'"
+    />
+    <noscript>
+      <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      />
+    </noscript>
   </head>
   <body>
     <div id="root"></div>

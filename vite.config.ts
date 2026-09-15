@@ -30,6 +30,23 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    // Everything used to ship as ONE chunk. Routes are code-split in App.tsx; this
+    // pulls the framework out on top of that, so a deploy that only changes app code
+    // does not invalidate React in everyone's cache. Heavy leaves (recharts,
+    // lightweight-charts) are deliberately NOT named here - Rollup already places
+    // them with the routes that import them, and naming them would force them back
+    // into a chunk the entry has to wait for.
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          react: ["react", "react-dom"],
+          query: ["@tanstack/react-query"],
+        },
+      },
+    },
+    // The previous 1.27 MB single chunk sat far above the default 500 kB warning, so
+    // the warning was permanent noise. Lowered to a level the split build should hold.
+    chunkSizeWarningLimit: 400,
   },
   server: {
     fs: {
