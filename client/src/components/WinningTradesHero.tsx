@@ -162,9 +162,9 @@ export default function EnhancedWinningTradesHero() {
   // Error state
   if (error) {
     return (
-      <Card className="w-full border-red-500 bg-red-950/50">
+      <Card className="w-full border-danger bg-danger/50">
         <CardContent className="py-8 text-center">
-          <p className="text-red-400">Failed to load winning trades. Please try again later.</p>
+          <p className="text-danger">Failed to load winning trades. Please try again later.</p>
         </CardContent>
       </Card>
     );
@@ -176,8 +176,8 @@ export default function EnhancedWinningTradesHero() {
       <Card className="w-full bg-card border-border">
         <CardContent className="py-16 text-center">
           <div className="space-y-4">
-            <div className="mx-auto w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center">
-              <Trophy className="h-8 w-8 text-emerald-400" />
+            <div className="mx-auto w-16 h-16 bg-success/20 rounded-full flex items-center justify-center">
+              <Trophy className="h-8 w-8 text-success" />
             </div>
             <div>
               <h3 className="text-xl font-semibold text-white mb-2">No Winning Trades Yet This Week</h3>
@@ -198,8 +198,8 @@ export default function EnhancedWinningTradesHero() {
       {/* Header with Mode Toggle */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-gradient-to-br from-emerald-500/20 to-emerald-600/30 border border-emerald-500/30">
-            <Trophy className="h-6 w-6 text-emerald-400" />
+          <div className="p-2 rounded-lg bg-gradient-to-br from-success/20 to-success/30 border border-success/30">
+            <Trophy className="h-6 w-6 text-success" />
           </div>
           <div>
             <h2 className="text-2xl font-bold text-white">

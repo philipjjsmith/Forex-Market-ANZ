@@ -382,7 +382,7 @@ export default function ProjectionTradingGame() {
                   <Button
                     onClick={() => setPositionType('long')}
                     variant={positionType === 'long' ? 'default' : 'outline'}
-                    className={positionType === 'long' ? 'bg-green-600 hover:bg-green-700' : ''}
+                    className={positionType === 'long' ? 'bg-success hover:bg-success' : ''}
                   >
                     <TrendingUp className="w-4 h-4 mr-2" />
                     Long
@@ -390,7 +390,7 @@ export default function ProjectionTradingGame() {
                   <Button
                     onClick={() => setPositionType('short')}
                     variant={positionType === 'short' ? 'default' : 'outline'}
-                    className={positionType === 'short' ? 'bg-red-600 hover:bg-red-700' : ''}
+                    className={positionType === 'short' ? 'bg-danger hover:bg-danger' : ''}
                   >
                     <TrendingDown className="w-4 h-4 mr-2" />
                     Short
@@ -410,7 +410,7 @@ export default function ProjectionTradingGame() {
             {gamePhase === 'confirmed' && (
               <Button
                 onClick={handlePlayMarket}
-                className="bg-green-600 hover:bg-green-700"
+                className="bg-success hover:bg-success"
               >
                 <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
                   <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z" />
@@ -590,14 +590,14 @@ export default function ProjectionTradingGame() {
 
       {/* Result Card */}
       {gamePhase === 'result' && result && (
-        <Card className={`p-8 ${result === 'win' ? 'bg-green-50 border-green-300' : 'bg-red-50 border-red-300'} border-2`}>
+        <Card className={`p-8 ${result === 'win' ? 'bg-success border-success' : 'bg-danger border-danger'} border-2`}>
           <div className="text-center">
             {result === 'win' ? (
               <Trophy className="w-16 h-16 text-market-green mx-auto mb-4" />
             ) : (
               <XCircle className="w-16 h-16 text-market-red mx-auto mb-4" />
             )}
-            <h3 className={`text-3xl font-bold ${result === 'win' ? 'text-green-900' : 'text-red-900'}`}>
+            <h3 className={`text-3xl font-bold ${result === 'win' ? 'text-success' : 'text-danger'}`}>
               {result === 'win' ? 'Take Profit Hit! 🎉' : 'Stop Loss Hit ❌'}
             </h3>
             <p className={`text-xl mt-2 ${result === 'win' ? 'text-market-green' : 'text-market-red'}`}>

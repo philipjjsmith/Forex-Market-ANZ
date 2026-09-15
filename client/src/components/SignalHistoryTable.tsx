@@ -75,14 +75,14 @@ export function SignalHistoryTable({ signals, accountSize, performanceData }: Si
       case 'TP2_HIT':
       case 'TP3_HIT':
         return (
-          <Badge variant="outline" className="border-green-500/50 text-green-300 bg-green-500/10">
+          <Badge variant="outline" className="border-success/50 text-success bg-success/10">
             <CheckCircle className="w-3 h-3 mr-1" />
             TP Hit
           </Badge>
         );
       case 'STOP_HIT':
         return (
-          <Badge variant="outline" className="border-red-500/50 text-red-300 bg-red-500/10">
+          <Badge variant="outline" className="border-danger/50 text-danger bg-danger/10">
             <XCircle className="w-3 h-3 mr-1" />
             Stop Hit
           </Badge>
@@ -196,8 +196,8 @@ export function SignalHistoryTable({ signals, accountSize, performanceData }: Si
                     variant="outline"
                     className={
                       signal.type === 'LONG'
-                        ? 'border-green-500/50 text-green-300 bg-green-500/10'
-                        : 'border-red-500/50 text-red-300 bg-red-500/10'
+                        ? 'border-success/50 text-success bg-success/10'
+                        : 'border-danger/50 text-danger bg-danger/10'
                     }
                   >
                     {signal.type === 'LONG' ? (
@@ -235,9 +235,9 @@ export function SignalHistoryTable({ signals, accountSize, performanceData }: Si
                   <span
                     className={`font-mono font-semibold ${
                       signal.profit_loss_pips > 0
-                        ? 'text-green-400'
+                        ? 'text-success'
                         : signal.profit_loss_pips < 0
-                        ? 'text-red-400'
+                        ? 'text-danger'
                         : 'text-muted-foreground'
                     }`}
                   >
@@ -247,13 +247,13 @@ export function SignalHistoryTable({ signals, accountSize, performanceData }: Si
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex items-center justify-end gap-1">
-                    <DollarSign className={`w-3 h-3 ${actualProfit.profitUSD >= 0 ? 'text-green-400' : 'text-red-400'}`} />
+                    <DollarSign className={`w-3 h-3 ${actualProfit.profitUSD >= 0 ? 'text-market-green' : 'text-market-red'}`} />
                     <span
                       className={`font-mono font-semibold ${
                         actualProfit.profitUSD > 0
-                          ? 'text-green-400'
+                          ? 'text-success'
                           : actualProfit.profitUSD < 0
-                          ? 'text-red-400'
+                          ? 'text-danger'
                           : 'text-muted-foreground'
                       }`}
                     >

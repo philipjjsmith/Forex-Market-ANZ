@@ -171,12 +171,12 @@ export default function Dashboard() {
         <div className="mb-8">
           <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between mb-2 gap-4">
             <div className="flex items-center gap-3">
-              <div className="p-3 bg-amber-600 rounded-lg">
+              <div className="p-3 bg-primary rounded-lg">
                 <Activity className="w-8 h-8" />
               </div>
               <div>
                 <h1 className="text-3xl font-bold">ArgoFX</h1>
-                <p className="text-amber-200">Multi-Timeframe Analysis Platform</p>
+                <p className="text-muted-foreground">Multi-Timeframe Analysis Platform</p>
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2 lg:gap-4">
@@ -193,7 +193,7 @@ export default function Dashboard() {
               {/* Learn Button */}
               <button
                 onClick={() => setLocation('/learn')}
-                className="flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 rounded-lg transition-colors"
+                className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 rounded-lg transition-colors"
                 title="Learn Forex Trading"
               >
                 <GraduationCap className="w-4 h-4" />
@@ -215,14 +215,14 @@ export default function Dashboard() {
               {/* User Info & Logout */}
               {user && (
                 <div className="flex items-center gap-3 px-4 py-2 bg-muted rounded-lg border border-border">
-                  <User className="w-4 h-4 text-amber-400" />
+                  <User className="w-4 h-4 text-primary" />
                   <span className="text-sm font-medium">{user.username}</span>
                   <button
                     onClick={handleLogout}
                     className="p-2 hover:bg-secondary rounded-lg transition-colors"
                     title="Logout"
                   >
-                    <LogOut className="w-4 h-4 text-muted-foreground hover:text-red-400" />
+                    <LogOut className="w-4 h-4 text-muted-foreground hover:text-danger" />
                   </button>
                 </div>
               )}
@@ -231,9 +231,9 @@ export default function Dashboard() {
 
           {/* API Error Display */}
           {apiError && (
-            <div className="mt-4 bg-red-500/10 border border-red-500/50 rounded-lg p-3 flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0" />
-              <span className="text-red-300 text-sm">{apiError}</span>
+            <div className="mt-4 bg-danger/10 border border-danger/50 rounded-lg p-3 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-danger flex-shrink-0" />
+              <span className="text-danger text-sm">{apiError}</span>
             </div>
           )}
         </div>
@@ -243,7 +243,7 @@ export default function Dashboard() {
           <div className="glass-card p-4 rounded-xl hover-lift hover-glow-blue transition-all duration-300">
             <div className="flex items-center justify-between mb-2">
               <span className="text-muted-foreground text-sm">Active Signals</span>
-              <Activity className="w-4 h-4 text-amber-400" />
+              <Activity className="w-4 h-4 text-primary" />
             </div>
             <div className="text-2xl font-bold" data-testid="text-active-signals">{activeSignals.length}</div>
           </div>
@@ -251,9 +251,9 @@ export default function Dashboard() {
           <div className="glass-card p-4 rounded-xl hover-lift hover-glow-blue transition-all duration-300">
             <div className="flex items-center justify-between mb-2">
               <span className="text-muted-foreground text-sm">LONG Signals</span>
-              <TrendingUp className="w-4 h-4 text-green-400" />
+              <TrendingUp className="w-4 h-4 text-success" />
             </div>
-            <div className="text-2xl font-bold text-green-400" data-testid="text-long-signals">
+            <div className="text-2xl font-bold text-success" data-testid="text-long-signals">
               {activeSignals.filter(s => s.type === 'LONG').length}
             </div>
           </div>
@@ -261,9 +261,9 @@ export default function Dashboard() {
           <div className="glass-card p-4 rounded-xl hover-lift hover-glow-blue transition-all duration-300">
             <div className="flex items-center justify-between mb-2">
               <span className="text-muted-foreground text-sm">SHORT Signals</span>
-              <TrendingDown className="w-4 h-4 text-red-400" />
+              <TrendingDown className="w-4 h-4 text-danger" />
             </div>
-            <div className="text-2xl font-bold text-red-400" data-testid="text-short-signals">
+            <div className="text-2xl font-bold text-danger" data-testid="text-short-signals">
               {activeSignals.filter(s => s.type === 'SHORT').length}
             </div>
           </div>
@@ -295,7 +295,7 @@ export default function Dashboard() {
                 onClick={() => setSelectedPair(pair)}
                 className={`px-4 py-2 rounded-lg transition-all duration-300 ${
                   selectedPair === pair
-                    ? 'bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-lg shadow-amber-500/50'
+                    ? 'bg-gradient-to-r from-primary to-orange-600 text-white shadow-lg shadow-amber-500/50'
                     : 'glass text-foreground-secondary hover:bg-secondary/50'
                 }`}
                 data-testid={`button-pair-${pair.replace('/', '-')}`}
@@ -319,7 +319,7 @@ export default function Dashboard() {
               <select
                 value={confidenceFilter}
                 onChange={(e) => setConfidenceFilter(e.target.value)}
-                className="px-4 py-2 rounded-lg bg-secondary text-white border border-input hover:border-amber-500 focus:border-amber-500 focus:outline-none cursor-pointer transition-all"
+                className="px-4 py-2 rounded-lg bg-secondary text-white border border-input hover:border-primary focus:border-primary focus:outline-none cursor-pointer transition-all"
                 data-testid="select-confidence-filter"
               >
                 <option value="all">📊 All Signals</option>
@@ -333,7 +333,7 @@ export default function Dashboard() {
               <select
                 value={signalTypeFilter}
                 onChange={(e) => setSignalTypeFilter(e.target.value)}
-                className="px-4 py-2 rounded-lg bg-secondary text-white border border-input hover:border-amber-500 focus:border-amber-500 focus:outline-none cursor-pointer transition-all"
+                className="px-4 py-2 rounded-lg bg-secondary text-white border border-input hover:border-primary focus:border-primary focus:outline-none cursor-pointer transition-all"
                 data-testid="select-signal-type-filter"
               >
                 <option value="all">All Types</option>
@@ -346,7 +346,7 @@ export default function Dashboard() {
               <button
                 onClick={() => setActiveTab('signals')}
                 className={`px-4 py-2 rounded-lg transition-all ${
-                  activeTab === 'signals' ? 'bg-amber-600 text-white' : 'bg-secondary text-foreground-secondary hover:bg-secondary'
+                  activeTab === 'signals' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-foreground-secondary hover:bg-secondary'
                 }`}
                 data-testid="button-tab-signals"
               >
@@ -355,7 +355,7 @@ export default function Dashboard() {
               <button
                 onClick={() => setActiveTab('saved')}
                 className={`px-4 py-2 rounded-lg transition-all flex items-center gap-2 ${
-                  activeTab === 'saved' ? 'bg-amber-600 text-white' : 'bg-secondary text-foreground-secondary hover:bg-secondary'
+                  activeTab === 'saved' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-foreground-secondary hover:bg-secondary'
                 }`}
                 data-testid="button-tab-saved"
               >
@@ -389,7 +389,7 @@ export default function Dashboard() {
           {/* Signals List */}
           <div className="lg:col-span-2 space-y-4">
             <h2 className="text-xl font-bold flex items-center gap-2">
-              <Target className="w-5 h-5 text-amber-400" />
+              <Target className="w-5 h-5 text-primary" />
               {activeTab === 'saved' ? 'Saved Trading Signals' : 'Active Trading Signals'}
             </h2>
             
@@ -455,7 +455,7 @@ export default function Dashboard() {
                       <div className="flex justify-between mb-2">
                         <span className="text-sm text-muted-foreground">RSI (14)</span>
                         <span className={`font-bold ${
-                          rsi && rsi > 70 ? 'text-red-400' : rsi && rsi < 30 ? 'text-green-400' : 'text-yellow-400'
+                          rsi && rsi > 70 ? 'text-danger' : rsi && rsi < 30 ? 'text-success' : 'text-yellow-400'
                         }`} data-testid="text-rsi">
                           {rsi ? rsi.toFixed(2) : 'N/A'}
                         </span>
@@ -463,7 +463,7 @@ export default function Dashboard() {
                       <div className="w-full bg-card rounded-full h-2">
                         <div 
                           className={`h-2 rounded-full ${
-                            rsi && rsi > 70 ? 'bg-red-500' : rsi && rsi < 30 ? 'bg-green-500' : 'bg-yellow-500'
+                            rsi && rsi > 70 ? 'bg-danger' : rsi && rsi < 30 ? 'bg-success' : 'bg-yellow-500'
                           }`}
                           style={{ width: `${rsi || 0}%` }}
                         ></div>
@@ -474,7 +474,7 @@ export default function Dashboard() {
                       <div className="flex justify-between mb-2">
                         <span className="text-sm text-muted-foreground">ADX (14)</span>
                         <span className={`font-bold ${
-                          adx && adx.adx > 25 ? 'text-green-400' : 'text-yellow-400'
+                          adx && adx.adx > 25 ? 'text-success' : 'text-yellow-400'
                         }`} data-testid="text-adx">
                           {adx ? adx.adx.toFixed(2) : 'N/A'}
                         </span>
@@ -499,9 +499,9 @@ export default function Dashboard() {
                           {fastMA && slowMA && (
                             <>
                               {fastMA > slowMA ? (
-                                <><CheckCircle className="w-3 h-3 text-green-400" /> <span className="text-green-400">Bullish Alignment</span></>
+                                <><CheckCircle className="w-3 h-3 text-success" /> <span className="text-success">Bullish Alignment</span></>
                               ) : (
-                                <><XCircle className="w-3 h-3 text-red-400" /> <span className="text-red-400">Bearish Alignment</span></>
+                                <><XCircle className="w-3 h-3 text-danger" /> <span className="text-danger">Bearish Alignment</span></>
                               )}
                             </>
                           )}

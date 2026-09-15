@@ -609,7 +609,7 @@ Risk: 1-2%${signal.stopLimitPrice ? `\nStop Limit: ${signal.stopLimitPrice}` : '
               <button
                 onClick={() => setTimeframe('1H')}
                 className={`px-2 py-1 text-xs rounded ${
-                  timeframe === '1H' ? 'bg-primary text-white' : 'bg-card text-muted-foreground hover:bg-card/80'
+                  timeframe === '1H' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-card/80'
                 }`}
               >
                 1H
@@ -617,7 +617,7 @@ Risk: 1-2%${signal.stopLimitPrice ? `\nStop Limit: ${signal.stopLimitPrice}` : '
               <button
                 onClick={() => setTimeframe('4H')}
                 className={`px-2 py-1 text-xs rounded ${
-                  timeframe === '4H' ? 'bg-primary text-white' : 'bg-card text-muted-foreground hover:bg-card/80'
+                  timeframe === '4H' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-card/80'
                 }`}
               >
                 4H
@@ -625,7 +625,7 @@ Risk: 1-2%${signal.stopLimitPrice ? `\nStop Limit: ${signal.stopLimitPrice}` : '
               <button
                 onClick={() => setTimeframe('1D')}
                 className={`px-2 py-1 text-xs rounded ${
-                  timeframe === '1D' ? 'bg-primary text-white' : 'bg-card text-muted-foreground hover:bg-card/80'
+                  timeframe === '1D' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-card/80'
                 }`}
               >
                 1D
@@ -680,7 +680,7 @@ Risk: 1-2%${signal.stopLimitPrice ? `\nStop Limit: ${signal.stopLimitPrice}` : '
       {/* Explanation Toggle Button */}
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full py-2 px-4 bg-primary hover:bg-primary/80 rounded-lg text-white font-semibold transition-all flex items-center justify-center gap-2"
+        className="w-full py-2 px-4 bg-primary hover:bg-primary/80 rounded-lg text-primary-foreground font-semibold transition-all flex items-center justify-center gap-2"
         data-testid={`button-toggle-explanation-${signal.id}`}
       >
         {isExpanded ? (

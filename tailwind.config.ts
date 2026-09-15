@@ -113,6 +113,12 @@ export default {
           red: "hsl(var(--down) / <alpha-value>)",
         },
         up: "hsl(var(--up) / <alpha-value>)",
+        // SYSTEM STATE, deliberately NOT the P&L pair. Green/red carry four
+        // separate meanings in this codebase - money, system state, trade
+        // direction, and before/after diffs - and collapsing them would erase
+        // the one distinction that matters: a healthy pipeline is not a profit.
+        success: "hsl(var(--success) / <alpha-value>)",
+        danger: "hsl(var(--danger) / <alpha-value>)",
         down: "hsl(var(--down) / <alpha-value>)",
       },
       fontFamily: {

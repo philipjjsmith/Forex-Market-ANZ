@@ -278,10 +278,10 @@ export default function Analytics() {
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <Activity className="w-8 h-8 text-amber-400" />
+              <Activity className="w-8 h-8 text-primary" />
               <div>
                 <h1 className="text-2xl font-bold text-white">AI Analytics</h1>
-                <p className="text-sm text-amber-200">Performance Tracking & Insights</p>
+                <p className="text-sm text-muted-foreground">Performance Tracking & Insights</p>
               </div>
             </div>
 
@@ -295,14 +295,14 @@ export default function Analytics() {
                 Dashboard
               </Button>
               <div className="flex items-center gap-2 px-4 py-2 bg-white/10 rounded-lg">
-                <User className="w-4 h-4 text-amber-300" />
+                <User className="w-4 h-4 text-primary" />
                 <span className="text-white font-medium">{user?.username}</span>
               </div>
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={handleLogout}
-                className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                className="text-danger hover:text-danger hover:bg-danger/10"
               >
                 <LogOut className="w-5 h-5" />
               </Button>
@@ -314,7 +314,7 @@ export default function Analytics() {
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8 space-y-8">
         {error && (
-          <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4 text-red-200">
+          <div className="bg-danger/10 border border-danger/20 rounded-lg p-4 text-danger">
             {error}
           </div>
         )}
@@ -322,7 +322,7 @@ export default function Analytics() {
         {/* Account Size Selector & Profit Summary */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Account Size Selector */}
-          <Card className="bg-gradient-to-br from-amber-900/40 to-orange-900/40 border-amber-500/50 backdrop-blur-sm shadow-xl">
+          <Card className="bg-gradient-to-br from-primary/40 to-orange-900/40 border-primary/50 backdrop-blur-sm shadow-xl">
             <CardHeader className="pb-4">
               <div className="flex items-center gap-3 mb-2">
                 <div className="p-2 bg-cyan-500/20 rounded-lg">
@@ -367,22 +367,22 @@ export default function Analytics() {
           {/* Total Profit */}
           <Card className={`backdrop-blur-sm shadow-xl border-2 transition-all ${
             profitData.totalProfit > 0
-              ? 'bg-gradient-to-br from-emerald-900/50 to-green-900/50 border-emerald-500/50'
+              ? 'bg-gradient-to-br from-success/50 to-success/50 border-success/50'
               : profitData.totalProfit < 0
-              ? 'bg-gradient-to-br from-red-900/50 to-rose-900/50 border-red-500/50'
+              ? 'bg-gradient-to-br from-danger/50 to-danger/50 border-danger/50'
               : 'bg-gradient-to-br from-muted/50 to-card/50 border-input/50'
           }`}>
             <CardHeader className="pb-3">
               <div className="flex items-center gap-3 mb-1">
                 <div className={`p-2 rounded-lg ${
-                  profitData.totalProfit > 0 ? 'bg-emerald-500/20' : profitData.totalProfit < 0 ? 'bg-red-500/20' : 'bg-secondary/20'
+                  profitData.totalProfit > 0 ? 'bg-market-green/20' : profitData.totalProfit < 0 ? 'bg-market-red/20' : 'bg-secondary/20'
                 }`}>
                   <DollarSign className={`w-6 h-6 ${
-                    profitData.totalProfit > 0 ? 'text-emerald-400' : profitData.totalProfit < 0 ? 'text-red-400' : 'text-muted-foreground'
+                    profitData.totalProfit > 0 ? 'text-market-green' : profitData.totalProfit < 0 ? 'text-market-red' : 'text-muted-foreground'
                   }`} />
                 </div>
                 <CardDescription className={`text-base font-medium ${
-                  profitData.totalProfit > 0 ? 'text-emerald-200' : profitData.totalProfit < 0 ? 'text-red-200' : 'text-foreground-secondary'
+                  profitData.totalProfit > 0 ? 'text-market-green' : profitData.totalProfit < 0 ? 'text-market-red' : 'text-foreground-secondary'
                 }`}>
                   Total Profit/Loss
                 </CardDescription>
@@ -391,15 +391,15 @@ export default function Analytics() {
             <CardContent>
               <div className="text-center mb-3">
                 <p className={`text-6xl font-black tracking-tight ${
-                  profitData.totalProfit > 0 ? 'text-emerald-400 drop-shadow-[0_0_15px_rgba(52,211,153,0.5)]' :
-                  profitData.totalProfit < 0 ? 'text-red-400 drop-shadow-[0_0_15px_rgba(248,113,113,0.5)]' :
+                  profitData.totalProfit > 0 ? 'text-market-green drop-shadow-[0_0_15px_rgba(52,211,153,0.5)]' :
+                  profitData.totalProfit < 0 ? 'text-market-red drop-shadow-[0_0_15px_rgba(248,113,113,0.5)]' :
                   'text-muted-foreground'
                 }`}>
                   {profitData.totalProfit >= 0 ? '+' : ''}${Math.abs(profitData.totalProfit).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </p>
               </div>
               <div className={`flex items-center justify-center gap-2 text-sm font-medium ${
-                profitData.totalProfit > 0 ? 'text-emerald-300' : profitData.totalProfit < 0 ? 'text-red-300' : 'text-muted-foreground'
+                profitData.totalProfit > 0 ? 'text-market-green' : profitData.totalProfit < 0 ? 'text-market-red' : 'text-muted-foreground'
               }`}>
                 <span className="flex items-center gap-1">
                   <CheckCircle className="w-4 h-4" />
@@ -415,7 +415,7 @@ export default function Analytics() {
           </Card>
 
           {/* Account Balance */}
-          <Card className="bg-gradient-to-br from-amber-900/40 to-orange-800/40 border-amber-500/50 backdrop-blur-sm shadow-xl border-2">
+          <Card className="bg-gradient-to-br from-primary/40 to-orange-800/40 border-primary/50 backdrop-blur-sm shadow-xl border-2">
             <CardHeader className="pb-3">
               <div className="flex items-center gap-3 mb-1">
                 <div className="p-2 bg-purple-500/20 rounded-lg">
@@ -435,9 +435,9 @@ export default function Analytics() {
               <div className="flex items-center justify-center gap-2">
                 <div className={`flex items-center gap-1 px-3 py-1 rounded-full font-semibold text-sm ${
                   profitData.totalProfit > 0
-                    ? 'bg-emerald-500/20 text-emerald-300'
+                    ? 'bg-success/20 text-success'
                     : profitData.totalProfit < 0
-                    ? 'bg-red-500/20 text-red-300'
+                    ? 'bg-danger/20 text-danger'
                     : 'bg-secondary/20 text-foreground-secondary'
                 }`}>
                   {profitData.totalProfit > 0 ? <TrendingUp className="w-4 h-4" /> : profitData.totalProfit < 0 ? <TrendingDown className="w-4 h-4" /> : <Target className="w-4 h-4" />}
@@ -454,7 +454,7 @@ export default function Analytics() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <Card className="bg-white/15 border-white/30 backdrop-blur-md shadow-lg hover:shadow-xl transition-all duration-300">
             <CardHeader className="pb-2">
-              <CardDescription className="text-amber-200 font-medium">Total Signals</CardDescription>
+              <CardDescription className="text-muted-foreground font-medium">Total Signals</CardDescription>
               <CardTitle className="text-3xl text-white font-bold">
                 {performance?.overall.totalSignals || 0}
               </CardTitle>
@@ -462,7 +462,7 @@ export default function Analytics() {
             <CardContent>
               <div className="flex items-center gap-2 text-sm">
                 <Clock className="w-4 h-4 text-yellow-400" />
-                <span className="text-yellow-200 font-medium">
+                <span className="text-muted-foreground font-medium">
                   {performance?.overall.pending || 0} pending
                 </span>
               </div>
@@ -471,19 +471,19 @@ export default function Analytics() {
 
           <Card className="bg-white/15 border-white/30 backdrop-blur-md shadow-lg hover:shadow-xl transition-all duration-300">
             <CardHeader className="pb-2">
-              <CardDescription className="text-amber-200 font-medium">Win Rate</CardDescription>
+              <CardDescription className="text-muted-foreground font-medium">Win Rate</CardDescription>
               <CardTitle className="text-3xl text-white font-bold">
                 {performance?.overall.winRate.toFixed(1) || 0}%
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-2 text-sm">
-                <TrendingUp className="w-4 h-4 text-green-400" />
-                <span className="text-green-200 font-medium">
+                <TrendingUp className="w-4 h-4 text-success" />
+                <span className="text-success font-medium">
                   {performance?.overall.wins || 0} wins
                 </span>
-                <TrendingDown className="w-4 h-4 text-red-400" />
-                <span className="text-red-200 font-medium">
+                <TrendingDown className="w-4 h-4 text-danger" />
+                <span className="text-danger font-medium">
                   {performance?.overall.losses || 0} losses
                 </span>
               </div>
@@ -492,38 +492,38 @@ export default function Analytics() {
 
           <Card className="bg-white/15 border-white/30 backdrop-blur-md shadow-lg hover:shadow-xl transition-all duration-300">
             <CardHeader className="pb-2">
-              <CardDescription className="text-amber-200 font-medium">Avg Win</CardDescription>
-              <CardTitle className="text-3xl text-green-400 font-bold">
+              <CardDescription className="text-muted-foreground font-medium">Avg Win</CardDescription>
+              <CardTitle className="text-3xl text-success font-bold">
                 +{performance?.overall.avgWinPips.toFixed(1) || 0}
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-green-200 font-medium">pips per winning trade</p>
+              <p className="text-sm text-market-green font-medium">pips per winning trade</p>
             </CardContent>
           </Card>
 
           <Card className="bg-white/15 border-white/30 backdrop-blur-md shadow-lg hover:shadow-xl transition-all duration-300">
             <CardHeader className="pb-2">
-              <CardDescription className="text-amber-200 font-medium">Avg Loss</CardDescription>
-              <CardTitle className="text-3xl text-red-400 font-bold">
+              <CardDescription className="text-muted-foreground font-medium">Avg Loss</CardDescription>
+              <CardTitle className="text-3xl text-danger font-bold">
                 -{performance?.overall.avgLossPips.toFixed(1) || 0}
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-red-200 font-medium">pips per losing trade</p>
+              <p className="text-sm text-market-red font-medium">pips per losing trade</p>
             </CardContent>
           </Card>
         </div>
 
         {/* AI Unlock Progress */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <Card className="bg-gradient-to-br from-amber-500/20 to-orange-500/20 border-amber-500/40 backdrop-blur-md shadow-lg hover:shadow-xl transition-all duration-300">
+          <Card className="bg-gradient-to-br from-primary/20 to-orange-500/20 border-primary/40 backdrop-blur-md shadow-lg hover:shadow-xl transition-all duration-300">
             <CardHeader>
               <CardTitle className="text-white flex items-center gap-2 font-bold">
-                <BarChart3 className="w-5 h-5 text-amber-400" />
+                <BarChart3 className="w-5 h-5 text-primary" />
                 AI Insights
               </CardTitle>
-              <CardDescription className="text-amber-200 font-medium">
+              <CardDescription className="text-muted-foreground font-medium">
                 {performance?.unlocks.insightsUnlocked
                   ? '✅ Unlocked - View performance patterns'
                   : `${performance?.unlocks.signalsNeededForInsights || 10} more signals needed`}
@@ -531,13 +531,13 @@ export default function Analytics() {
             </CardHeader>
             <CardContent>
               <Progress value={insightsProgress} className="h-2" />
-              <p className="text-sm text-amber-200 mt-2 font-medium">
+              <p className="text-sm text-muted-foreground mt-2 font-medium">
                 {totalCompleted} / 10 completed signals
               </p>
             </CardContent>
           </Card>
 
-          <Card className="bg-gradient-to-br from-purple-500/20 to-pink-500/20 border-amber-500/40 backdrop-blur-md shadow-lg hover:shadow-xl transition-all duration-300">
+          <Card className="bg-gradient-to-br from-purple-500/20 to-pink-500/20 border-primary/40 backdrop-blur-md shadow-lg hover:shadow-xl transition-all duration-300">
             <CardHeader>
               <CardTitle className="text-white flex items-center gap-2 font-bold">
                 <Target className="w-5 h-5 text-purple-400" />
@@ -562,7 +562,7 @@ export default function Analytics() {
         <Card className="bg-white/15 border-white/30 backdrop-blur-md shadow-lg">
           <CardHeader>
             <CardTitle className="text-white font-bold">Active Signals ({activeSignals.length})</CardTitle>
-            <CardDescription className="text-amber-200 font-medium">
+            <CardDescription className="text-muted-foreground font-medium">
               Real-time monitoring • Updates every 30s
             </CardDescription>
           </CardHeader>
@@ -586,7 +586,7 @@ export default function Analytics() {
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle className="text-white font-bold">Signal History</CardTitle>
-                <CardDescription className="text-amber-200 font-medium">
+                <CardDescription className="text-muted-foreground font-medium">
                   Showing {historySignals.length} of {historyTotal} completed signals
                 </CardDescription>
               </div>
@@ -618,7 +618,7 @@ export default function Analytics() {
                 <Button
                   onClick={loadMoreHistory}
                   disabled={isLoadingMore}
-                  className="bg-amber-600 hover:bg-amber-700 text-white px-8 py-3 text-lg font-semibold shadow-lg"
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground px-8 py-3 text-lg font-semibold shadow-lg"
                 >
                   {isLoadingMore ? 'Loading...' : `Load More (${historyTotal - historySignals.length} remaining)`}
                 </Button>

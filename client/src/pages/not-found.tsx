@@ -17,11 +17,11 @@ export default function NotFound() {
   return (
     <div className="min-h-screen flex items-center justify-center p-6">
       <div className="w-full max-w-md text-center">
-        <div className="inline-flex p-3 mb-6 rounded-lg bg-amber-600/15 border border-amber-500/30">
-          <Compass className="w-8 h-8 text-amber-400" aria-hidden="true" />
+        <div className="inline-flex p-3 mb-6 rounded-lg bg-primary/15 border border-primary/30">
+          <Compass className="w-8 h-8 text-primary" aria-hidden="true" />
         </div>
 
-        <p className="font-mono text-xs tracking-[0.2em] text-amber-400/80 mb-3">
+        <p className="font-mono text-xs tracking-[0.2em] text-primary/80 mb-3">
           ERROR 404
         </p>
 
@@ -37,13 +37,13 @@ export default function NotFound() {
         <div className="flex flex-wrap gap-3 justify-center">
           <Link
             href="/"
-            className="px-5 py-2.5 rounded-md bg-amber-600 hover:bg-amber-500 text-white font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-400"
+            className="px-5 py-2.5 rounded-md bg-primary hover:bg-primary/90 text-primary-foreground font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
           >
             Go to the dashboard
           </Link>
           <Link
             href="/learn"
-            className="px-5 py-2.5 rounded-md border border-border hover:border-input text-foreground font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-400"
+            className="px-5 py-2.5 rounded-md border border-border hover:border-input text-foreground font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
           >
             Learn the basics
           </Link>

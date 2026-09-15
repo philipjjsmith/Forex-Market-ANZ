@@ -334,7 +334,7 @@ export function ActiveSignalsTable({ signals, accountSize, performanceData, onSi
             <Button
               onClick={handleCloseSignal}
               disabled={isClosing || !closePrice}
-              className="bg-primary hover:bg-primary/80 text-white"
+              className="bg-primary hover:bg-primary/80 text-primary-foreground"
             >
               {isClosing ? 'Closing...' : 'Close Signal'}
             </Button>

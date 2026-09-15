@@ -113,7 +113,7 @@ export default function Login() {
           <h1 className="text-3xl font-bold text-white mb-2">
             ArgoFX
           </h1>
-          <p className="text-amber-300">
+          <p className="text-primary">
             {showForgotPassword
               ? 'Reset Your Password'
               : isLogin
@@ -126,14 +126,14 @@ export default function Login() {
         <div className="bg-muted rounded-xl p-8 shadow-2xl border border-border">
           {/* Error/Success Messages */}
           {error && (
-            <Alert className="mb-6 bg-red-500/10 border-red-500/50 text-red-300">
+            <Alert className="mb-6 bg-danger/10 border-danger/50 text-danger">
               <AlertCircle className="w-4 h-4" />
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
 
           {successMessage && (
-            <Alert className="mb-6 bg-green-500/10 border-green-500/50 text-green-300">
+            <Alert className="mb-6 bg-success/10 border-success/50 text-success">
               <AlertCircle className="w-4 h-4" />
               <AlertDescription>{successMessage}</AlertDescription>
             </Alert>
@@ -194,7 +194,7 @@ export default function Login() {
                     type="text"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    className="pl-10 bg-secondary border-input text-white placeholder:text-muted-foreground focus:border-amber-500"
+                    className="pl-10 bg-secondary border-input text-white placeholder:text-muted-foreground focus:border-primary"
                     placeholder="Enter your username"
                     disabled={isLoading}
                   />
@@ -213,7 +213,7 @@ export default function Login() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="pl-10 bg-secondary border-input text-white placeholder:text-muted-foreground focus:border-amber-500"
+                  className="pl-10 bg-secondary border-input text-white placeholder:text-muted-foreground focus:border-primary"
                   placeholder="Enter your email"
                   disabled={isLoading}
                 />
@@ -232,7 +232,7 @@ export default function Login() {
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="pl-10 bg-secondary border-input text-white placeholder:text-muted-foreground focus:border-amber-500"
+                    className="pl-10 bg-secondary border-input text-white placeholder:text-muted-foreground focus:border-primary"
                     placeholder="Enter your password"
                     disabled={isLoading}
                   />
@@ -252,7 +252,7 @@ export default function Login() {
                     type="password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="pl-10 bg-secondary border-input text-white placeholder:text-muted-foreground focus:border-amber-500"
+                    className="pl-10 bg-secondary border-input text-white placeholder:text-muted-foreground focus:border-primary"
                     placeholder="Confirm your password"
                     disabled={isLoading}
                   />
@@ -266,7 +266,7 @@ export default function Login() {
                 <button
                   type="button"
                   onClick={() => setShowForgotPassword(true)}
-                  className="text-sm text-amber-400 hover:text-amber-300"
+                  className="text-sm text-primary hover:text-primary"
                 >
                   Forgot password?
                 </button>
@@ -300,7 +300,7 @@ export default function Login() {
                   setError('');
                   setSuccessMessage('');
                 }}
-                className="text-sm text-muted-foreground hover:text-amber-400"
+                className="text-sm text-muted-foreground hover:text-primary"
               >
                 Back to login
               </button>
@@ -313,7 +313,7 @@ export default function Login() {
                     setError('');
                     setSuccessMessage('');
                   }}
-                  className="text-amber-400 hover:text-amber-300 font-semibold"
+                  className="text-primary hover:text-primary font-semibold"
                 >
                   {isLogin ? 'Sign up' : 'Sign in'}
                 </button>
