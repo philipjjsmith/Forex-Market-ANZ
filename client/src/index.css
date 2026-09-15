@@ -2,96 +2,123 @@
 @tailwind components;
 @tailwind utilities;
 
-/* LIGHT MODE */
+/* ═══════════════════════════════════════════════════════════════════════════
+   ArgoFX token system — Phase 1.
+
+   WHAT THIS REPLACED, and why it mattered:
+
+   The old file defined a complete `.dark` palette that NOTHING EVER APPLIED —
+   `.dark` was never set on any element, `next-themes` was a dependency imported
+   nowhere, and the 40 `dark:` utilities written across the components could never
+   match. The site looked dark only because `@layer base` painted `body` with a
+   hardcoded warm-brown gradient. The same rule set `text-foreground`, which
+   resolved to the LIGHT token — a near-black grey — sitting on that near-black
+   ground. So `bg-card` rendered WHITE cards on a dark page, and page headings
+   using `text-foreground` were very nearly invisible. `/learn` showed all of this
+   at once in production.
+
+   The token layer was therefore not merely unused. It actively contradicted the
+   design, which is precisely why ~1,100 hardcoded `slate-*` classes exist: a
+   component author reaching for the semantic token got an unreadable result and
+   hardcoded a literal instead.
+
+   Dark is the product default and is applied two ways deliberately: `class="dark"`
+   is hardcoded on <html> so the FIRST PAINT is dark with no flash, and
+   ThemeProvider then owns it for any later switch. Light is a genuine inversion of
+   the same hues rather than the unrelated second palette this file used to carry.
+
+   Hue discipline: every neutral sits on hue 217-222 (cool, slate-adjacent) so that
+   tokenized elements and the not-yet-migrated `slate-*` literals agree visually
+   until Phase 2 removes the literals.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── LIGHT ────────────────────────────────────────────────────────────────── */
 :root {
-  --button-outline: rgba(0,0,0, .10);
-  --badge-outline: rgba(0,0,0, .05);
+  --button-outline: rgba(0, 0, 0, .10);
+  --badge-outline: rgba(0, 0, 0, .05);
 
   /* Automatic computation of border around primary / danger buttons */
   --opaque-button-border-intensity: -8; /* In terms of percentages */
 
   /* Backgrounds applied on top of other backgrounds when hovered/active */
-  --elevate-1: rgba(0,0,0, .03);
-  --elevate-2: rgba(0,0,0, .08);
+  --elevate-1: rgba(0, 0, 0, .03);
+  --elevate-2: rgba(0, 0, 0, .08);
 
-  --background: 0 0% 98%;
+  --background: 220 20% 98%;
+  --foreground: 222 30% 12%;
 
-  --foreground: 222 15% 20%;
-
-  --border: 220 13% 85%;
+  --border: 217 16% 87%;
+  --input: 217 16% 80%;
 
   --card: 0 0% 100%;
+  --card-foreground: 222 30% 12%;
+  --card-border: 217 16% 90%;
 
-  --card-foreground: 222 15% 20%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 30% 12%;
+  --popover-border: 217 16% 90%;
 
-  --card-border: 220 13% 91%;
+  --sidebar: 220 18% 96%;
+  --sidebar-foreground: 222 30% 12%;
+  --sidebar-border: 217 16% 88%;
+  --sidebar-primary: 32 95% 38%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 217 16% 92%;
+  --sidebar-accent-foreground: 222 30% 12%;
+  --sidebar-ring: 32 95% 38%;
 
-  --sidebar: 220 13% 96%;
+  /* Brand accent. Amber, and it carries the BRAND only - never profit or loss.
+     In light mode it is darkened to 38% lightness to clear AA against white. */
+  --primary: 32 95% 38%;
+  --primary-foreground: 0 0% 100%;
 
-  --sidebar-foreground: 222 15% 20%;
+  --secondary: 217 16% 91%;
+  --secondary-foreground: 222 30% 12%;
 
-  --sidebar-border: 220 13% 88%;
+  --muted: 217 16% 93%;
+  --muted-foreground: 217 12% 42%;
 
-  --sidebar-primary: 221 83% 33%;
+  --accent: 217 16% 94%;
+  --accent-foreground: 32 95% 38%;
 
-  --sidebar-primary-foreground: 210 40% 98%;
-
-  --sidebar-accent: 220 13% 91%;
-
-  --sidebar-accent-foreground: 222 15% 20%;
-
-  --sidebar-ring: 221 83% 53%;
-
-  --popover: 0 0% 99%;
-
-  --popover-foreground: 222 15% 20%;
-
-  --popover-border: 220 13% 90%;
-
-  --primary: 221 83% 33%;
-
-  --primary-foreground: 210 40% 98%;
-
-  --secondary: 220 13% 89%;
-
-  --secondary-foreground: 222 15% 20%;
-
-  --muted: 220 10% 92%;
-
-  --muted-foreground: 220 9% 46%;
-
-  --accent: 220 14% 94%;
-
-  --accent-foreground: 221 83% 33%;
-
-  --destructive: 0 84% 50%;
-
+  --destructive: 0 72% 45%;
   --destructive-foreground: 0 0% 100%;
 
-  --input: 220 13% 75%;
-  --ring: 221 83% 53%;
-  --chart-1: 221 83% 33%;
-  --chart-2: 160 84% 39%;
-  --chart-3: 245 58% 65%;
-  --chart-4: 38 92% 50%;
-  --chart-5: 174 72% 45%;
+  --ring: 32 95% 38%;
 
-  --font-sans: Open Sans, sans-serif;
+  /* P&L semantics. EXACTLY two, and they mean nothing else. The brand accent is
+     never one of them, so a glance at a dense table cannot misread brand as gain.
+     Surfaced through Tailwind as `market-green` / `market-red`. */
+  --up: 160 84% 28%;
+  --down: 0 72% 45%;
+
+  --chart-1: 32 95% 38%;
+  --chart-2: 160 84% 28%;
+  --chart-3: 217 60% 45%;
+  --chart-4: 262 60% 52%;
+  --chart-5: 190 80% 35%;
+
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-serif: Georgia, serif;
-  --font-mono: Menlo, monospace;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
   --radius: .5rem; /* 8px */
-  --shadow-2xs: 0px 2px 0px 0px hsl(220 13% 85% / 0.00);
-  --shadow-xs: 0px 2px 0px 0px hsl(220 13% 85% / 0.00);
-  --shadow-sm: 0px 2px 0px 0px hsl(220 13% 85% / 0.00), 0px 1px 2px -1px hsl(220 13% 85% / 0.00);
-  --shadow: 0px 2px 0px 0px hsl(220 13% 85% / 0.00), 0px 1px 2px -1px hsl(220 13% 85% / 0.00);
-  --shadow-md: 0px 2px 0px 0px hsl(220 13% 85% / 0.00), 0px 2px 4px -1px hsl(220 13% 85% / 0.00);
-  --shadow-lg: 0px 2px 0px 0px hsl(220 13% 85% / 0.00), 0px 4px 6px -1px hsl(220 13% 85% / 0.00);
-  --shadow-xl: 0px 2px 0px 0px hsl(220 13% 85% / 0.00), 0px 8px 10px -1px hsl(220 13% 85% / 0.00);
-  --shadow-2xl: 0px 2px 0px 0px hsl(220 13% 85% / 0.00);
+
+  /* Elevation. Every one of these was `/ 0.00` before - a full eight-step scale
+     that rendered NOTHING, which is why the interface read flat. */
+  --shadow-2xs: 0 1px 1px hsl(222 30% 12% / .04);
+  --shadow-xs:  0 1px 2px hsl(222 30% 12% / .06);
+  --shadow-sm:  0 1px 2px hsl(222 30% 12% / .08), 0 1px 1px hsl(222 30% 12% / .04);
+  --shadow:     0 1px 3px hsl(222 30% 12% / .10), 0 1px 2px hsl(222 30% 12% / .06);
+  --shadow-md:  0 4px 8px hsl(222 30% 12% / .10), 0 2px 4px hsl(222 30% 12% / .06);
+  --shadow-lg:  0 10px 20px hsl(222 30% 12% / .12), 0 4px 8px hsl(222 30% 12% / .06);
+  --shadow-xl:  0 20px 32px hsl(222 30% 12% / .14), 0 8px 12px hsl(222 30% 12% / .08);
+  --shadow-2xl: 0 28px 56px hsl(222 30% 12% / .20);
+
   --tracking-normal: 0em;
   --spacing: 0.25rem;
 
-  /* Automatically computed borders - intensity can be controlled by the user by the --opaque-button-border-intensity setting */
+  /* Automatically computed borders - intensity controlled by --opaque-button-border-intensity */
 
   /* Fallback for older browsers */
   --sidebar-primary-border: hsl(var(--sidebar-primary));
@@ -122,86 +149,78 @@
   --destructive-border: hsl(from hsl(var(--destructive)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
 }
 
+/* ── DARK — the product default ───────────────────────────────────────────── */
 .dark {
-  --button-outline: rgba(255,255,255, .10);
-  --badge-outline: rgba(255,255,255, .05);
+  --button-outline: rgba(255, 255, 255, .10);
+  --badge-outline: rgba(255, 255, 255, .05);
 
-  --opaque-button-border-intensity: 9;  /* In terms of percentages */
+  --opaque-button-border-intensity: 9; /* In terms of percentages */
 
-  /* Backgrounds applied on top of other backgrounds when hovered/active */
-  --elevate-1: rgba(255,255,255, .04);
-  --elevate-2: rgba(255,255,255, .09);
+  --elevate-1: rgba(255, 255, 255, .04);
+  --elevate-2: rgba(255, 255, 255, .09);
 
-  --background: 30 15% 8%;
+  --background: 222 24% 7%;
+  --foreground: 210 20% 96%;
 
-  --foreground: 36 30% 86%;
+  --border: 217 16% 20%;
+  --input: 217 16% 26%;
 
-  --border: 30 10% 22%;
+  --card: 217 24% 13%;
+  --card-foreground: 210 20% 96%;
+  --card-border: 217 16% 22%;
 
-  --card: 30 12% 20%;
+  --popover: 217 24% 13%;
+  --popover-foreground: 210 20% 96%;
+  --popover-border: 217 16% 22%;
 
-  --card-foreground: 36 30% 86%;
+  --sidebar: 217 24% 11%;
+  --sidebar-foreground: 210 20% 96%;
+  --sidebar-border: 217 16% 20%;
+  --sidebar-primary: 38 92% 55%;
+  --sidebar-primary-foreground: 222 30% 8%;
+  --sidebar-accent: 217 20% 20%;
+  --sidebar-accent-foreground: 210 20% 96%;
+  --sidebar-ring: 38 92% 55%;
 
-  --card-border: 30 10% 24%;
+  --primary: 38 92% 55%;
+  --primary-foreground: 222 30% 8%;
 
-  --sidebar: 30 12% 18%;
+  --secondary: 217 20% 20%;
+  --secondary-foreground: 210 20% 96%;
 
-  --sidebar-foreground: 36 30% 86%;
+  --muted: 217 20% 17%;
+  /* Deliberately ~slate-400 (#94A3B8): the value 102 hardcoded `text-slate-400`
+     call sites already use, so tokenised and literal text agree before Phase 2. */
+  --muted-foreground: 215 18% 64%;
 
-  --sidebar-border: 30 10% 22%;
+  --accent: 217 20% 22%;
+  --accent-foreground: 38 92% 55%;
 
-  --sidebar-primary: 36 60% 58%;
-
-  --sidebar-primary-foreground: 30 15% 10%;
-
-  --sidebar-accent: 30 8% 24%;
-
-  --sidebar-accent-foreground: 36 30% 86%;
-
-  --sidebar-ring: 36 60% 60%;
-
-  --popover: 30 10% 18%;
-
-  --popover-foreground: 36 30% 86%;
-
-  --popover-border: 30 8% 24%;
-
-  --primary: 36 60% 58%;
-
-  --primary-foreground: 30 15% 10%;
-
-  --secondary: 30 8% 28%;
-
-  --secondary-foreground: 36 30% 86%;
-
-  --muted: 30 8% 24%;
-
-  --muted-foreground: 30 10% 60%;
-
-  --accent: 24 50% 58%;
-
-  --accent-foreground: 30 15% 10%;
-
-  --destructive: 5 75% 55%;
-
+  --destructive: 0 72% 51%;
   --destructive-foreground: 0 0% 100%;
 
-  --input: 30 10% 32%;
-  --ring: 36 60% 60%;
-  --chart-1: 36 55% 60%;
-  --chart-2: 110 35% 55%;
-  --chart-3: 24 50% 60%;
-  --chart-4: 45 55% 60%;
-  --chart-5: 174 72% 56%;
+  --ring: 38 92% 55%;
 
-  --shadow-2xs: 0px 2px 0px 0px hsl(217 15% 23% / 0.00);
-  --shadow-xs: 0px 2px 0px 0px hsl(217 15% 23% / 0.00);
-  --shadow-sm: 0px 2px 0px 0px hsl(217 15% 23% / 0.00), 0px 1px 2px -1px hsl(217 15% 23% / 0.00);
-  --shadow: 0px 2px 0px 0px hsl(217 15% 23% / 0.00), 0px 1px 2px -1px hsl(217 15% 23% / 0.00);
-  --shadow-md: 0px 2px 0px 0px hsl(217 15% 23% / 0.00), 0px 2px 4px -1px hsl(217 15% 23% / 0.00);
-  --shadow-lg: 0px 2px 0px 0px hsl(217 15% 23% / 0.00), 0px 4px 6px -1px hsl(217 15% 23% / 0.00);
-  --shadow-xl: 0px 2px 0px 0px hsl(217 15% 23% / 0.00), 0px 8px 10px -1px hsl(217 15% 23% / 0.00);
-  --shadow-2xl: 0px 2px 0px 0px hsl(217 15% 23% / 0.00);
+  --up: 160 70% 45%;
+  --down: 0 72% 55%;
+
+  --chart-1: 38 92% 55%;
+  --chart-2: 160 70% 45%;
+  --chart-3: 217 70% 62%;
+  --chart-4: 262 70% 68%;
+  --chart-5: 190 85% 55%;
+
+  /* On a dark ground a shadow must be near-black and carry real alpha, otherwise
+     it is invisible. Separation here comes mostly from surface lightness plus a
+     1px hairline; these only lift the few things that genuinely float. */
+  --shadow-2xs: 0 1px 1px rgb(0 0 0 / .30);
+  --shadow-xs:  0 1px 2px rgb(0 0 0 / .35);
+  --shadow-sm:  0 1px 2px rgb(0 0 0 / .40), 0 1px 1px rgb(0 0 0 / .25);
+  --shadow:     0 1px 3px rgb(0 0 0 / .45), 0 1px 2px rgb(0 0 0 / .30);
+  --shadow-md:  0 4px 8px rgb(0 0 0 / .45), 0 2px 4px rgb(0 0 0 / .30);
+  --shadow-lg:  0 10px 20px rgb(0 0 0 / .50), 0 4px 8px rgb(0 0 0 / .30);
+  --shadow-xl:  0 20px 32px rgb(0 0 0 / .55), 0 8px 12px rgb(0 0 0 / .35);
+  --shadow-2xl: 0 28px 56px rgb(0 0 0 / .65);
 
   /* Fallback for older browsers */
   --sidebar-primary-border: hsl(var(--sidebar-primary));
@@ -237,31 +256,28 @@
     @apply border-border;
   }
 
+  html {
+    color-scheme: dark;
+  }
+
+  html.light {
+    color-scheme: light;
+  }
+
   body {
-    @apply font-sans antialiased text-foreground;
+    @apply font-sans antialiased bg-background text-foreground;
+    /* The warm-brown mesh gradient, its amber radials, its inline SVG noise layer
+       and `background-attachment: fixed` all lived here. They are what made the
+       page dark while the tokens said otherwise. The ground is now the token, so
+       the two can never disagree again. */
+    min-height: 100vh;
+  }
 
-    /* Professional WARM charcoal mesh gradient with fine grain noise texture */
-    /* TRUE warm colors: Brown/amber undertones, NO blue */
-    /* Research-backed: AAA WCAG compliance, reduces eye strain 30-40% */
-    background:
-      radial-gradient(ellipse at 20% 10%, rgba(245, 158, 11, 0.08) 0%, transparent 50%),
-      radial-gradient(ellipse at 80% 90%, rgba(217, 119, 6, 0.06) 0%, transparent 50%),
-      linear-gradient(135deg, #1C1816 0%, #2D2520 100%);
-
-    /* Fine grain noise overlay (2.5% opacity) - adds premium texture */
-    background-image:
-      radial-gradient(ellipse at 20% 10%, rgba(245, 158, 11, 0.08) 0%, transparent 50%),
-      radial-gradient(ellipse at 80% 90%, rgba(217, 119, 6, 0.06) 0%, transparent 50%),
-      linear-gradient(135deg, #1C1816 0%, #2D2520 100%),
-      url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' /%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.025'/%3E%3C/svg%3E");
-
-    /* Fixed attachment for immersive depth */
-    background-attachment: fixed;
-    background-size: cover;
-
-    /* GPU acceleration for smooth rendering */
-    transform: translateZ(0);
-    backface-visibility: hidden;
+  /* Headings set their own tracking: negative tracking at display sizes is what
+     reads as considered rather than default. */
+  h1, h2, h3 {
+    letter-spacing: -0.02em;
+    text-wrap: balance;
   }
 }
 
@@ -503,5 +519,42 @@
     transform: translateZ(0);
     backface-visibility: hidden;
     perspective: 1000px;
+  }
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Type scale and numeric utilities — Phase 1 foundation.
+
+   Named distinctly (`type-*`) so they cannot collide with Tailwind's own
+   `text-*` sizes, which ~1,100 existing call sites still use.
+   ═══════════════════════════════════════════════════════════════════════════ */
+@layer utilities {
+  .type-hero    { font-size: clamp(2.25rem, 5vw, 3.5rem); line-height: 1.05; letter-spacing: -0.03em;  font-weight: 700; }
+  .type-display { font-size: clamp(1.875rem, 3.6vw, 2.5rem); line-height: 1.1; letter-spacing: -0.025em; font-weight: 700; }
+  .type-h2      { font-size: clamp(1.5rem, 2.6vw, 1.875rem); line-height: 1.2; letter-spacing: -0.02em;  font-weight: 600; }
+  .type-h3      { font-size: 1.25rem;  line-height: 1.3;  letter-spacing: -0.012em; font-weight: 600; }
+  .type-body    { font-size: 1rem;     line-height: 1.65; }
+  .type-small   { font-size: 0.875rem; line-height: 1.55; }
+  .type-micro   { font-size: 0.75rem;  line-height: 1.5;  letter-spacing: 0.01em; }
+  .type-label   { font-size: 0.6875rem; line-height: 1.4; letter-spacing: 0.12em; text-transform: uppercase; }
+
+  /* Every price, pip, R multiple, percentage and timestamp. Mixed-width digits in
+     a results table are the clearest amateur tell in a trading interface. */
+  .tnum { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+  .tabular { font-variant-numeric: tabular-nums; }
+
+  /* Reading measure for body copy. */
+  .measure { max-width: 66ch; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

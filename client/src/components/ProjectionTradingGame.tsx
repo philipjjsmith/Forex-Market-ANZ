@@ -321,8 +321,8 @@ export default function ProjectionTradingGame() {
       <Card className="p-8">
         <div className="flex items-center justify-center">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading market data...</p>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Loading market data...</p>
           </div>
         </div>
       </Card>
@@ -332,7 +332,7 @@ export default function ProjectionTradingGame() {
   if (error) {
     return (
       <Card className="p-8">
-        <div className="text-center text-red-600">
+        <div className="text-center text-market-red">
           <p className="font-semibold">Error loading data</p>
           <p className="text-sm">{error}</p>
           <Button onClick={fetchHistoricalData} className="mt-4">
@@ -349,14 +349,14 @@ export default function ProjectionTradingGame() {
       <Card className="p-6">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-xl font-bold text-gray-900">
+            <h3 className="type-h3 text-foreground">
               {gamePhase === 'analysis' && 'Analyze the Market'}
               {gamePhase === 'drawing' && 'Draw Your Projection'}
               {gamePhase === 'confirmed' && 'Projection Set'}
               {gamePhase === 'playing' && 'Market Playing...'}
               {gamePhase === 'result' && (result === 'win' ? '🎉 Trade Won!' : result === 'loss' ? '❌ Stop Loss Hit' : 'Trade Complete')}
             </h3>
-            <p className="text-sm text-gray-600 mt-1">
+            <p className="text-sm text-muted-foreground mt-1">
               {gamePhase === 'analysis' && 'Study the historical candles and decide: bullish or bearish?'}
               {gamePhase === 'drawing' && 'Click and drag on the chart to set entry, TP, and SL'}
               {gamePhase === 'confirmed' && 'Review your projection and click Play to see the outcome'}
@@ -433,23 +433,23 @@ export default function ProjectionTradingGame() {
 
         {/* Projection Details */}
         {projection && (
-          <div className="mt-4 p-4 bg-slate-100 rounded-lg">
+          <div className="mt-4 p-4 bg-muted border border-card-border rounded-lg">
             <div className="grid grid-cols-4 gap-4 text-sm">
               <div>
-                <p className="text-gray-600">Type</p>
-                <p className="font-bold text-gray-900 uppercase">{projection.type}</p>
+                <p className="text-muted-foreground">Type</p>
+                <p className="font-bold text-foreground uppercase">{projection.type}</p>
               </div>
               <div>
-                <p className="text-gray-600">Entry</p>
-                <p className="font-bold text-gray-900">{projection.entry.toFixed(5)}</p>
+                <p className="text-muted-foreground">Entry</p>
+                <p className="tnum font-bold text-foreground">{projection.entry.toFixed(5)}</p>
               </div>
               <div>
-                <p className="text-gray-600">Take Profit</p>
-                <p className="font-bold text-green-600">{projection.takeProfit.toFixed(5)}</p>
+                <p className="text-muted-foreground">Take Profit</p>
+                <p className="tnum font-bold text-market-green">{projection.takeProfit.toFixed(5)}</p>
               </div>
               <div>
-                <p className="text-gray-600">Stop Loss</p>
-                <p className="font-bold text-red-600">{projection.stopLoss.toFixed(5)}</p>
+                <p className="text-muted-foreground">Stop Loss</p>
+                <p className="tnum font-bold text-market-red">{projection.stopLoss.toFixed(5)}</p>
               </div>
             </div>
           </div>
@@ -575,8 +575,8 @@ export default function ProjectionTradingGame() {
         </div>
 
         {gamePhase === 'drawing' && (
-          <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-            <p className="text-sm text-blue-900">
+          <div className="mt-4 p-4 bg-primary/10 border border-primary/30 rounded-lg">
+            <p className="text-sm text-foreground">
               <strong>How to draw:</strong> Click and drag on the chart. Starting point = Entry, drag up/down to set TP and SL.
               {drawStart && drawEnd && (
                 <span className="block mt-2 font-semibold">
@@ -593,17 +593,17 @@ export default function ProjectionTradingGame() {
         <Card className={`p-8 ${result === 'win' ? 'bg-green-50 border-green-300' : 'bg-red-50 border-red-300'} border-2`}>
           <div className="text-center">
             {result === 'win' ? (
-              <Trophy className="w-16 h-16 text-green-600 mx-auto mb-4" />
+              <Trophy className="w-16 h-16 text-market-green mx-auto mb-4" />
             ) : (
-              <XCircle className="w-16 h-16 text-red-600 mx-auto mb-4" />
+              <XCircle className="w-16 h-16 text-market-red mx-auto mb-4" />
             )}
             <h3 className={`text-3xl font-bold ${result === 'win' ? 'text-green-900' : 'text-red-900'}`}>
               {result === 'win' ? 'Take Profit Hit! 🎉' : 'Stop Loss Hit ❌'}
             </h3>
-            <p className={`text-xl mt-2 ${result === 'win' ? 'text-green-700' : 'text-red-700'}`}>
+            <p className={`text-xl mt-2 ${result === 'win' ? 'text-market-green' : 'text-market-red'}`}>
               {finalPL > 0 ? '+' : ''}{finalPL} pips
             </p>
-            <p className="text-sm text-gray-600 mt-4">
+            <p className="text-sm text-muted-foreground mt-4">
               Price hit: {hitPrice.toFixed(5)}
             </p>
           </div>

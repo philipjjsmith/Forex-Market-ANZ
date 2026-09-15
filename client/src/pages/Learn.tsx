@@ -15,7 +15,7 @@ export default function Learn() {
         {/* Back Button */}
         <button
           onClick={() => setLocation('/')}
-          className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
+          className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
         >
           <ArrowLeft className="w-5 h-5" />
           <span className="font-medium">Back to Dashboard</span>
@@ -23,11 +23,11 @@ export default function Learn() {
 
         {/* Header */}
         <div className="text-center space-y-4">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 mb-4">
-            <GraduationCap className="w-8 h-8 text-blue-600" />
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/15 mb-4">
+            <GraduationCap className="w-8 h-8 text-primary" />
           </div>
-          <h1 className="text-4xl font-bold text-gray-900">Learn Forex Trading</h1>
-          <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+          <h1 className="type-display text-foreground">Learn Forex Trading</h1>
+          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
             Master the art of identifying market trends through interactive challenges
           </p>
         </div>
@@ -35,30 +35,30 @@ export default function Learn() {
         {/* Educational Cards */}
         <div className="grid md:grid-cols-2 gap-6 mt-8">
           {/* Bullish Trends */}
-          <Card className="border-2 border-green-200 hover:border-green-400 transition-colors">
+          <Card className="border-2 border-market-green/30 hover:border-market-green/60 transition-colors">
             <CardHeader>
               <div className="flex items-center gap-3">
-                <TrendingUp className="w-8 h-8 text-green-600" />
+                <TrendingUp className="w-8 h-8 text-market-green" />
                 <CardTitle className="text-2xl">Bullish Trends</CardTitle>
               </div>
               <CardDescription>Learn to identify upward market movements</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <p className="text-gray-700">
+              <p className="text-foreground">
                 A <strong>bullish trend</strong> occurs when prices are consistently rising,
                 forming higher highs and higher lows.
               </p>
-              <ul className="space-y-2 text-sm text-gray-600">
+              <ul className="space-y-2 text-sm text-muted-foreground">
                 <li className="flex items-start gap-2">
-                  <span className="text-green-600 font-bold">✓</span>
+                  <span className="text-market-green font-bold">✓</span>
                   <span>Higher highs: Each peak is higher than the previous</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="text-green-600 font-bold">✓</span>
+                  <span className="text-market-green font-bold">✓</span>
                   <span>Higher lows: Each valley is higher than the previous</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="text-green-600 font-bold">✓</span>
+                  <span className="text-market-green font-bold">✓</span>
                   <span>Upward trendline: Connect the lows with an ascending line</span>
                 </li>
               </ul>
@@ -66,30 +66,30 @@ export default function Learn() {
           </Card>
 
           {/* Bearish Trends */}
-          <Card className="border-2 border-red-200 hover:border-red-400 transition-colors">
+          <Card className="border-2 border-market-red/30 hover:border-market-red/60 transition-colors">
             <CardHeader>
               <div className="flex items-center gap-3">
-                <TrendingDown className="w-8 h-8 text-red-600" />
+                <TrendingDown className="w-8 h-8 text-market-red" />
                 <CardTitle className="text-2xl">Bearish Trends</CardTitle>
               </div>
               <CardDescription>Learn to identify downward market movements</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <p className="text-gray-700">
+              <p className="text-foreground">
                 A <strong>bearish trend</strong> occurs when prices are consistently falling,
                 forming lower highs and lower lows.
               </p>
-              <ul className="space-y-2 text-sm text-gray-600">
+              <ul className="space-y-2 text-sm text-muted-foreground">
                 <li className="flex items-start gap-2">
-                  <span className="text-red-600 font-bold">✓</span>
+                  <span className="text-market-red font-bold">✓</span>
                   <span>Lower highs: Each peak is lower than the previous</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="text-red-600 font-bold">✓</span>
+                  <span className="text-market-red font-bold">✓</span>
                   <span>Lower lows: Each valley is lower than the previous</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="text-red-600 font-bold">✓</span>
+                  <span className="text-market-red font-bold">✓</span>
                   <span>Downward trendline: Connect the highs with a descending line</span>
                 </li>
               </ul>
@@ -98,7 +98,7 @@ export default function Learn() {
         </div>
 
         {/* Practice Section */}
-        <Card className="mt-8 border-2 border-blue-300">
+        <Card className="mt-8 border-2 border-primary/40">
           <CardHeader className="text-center">
             <CardTitle className="text-3xl">Ready to Practice?</CardTitle>
             <CardDescription className="text-base">
@@ -106,7 +106,7 @@ export default function Learn() {
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col items-center gap-4">
-            <p className="text-center text-gray-700 max-w-2xl">
+            <p className="text-center text-muted-foreground max-w-2xl">
               We'll show you a real historical chart. You'll identify the trend,
               make your prediction, and watch the market play out to see if you were right!
             </p>

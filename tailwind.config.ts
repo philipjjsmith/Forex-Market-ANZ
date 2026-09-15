@@ -10,6 +10,24 @@ export default {
         md: ".375rem", /* 6px */
         sm: ".1875rem", /* 3px */
       },
+      // Point Tailwind's own shadow scale at the tokens.
+      //
+      // Fixing the --shadow-* values in index.css was necessary and NOT sufficient:
+      // every component reaches for Tailwind's `shadow-sm` / `shadow-lg` utilities,
+      // which never read those variables. Measured on the built page before this
+      // mapping, a shadcn Card resolved to `rgba(0,0,0,0.05) 0 1px 2px` - Tailwind's
+      // light-mode default, and completely invisible on a dark ground. So the eight
+      // dead tokens had a ninth problem: nothing consumed them.
+      boxShadow: {
+        "2xs": "var(--shadow-2xs)",
+        xs: "var(--shadow-xs)",
+        sm: "var(--shadow-sm)",
+        DEFAULT: "var(--shadow)",
+        md: "var(--shadow-md)",
+        lg: "var(--shadow-lg)",
+        xl: "var(--shadow-xl)",
+        "2xl": "var(--shadow-2xl)",
+      },
       colors: {
         // Flat / base colors (regular buttons)
         background: "hsl(var(--background) / <alpha-value>)",
@@ -81,20 +99,24 @@ export default {
           busy: "rgb(239 68 68)",
           offline: "rgb(156 163 175)",
         },
+        // P&L semantics. EXACTLY two meanings, and the brand accent is neither,
+        // so a glance at a dense table cannot misread brand colour as a gain.
+        // These were six hardcoded hexes used by nothing; they now resolve to
+        // --up / --down and therefore track the theme.
         market: {
-          green: "#059669",
-          "green-dark": "#047857",
-          "green-light": "#10B981",
-          red: "#DC2626",
-          "red-dark": "#B91C1C",
-          "red-light": "#EF4444",
+          green: "hsl(var(--up) / <alpha-value>)",
+          red: "hsl(var(--down) / <alpha-value>)",
         },
+        up: "hsl(var(--up) / <alpha-value>)",
+        down: "hsl(var(--down) / <alpha-value>)",
       },
       fontFamily: {
-        sans: ["Inter", "system-ui", "sans-serif"],
+        // Roboto was listed here and removed from index.html in Phase 0 - it was
+        // render-blocking and used nowhere. A `font-roboto` class would have
+        // silently fallen back to the system sans.
+        sans: ["Inter", "ui-sans-serif", "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
         serif: ["Georgia", "serif"],
-        mono: ["JetBrains Mono", "monospace"],
-        roboto: ["Roboto", "sans-serif"],
+        mono: ["JetBrains Mono", "ui-monospace", "SFMono-Regular", "Menlo", "monospace"],
       },
       keyframes: {
         "accordion-down": {
