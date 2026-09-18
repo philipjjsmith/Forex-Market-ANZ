@@ -16,9 +16,33 @@ export default function Dashboard() {
   const [, setLocation] = useLocation();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
-  const [pairs] = useState(['EUR/USD', 'USD/CHF']); // Optimized pairs: EUR/USD (60% WR) + USD/CHF (25% WR)
+  /**
+   * The five pairs the backend has actually traded since 2026-08-28.
+   *
+   * This list used to read ['EUR/USD', 'USD/CHF'] with the comment "Optimized pairs:
+   * EUR/USD (60% WR) + USD/CHF (25% WR)". Both figures came from a validator that was
+   * later shown to be wrong on 131 of 306 rows; a full replay put EUR/USD at 30% and
+   * made it the WORST pair, not the best. The selection was exactly backwards, and the
+   * comment asserting it had no business staying in the codebase.
+   *
+   * Changing this list is behaviourally inert today: `pairs` is read in exactly one
+   * place (the selector below), and the only thing `selectedPair` drives is the Market
+   * Indicators panel — which cannot render at all, see the note on `marketData`.
+   */
+  const [pairs] = useState(['EUR/USD', 'GBP/USD', 'USD/CHF', 'USD/JPY', 'AUD/USD']);
   const [selectedPair, setSelectedPair] = useState('EUR/USD');
   const [signals, setSignals] = useState<Signal[]>([]);
+  /**
+   * DEAD STATE — `setMarketData` has no call site anywhere in this file, so this is
+   * permanently `{}`. Everything downstream of it is therefore unreachable: the
+   * `currentData` lookup below, and with it the whole Market Indicators panel (RSI,
+   * Bollinger Bands, ADX and MA alignment — roughly 100 lines of JSX that have never
+   * rendered for anyone).
+   *
+   * Left in place deliberately rather than deleted: whether that panel should be
+   * restored with a real data source or removed is a product decision, and this page
+   * is behind auth and cannot be reviewed from the tooling that found the problem.
+   */
   const [marketData, setMarketData] = useState<Record<string, {
     candles: any[],
     currentPrice: number,
