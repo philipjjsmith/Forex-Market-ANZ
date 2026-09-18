@@ -27,7 +27,7 @@ function Wordmark() {
         A
       </span>
       <span className="text-[17px] font-semibold tracking-[-0.02em] text-foreground">
-        ArgoFX
+        ArgosFX
       </span>
     </Link>
   );
@@ -46,6 +46,12 @@ export function PublicLayout({ children }: { children: ReactNode }) {
         >
           <Wordmark />
           <div className="ml-auto flex items-center gap-6">
+            <Link href="/evidence" className={navLink}>
+              Record
+            </Link>
+            <Link href="/method" className={navLink}>
+              Method
+            </Link>
             <Link href="/learn" className={navLink}>
               Learn
             </Link>
@@ -65,12 +71,24 @@ export function PublicLayout({ children }: { children: ReactNode }) {
         <div className="mx-auto max-w-6xl px-6 py-10">
           <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
             <Wordmark />
-            <div className="ml-auto flex items-center gap-6">
+            <div className="ml-auto flex flex-wrap items-center gap-x-6 gap-y-2">
+              <Link href="/evidence" className={navLink}>
+                Record
+              </Link>
+              <Link href="/method" className={navLink}>
+                Method
+              </Link>
               <Link href="/learn" className={navLink}>
                 Learn
               </Link>
-              <Link href="/login" className={navLink}>
-                Sign in
+              <Link href="/risk" className={navLink}>
+                Risk
+              </Link>
+              <Link href="/terms" className={navLink}>
+                Terms
+              </Link>
+              <Link href="/privacy" className={navLink}>
+                Privacy
               </Link>
             </div>
           </div>
@@ -93,7 +111,7 @@ export function PublicLayout({ children }: { children: ReactNode }) {
           </p>
 
           <p className="mt-4 text-xs text-muted-foreground">
-            © {new Date().getFullYear()} ArgoFX
+            © {new Date().getFullYear()} ArgosFX
           </p>
         </div>
       </footer>

@@ -38,7 +38,7 @@ export default function NotFound() {
 
         <div className="flex flex-wrap gap-3 justify-center">
           <Link
-            href="/"
+            href="/app"
             className="px-5 py-2.5 rounded-md bg-primary hover:bg-primary/90 text-primary-foreground font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
           >
             Go to the dashboard

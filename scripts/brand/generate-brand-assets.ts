@@ -1,5 +1,5 @@
 /**
- * Generates every ArgoFX brand raster into client/public/.
+ * Generates every ArgosFX brand raster into client/public/.
  *
  * Run: npx tsx scripts/brand/generate-brand-assets.ts
  *
@@ -127,7 +127,7 @@ function ogImage(): Buffer {
 
   ctx.fillStyle = C.text;
   ctx.font = '700 88px sans-serif';
-  ctx.fillText('ArgoFX', L, 290);
+  ctx.fillText('ArgosFX', L, 290);
 
   ctx.fillStyle = C.muted;
   ctx.font = '400 32px sans-serif';
@@ -167,8 +167,8 @@ const SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
 `;
 
 const MANIFEST = {
-  name: 'ArgoFX',
-  short_name: 'ArgoFX',
+  name: 'ArgosFX',
+  short_name: 'ArgosFX',
   description: 'Intraday forex setups, published with the losses attached.',
   start_url: '/',
   display: 'standalone',
@@ -196,7 +196,7 @@ emit('icon-512.png', icon(512));
 emit('og.png', ogImage());
 emit('site.webmanifest', JSON.stringify(MANIFEST, null, 2) + '\n');
 
-console.log(`ArgoFX brand assets -> ${OUT}\n`);
+console.log(`ArgosFX brand assets -> ${OUT}\n`);
 for (const [name, bytes] of written) {
   console.log(`  ${name.padEnd(22)} ${(bytes / 1024).toFixed(1)} KB`);
 }

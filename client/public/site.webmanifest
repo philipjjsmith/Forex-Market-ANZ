@@ -1,6 +1,6 @@
 {
-  "name": "ArgoFX",
-  "short_name": "ArgoFX",
+  "name": "ArgosFX",
+  "short_name": "ArgosFX",
   "description": "Intraday forex setups, published with the losses attached.",
   "start_url": "/",
   "display": "standalone",

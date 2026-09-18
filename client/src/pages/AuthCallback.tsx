@@ -54,8 +54,9 @@ export default function AuthCallback() {
         window.history.replaceState({}, '', '/auth/callback');
 
         // Admins land on the dashboard they were almost certainly trying to reach; everyone else
-        // goes to the app root, because /admin would only 403 at them.
-        navigate(data.user?.role === 'admin' ? '/admin' : '/');
+        // goes to /app, because /admin would only 403 at them. (`/` is the public
+        // landing page since Phase 4, so sending them there would look like a failed login.)
+        navigate(data.user?.role === 'admin' ? '/admin' : '/app');
       } catch {
         if (!cancelled) setError('Network error while completing sign-in.');
       }

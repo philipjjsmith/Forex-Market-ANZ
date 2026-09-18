@@ -288,7 +288,7 @@ export default function Analytics() {
             <div className="flex items-center gap-4">
               <Button
                 variant="outline"
-                onClick={() => setLocation('/')}
+                onClick={() => setLocation('/app')}
                 className="border-white/20 hover:bg-white/10 text-white"
               >
                 <Home className="w-4 h-4 mr-2" />

@@ -175,7 +175,7 @@ export default function Dashboard() {
                 <Activity className="w-8 h-8" />
               </div>
               <div>
-                <h1 className="text-3xl font-bold">ArgoFX</h1>
+                <h1 className="text-3xl font-bold">ArgosFX</h1>
                 <p className="text-muted-foreground">Multi-Timeframe Analysis Platform</p>
               </div>
             </div>

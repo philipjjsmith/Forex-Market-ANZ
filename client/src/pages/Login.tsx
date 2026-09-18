@@ -57,7 +57,7 @@ export default function Login() {
         const result = await login(email, password);
         if (result.success) {
           // Redirect to dashboard
-          setLocation('/');
+          setLocation('/app');
         } else {
           setError(result.error || 'Login failed');
         }
@@ -84,7 +84,7 @@ export default function Login() {
         const result = await register(username, email, password);
         if (result.success) {
           // Redirect to dashboard
-          setLocation('/');
+          setLocation('/app');
         } else {
           setError(result.error || 'Registration failed');
         }
@@ -111,7 +111,7 @@ export default function Login() {
             </div>
           </div>
           <h1 className="text-3xl font-bold text-white mb-2">
-            ArgoFX
+            ArgosFX
           </h1>
           <p className="text-primary">
             {showForgotPassword
@@ -324,7 +324,10 @@ export default function Login() {
 
         {/* Footer */}
         <p className="text-center text-sm text-muted-foreground mt-8">
-          By continuing, you agree to our Terms of Service and Privacy Policy
+          By continuing, you agree to our{' '}
+          <a href="/terms" className="text-primary underline underline-offset-4">Terms of Service</a>{' '}
+          and{' '}
+          <a href="/privacy" className="text-primary underline underline-offset-4">Privacy Policy</a>
         </p>
       </div>
     </div>
